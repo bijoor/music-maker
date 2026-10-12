@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import * as engine from '../engine/strudel';
 import type { HapEvent } from '../engine/strudel';
-import { BANK, BANKS, BASS_2BAR, CLIP_A, CLIP_B, FILL, GROOVE, KIT_VOICES, METRONOME, alignOffset, withOffset } from './tests';
+import { BANK, BANKS, BASS_2BAR, CHAIN, CLIP_A, CLIP_B, GROOVE, KIT_VOICES, METRONOME } from './tests';
 
-type Status = 'pending' | 'pass' | 'fail' | 'info';
+type Status = 'pending' | 'running' | 'pass' | 'fail' | 'info';
 type Result = { status: Status; detail: string };
 type Watch = (e: HapEvent) => void;
 
@@ -16,6 +16,8 @@ const TESTS: Record<string, string> = {
   highlight: '6. Played notes map back to code',
   banks: '7. Drum sounds available per machine',
 };
+const TAPS_NEEDED = 8;
+if (import.meta.env.DEV) (window as unknown as { engine: typeof engine }).engine = engine;
 
 export default function Lab() {
   const [state, setState] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
@@ -23,9 +25,10 @@ export default function Lab() {
   const [bpm, setBpm] = useState(112);
   const [results, setResults] = useState<Record<string, Result>>({});
   const [log, setLog] = useState<string[]>([]);
-  const [lit, setLit] = useState<string>('');
+  const [lit, setLit] = useState('');
   const [heard, setHeard] = useState<string[]>([]);
   const [code, setCode] = useState('');
+  const [tapCount, setTapCount] = useState(0);
   const watches = useRef(new Set<Watch>());
   const taps = useRef<{ beats: number[]; offsets: number[] }>({ beats: [], offsets: [] });
   const barRef = useRef<HTMLSpanElement>(null);
@@ -33,11 +36,24 @@ export default function Lab() {
 
   const say = (line: string) => setLog((l) => [`${new Date().toLocaleTimeString()}  ${line}`, ...l].slice(0, 60));
   const set = (key: string, status: Status, detail: string) => setResults((r) => ({ ...r, [key]: { status, detail } }));
-  const watch = (fn: Watch, ms: number) => {
+  // Each run of a test gets a number; only the latest run of that test may report its result.
+  const runs = useRef<Record<string, number>>({});
+  const newRun = (key: string) => { const n = (runs.current[key] ?? 0) + 1; runs.current[key] = n; return (status: Status, detail: string) => { if (runs.current[key] === n) set(key, status, detail); }; };
+  const barMs = () => 1000 / engine.getCps();
+
+  /** Collect played events with from <= cycle < to, then call done (or after a generous timeout). */
+  function collect(from: number, to: number, done: (evs: HapEvent[]) => void) {
+    const evs: HapEvent[] = [];
+    let finished = false;
+    const finish = () => { if (finished) return; finished = true; watches.current.delete(fn); done(evs); };
+    const fn: Watch = (e) => {
+      if (e.cycle >= from && e.cycle < to) evs.push(e);
+      if (e.cycle >= to) finish();
+    };
     watches.current.add(fn);
-    setTimeout(() => watches.current.delete(fn), ms);
-  };
-  const barMs = () => (1000 / engine.getCps());
+    const wait = (to - engine.cycleNow() + 2) * barMs();
+    setTimeout(finish, wait);
+  }
 
   useEffect(() => {
     if (state !== 'ready') return;
@@ -53,132 +69,132 @@ export default function Lab() {
     return () => { off(); cancelAnimationFrame(raf); };
   }, [state]);
 
-  async function start() {
+  function start() {
     setState('loading');
-    try {
-      await engine.initEngine();
+    engine.initEngine().then(() => {
       engine.setBpm(bpm);
       setState('ready');
       say('Engine ready: samples and synths loaded');
       runBanks();
-    } catch (err) {
-      setError(String(err));
-      setState('error');
-    }
+    }, (err) => { setError(String(err)); setState('error'); });
   }
 
-  async function play(c: string, at?: { cycle: number; period?: number }) {
+  /** Compile a clip and launch it on a track at the next bar line. Logs how long compiling took. */
+  async function launch(track: string, c: string, opts?: engine.LaunchOptions) {
     engine.unlockAudio();
+    const t0 = performance.now();
+    const pat = await engine.compile(c);
+    const ms = performance.now() - t0;
+    const at = engine.launch(track, pat, opts);
     setCode(c);
-    await engine.evaluate(c, at);
+    say(`Launched on ${track}, bar ${at + 1} (compiled in ${ms.toFixed(0)} ms)`);
+    return at;
   }
 
   // 1. Sound check
   async function testSound() {
-    let count = 0;
-    watch(() => count++, 3000);
-    await play(`$: ${CLIP_A}`);
-    setTimeout(() => set('sound', count > 8 ? 'pass' : 'fail', `${count} events played in 2.5 s`), 2500);
-    say('Playing clip A');
+    set('sound', 'running', 'Listening…');
+    const at = await launch('drums', CLIP_A);
+    collect(at, at + 1, (evs) => set('sound', evs.length >= 8 ? 'pass' : 'fail', `${evs.length} events in the first bar`));
   }
 
   // 2. Bar-line switch: A uses sd, B uses cp.
-  async function testSwitch(target: 'A' | 'B', quantised: boolean) {
-    if (!engine.isStarted()) await play(`$: ${target === 'A' ? CLIP_B : CLIP_A}`);
-    const at = engine.nextBar();
+  async function testSwitch(target: 'A' | 'B') {
+    if (!engine.isStarted()) await launch('drums', target === 'A' ? CLIP_B : CLIP_A);
+    const report = newRun('switch');
+    report('running', 'Waiting for the bar line…');
+    const at = await launch('drums', target === 'B' ? CLIP_B : CLIP_A);
     const outgoing = target === 'B' ? 'sd' : 'cp', incoming = target === 'B' ? 'cp' : 'sd';
-    let stray = 0, firstIncoming: number | null = null, early = 0;
-    watch((e) => {
-      const s = e.value.s;
-      if (s === outgoing && e.cycle >= at) stray++;
-      if (s === incoming) { if (e.cycle < at) early++; else if (firstIncoming === null) firstIncoming = e.cycle; }
-    }, barMs() * 3);
-    await play(`$: ${target === 'B' ? CLIP_B : CLIP_A}`, quantised ? { cycle: at } : undefined);
-    say(`Switch to ${target} ${quantised ? `queued for bar ${at + 1}` : 'immediately'}`);
-    setTimeout(() => {
-      const ok = stray === 0 && early === 0 && firstIncoming !== null && firstIncoming < at + 1;
-      const detail = `${quantised ? 'Quantised' : 'Immediate'}: switch bar ${at + 1}; ${outgoing} after it: ${stray}; ${incoming} before it: ${early}; first ${incoming} at bar ${firstIncoming === null ? '–' : (firstIncoming + 1).toFixed(2)}`;
-      if (quantised) set('switch', ok ? 'pass' : 'fail', detail);
-      say(detail);
-    }, barMs() * 2.5 + (at - engine.cycleNow()) * barMs());
+    collect(at - 1, at + 1, (evs) => {
+      const stray = evs.filter((e) => e.value.s === outgoing && e.cycle >= at).length;
+      const early = evs.filter((e) => e.value.s === incoming && e.cycle < at).length;
+      const first = evs.find((e) => e.value.s === incoming && e.cycle >= at);
+      const ok = stray === 0 && early === 0 && !!first;
+      report(ok ? 'pass' : 'fail', `Switched to ${target} at bar ${at + 1}; ${outgoing} after it: ${stray}; ${incoming} before it: ${early}; first ${incoming} at bar ${first ? (first.cycle + 1).toFixed(2) : '–'}`);
+    });
   }
 
-  // 3. 2-bar clip alignment
+  // 3. 2-bar clip launched on an odd bar must still start on its bar 1 (c2).
   async function testAlign(aligned: boolean) {
-    if (!engine.isStarted()) await play(`$: ${GROOVE}`);
-    let at = engine.nextBar();
-    if (at % 2 === 0) at += 1; // launch on an odd bar, where an unshifted 2-bar clip would start on its bar 2
-    const off = aligned ? alignOffset(at, 2) : 0;
-    let first: string | null = null;
-    watch((e) => { if (e.value.note !== undefined && first === null && e.cycle >= at) first = String(e.value.note); }, barMs() * 4 + (at - engine.cycleNow()) * barMs());
-    await play(`$: ${GROOVE}\n$: ${withOffset(BASS_2BAR, off)}`, { cycle: at, period: 2 });
-    say(`2-bar bass ${aligned ? `with .late(${off})` : 'without offset'}, launched at bar ${at + 1}`);
-    setTimeout(() => {
-      const ok = first === 'c2';
-      const detail = `${aligned ? 'Aligned' : 'Unaligned'}: launched at bar ${at + 1}, first note ${first ?? '–'} (bar 1 of the clip starts on c2)`;
-      if (aligned) set('align', ok ? 'pass' : 'fail', detail);
-      else say(`For comparison: ${detail}`);
+    if (!engine.isStarted()) await launch('drums', GROOVE);
+    if (aligned) set('align', 'running', 'Waiting for an odd bar…');
+    const at = await launch('bass', BASS_2BAR, { period: 2, quantum: 2, offset: 1, shift: aligned });
+    collect(at, at + 1, (evs) => {
+      const first = evs.find((e) => e.value.note !== undefined);
+      const note = first ? String(first.value.note) : '–';
+      const detail = `${aligned ? 'Aligned' : 'Not aligned (comparison)'}: launched at bar ${at + 1}, first note ${note} (the clip's bar 1 starts on c2)`;
+      if (aligned) set('align', note === 'c2' ? 'pass' : 'fail', detail);
+      else setResults((r) => (r.align && r.align.status !== 'running' && r.align.status !== 'info' ? r : { ...r, align: { status: 'info', detail } }));
       say(detail);
-    }, (at + 1.5 - engine.cycleNow()) * barMs());
+    });
   }
 
-  // 4. arrange(): three bars of groove, one bar of fill (only the fill has cp)
+  // 4. arrange(): three bars of groove, one bar of fill (only the fill has cp).
   async function testArrange() {
-    if (!engine.isStarted()) await play(`$: ${GROOVE}`);
-    const at = engine.nextBar(), off = alignOffset(at, 4);
-    const bars: Record<number, boolean> = {};
+    if (engine.isStarted()) engine.stopTrack('bass');
+    const report = newRun('arrange');
+    report('running', 'Listening for 8 bars…');
     setHeard([]);
-    watch((e) => {
-      if (e.cycle < at) return;
-      const bar = Math.floor(e.cycle);
-      if (!(bar in bars)) bars[bar] = false;
-      if (e.value.s === 'cp') bars[bar] = true;
-      setHeard(Object.keys(bars).map(Number).sort((a, b) => a - b).map((b) => (bars[b] ? 'C' : 'A')));
-    }, (at + 8.2 - engine.cycleNow()) * barMs());
-    await play(`$: ${withOffset(`arrange([3, ${GROOVE}], [1, ${FILL}])`, off)}`, { cycle: at, period: 4 });
-    say(`arrange() launched at bar ${at + 1}`);
-    setTimeout(() => {
-      const seq = Object.keys(bars).map(Number).sort((a, b) => a - b).slice(0, 8).map((b) => (bars[b] ? 'C' : 'A')).join('');
-      set('arrange', seq === 'AAACAAAC' ? 'pass' : 'fail', `Bars heard from bar ${at + 1}: ${seq.split('').join(' ')} (expected A A A C A A A C)`);
-    }, (at + 8.1 - engine.cycleNow()) * barMs());
+    const at = await launch('drums', CHAIN, { period: 4 });
+    const bars: boolean[] = Array(8).fill(false);
+    const seen = new Set<number>();
+    const live: Watch = (e) => {
+      const b = Math.floor(e.cycle) - at;
+      if (b < 0 || b > 7) return;
+      seen.add(b);
+      if (e.value.s === 'cp') bars[b] = true;
+      setHeard([...seen].sort((x, y) => x - y).map((i) => (bars[i] ? 'C' : 'A')));
+    };
+    watches.current.add(live);
+    collect(at, at + 8, () => {
+      watches.current.delete(live);
+      const seq = bars.map((c) => (c ? 'C' : 'A')).join(' ');
+      report(seq === 'A A A C A A A C' ? 'pass' : 'fail', `Bars ${at + 1}–${at + 8}: ${seq} (expected A A A C A A A C)`);
+    });
   }
 
   // 5. Latency: tap along to the metronome; offset = tap time − nearest click time.
   async function startTaps() {
+    if (engine.isStarted()) engine.stopTrack('bass');
     taps.current = { beats: [], offsets: [] };
-    watch((e) => { if (e.value.s === 'rim') taps.current.beats.push(e.time); }, 60000);
-    await play(`$: ${METRONOME}`);
+    setTapCount(0);
+    const fn: Watch = (e) => { if (e.value.s === 'rim') taps.current.beats.push(e.time); };
+    watches.current.add(fn);
+    setTimeout(() => watches.current.delete(fn), 120000);
+    await launch('drums', METRONOME);
     const info = engine.audioInfo();
-    set('latency', 'info', `Tap the big button on every click (8 taps). Output latency reported by the browser: ${fmtMs(info.outputLatency)}, base ${fmtMs(info.baseLatency)}`);
-    say('Metronome playing: tap along');
+    set('latency', 'running', `Tap the Tap button on every click, ${TAPS_NEEDED} times. Browser output latency ${fmtMs(info.outputLatency)}, base ${fmtMs(info.baseLatency)}.`);
   }
   function tap() {
     engine.trigger({ s: 'cp', bank: BANK });
     const t = engine.audioTime(), beats = taps.current.beats;
-    if (!beats.length) return;
+    if (!beats.length) { say('Start the metronome first'); return; }
     const nearest = beats.reduce((a, b) => (Math.abs(b - t) < Math.abs(a - t) ? b : a));
     taps.current.offsets.push((t - nearest) * 1000);
     const o = taps.current.offsets;
-    if (o.length >= 8) {
-      const recent = o.slice(-8), mean = recent.reduce((a, b) => a + b, 0) / recent.length;
+    setTapCount(o.length);
+    if (o.length >= TAPS_NEEDED) {
+      const recent = o.slice(-TAPS_NEEDED), mean = recent.reduce((a, b) => a + b, 0) / recent.length;
       const sd = Math.sqrt(recent.reduce((a, b) => a + (b - mean) ** 2, 0) / recent.length);
       const info = engine.audioInfo();
       set('latency', 'info', `Average tap offset ${mean.toFixed(0)} ms (spread ±${sd.toFixed(0)} ms) over ${recent.length} taps. Browser output latency ${fmtMs(info.outputLatency)}. A record offset of about ${Math.max(0, mean).toFixed(0)} ms would line taps up with the beat.`);
-    } else set('latency', 'info', `${o.length} of 8 taps…`);
+    }
   }
 
   // 6. Highlighting: the played event carries the character range of its token.
   async function testHighlight() {
-    const c = `$: ${CLIP_A}`;
-    let withLoc = 0, total = 0;
-    watch((e) => {
-      total++;
-      if (e.locations.length) withLoc++;
+    set('highlight', 'running', 'Listening…');
+    const at = await launch('drums', CLIP_A);
+    const flash: Watch = (e) => {
       const loc = e.locations[0];
       if (loc) setTimeout(() => { setLit(`${loc.start}-${loc.end}`); setTimeout(() => setLit(''), 90); }, Math.max(0, (e.time - engine.audioTime()) * 1000));
-    }, barMs() * 3);
-    await play(c);
-    setTimeout(() => set('highlight', withLoc && withLoc === total ? 'pass' : 'fail', `${withLoc} of ${total} events carried a code location`), barMs() * 2.5);
+    };
+    watches.current.add(flash);
+    setTimeout(() => watches.current.delete(flash), barMs() * 4);
+    collect(at, at + 2, (evs) => {
+      const withLoc = evs.filter((e) => e.locations.length).length;
+      set('highlight', evs.length && withLoc === evs.length ? 'pass' : 'fail', `${withLoc} of ${evs.length} events carried a code location`);
+    });
   }
 
   function runBanks() {
@@ -193,7 +209,7 @@ export default function Lab() {
   function copyResults() {
     const info = engine.audioInfo();
     const text = [`Phase 0 results — ${new Date().toISOString()}`, navigator.userAgent, `Audio: ${info.sampleRate} Hz, output latency ${fmtMs(info.outputLatency)}, base ${fmtMs(info.baseLatency)}`, '',
-      ...Object.entries(TESTS).map(([k, name]) => `${name}: ${results[k]?.status ?? 'not run'} — ${results[k]?.detail ?? ''}`)].join('\n');
+      ...Object.entries(TESTS).map(([k, name]) => `${name}: ${results[k]?.status ?? 'not run'} — ${results[k]?.detail ?? ''}`), '', 'Log:', ...log.slice(0, 20)].join('\n');
     navigator.clipboard?.writeText(text).then(() => say('Results copied'), () => say('Copy failed; select the results text instead'));
   }
 
@@ -224,13 +240,12 @@ export default function Lab() {
       <section className="tests">
         <Card k="sound" results={results}><button onClick={testSound}>Play clip A</button></Card>
         <Card k="switch" results={results}>
-          <button onClick={() => testSwitch('B', true)}>Switch to B on next bar</button>
-          <button onClick={() => testSwitch('A', true)}>Switch to A on next bar</button>
-          <button className="ghost" onClick={() => testSwitch('B', false)}>Switch to B immediately (compare)</button>
+          <button onClick={() => testSwitch('B')}>Switch to B on next bar</button>
+          <button onClick={() => testSwitch('A')}>Switch to A on next bar</button>
         </Card>
         <Card k="align" results={results}>
           <button onClick={() => testAlign(true)}>Launch 2-bar bass (aligned)</button>
-          <button className="ghost" onClick={() => testAlign(false)}>Launch without offset (compare)</button>
+          <button className="ghost" onClick={() => testAlign(false)}>Launch without aligning (compare)</button>
         </Card>
         <Card k="arrange" results={results}>
           <button onClick={testArrange}>Play A, A, A, C</button>
@@ -238,7 +253,7 @@ export default function Lab() {
         </Card>
         <Card k="latency" results={results}>
           <button onClick={startTaps}>Start metronome</button>
-          <button className="tap" onPointerDown={tap}>Tap</button>
+          <button className="tap" onPointerDown={tap}>Tap<small>{tapCount} / {TAPS_NEEDED}</small></button>
           <span className="pads">{['bd', 'sd', 'hh', 'oh'].map((v) => <button key={v} className="pad" onPointerDown={() => engine.trigger({ s: v, bank: BANK })}>{v}</button>)}</span>
         </Card>
         <Card k="highlight" results={results}>
@@ -248,7 +263,7 @@ export default function Lab() {
       </section>
 
       <section className="code">
-        <h2>Code playing now</h2>
+        <h2>Last launched clip</h2>
         <pre>{renderCode(code, lit)}</pre>
       </section>
       <section className="log"><h2>Log</h2><pre>{log.join('\n')}</pre></section>
@@ -258,9 +273,10 @@ export default function Lab() {
 
 function Card({ k, results, children }: { k: string; results: Record<string, Result>; children: ReactNode }) {
   const r = results[k];
+  const label = { pass: 'Pass', fail: 'Fail', info: 'Info', running: 'Running…', pending: 'Not run' }[r?.status ?? 'pending'];
   return (
     <div className={`card ${r?.status ?? 'pending'}`}>
-      <div className="title"><strong>{TESTS[k]}</strong><span className="badge">{r?.status === 'pass' ? 'Pass' : r?.status === 'fail' ? 'Fail' : r?.status === 'info' ? 'Info' : 'Not run'}</span></div>
+      <div className="title"><strong>{TESTS[k]}</strong><span className="badge">{label}</span></div>
       <div className="actions">{children}</div>
       {r && <p className="detail">{r.detail}</p>}
     </div>

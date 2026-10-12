@@ -1,5 +1,11 @@
-// Strudel engine wrapper: one repl, sample loading, direct triggering, and bar-quantised pattern switching.
-import { evalScope, repl, Pattern, TimeSpan, silence } from '@strudel/core';
+// Strudel engine wrapper: one scheduler, sample loading, direct triggering, and per-track clip launching
+// that lands exactly on bar lines.
+//
+// Each track has its own timeline of segments. Launching a clip compiles its code first, then picks the first
+// bar line the scheduler has not queried yet, so a switch can never land in the past however slow compilation
+// is. The final pattern is a stack of the tracks; each track routes queries before a switch bar to the old clip
+// and after it to the new one (switchAt).
+import { evalScope, evaluate as evaluateCode, repl, Pattern, TimeSpan, silence, stack } from '@strudel/core';
 import { transpiler } from '@strudel/transpiler';
 import { webaudioOutput } from '@strudel/webaudio';
 import { registerSoundfonts } from '@strudel/soundfonts';
@@ -16,16 +22,13 @@ export type HapEvent = {
   locations: Location[];
 };
 type Listener = (e: HapEvent) => void;
+type Segment = { at: number; raw: any; pat: any; period: number; shift: boolean };
 
 const SAMPLE_BASE = 'https://raw.githubusercontent.com/felixroos/dough-samples/main';
 const listeners = new Set<Listener>();
+const tracks = new Map<string, Segment[]>();
 let ready: Promise<void> | null = null;
 let r: any = null;
-
-// Bar-quantised switching state: `playing` is what sounds now; `pending` takes over at cycle `at`.
-let playing: any = silence;
-let pending: { pat: any; at: number } | null = null;
-let nextSwitch: { at: number; period: number } | null = null;
 
 /** A pattern that plays `before` until `cycle`, then `after`. Exact to the sample, independent of query windows. */
 export function switchAt(before: any, after: any, cycle: number): any {
@@ -44,31 +47,12 @@ function output(hap: any, deadline: number, duration: number, cps: number, t: nu
     time: t,
     cycle: hap.whole?.begin.valueOf() ?? 0,
     duration,
-    value: typeof hap.value === 'object' ? hap.value : { value: hap.value },
+    // Copy: superdough rewrites the value object while playing it (e.g. merging the bank into the sound name).
+    value: typeof hap.value === 'object' ? { ...hap.value } : { value: hap.value },
     locations: hap.context?.locations ?? [],
   };
   listeners.forEach((l) => l(ev));
   return webaudioOutput(hap, deadline, duration, cps, t);
-}
-
-function editPattern(pat: any) {
-  const sch = r?.scheduler;
-  if (nextSwitch && sch?.started) {
-    // The scheduler has already queried up to lastEnd; never switch before that.
-    let at = nextSwitch.at;
-    while (at < sch.lastEnd) at += nextSwitch.period;
-    pending = { pat, at };
-    nextSwitch = null;
-    return switchAt(playing, pat, at);
-  }
-  nextSwitch = null;
-  if (pending) {
-    // An edit while a switch is pending updates the incoming pattern, not the outgoing one.
-    pending = { pat, at: pending.at };
-    return switchAt(playing, pat, pending.at);
-  }
-  playing = pat;
-  return pat;
 }
 
 /**
@@ -116,14 +100,7 @@ export function initEngine(): Promise<void> {
         samples(`${SAMPLE_BASE}/piano.json`),
         samples(`${SAMPLE_BASE}/Dirt-Samples.json`),
       ]);
-      r = repl({ defaultOutput: output, getTime: () => ac.currentTime, transpiler, editPattern });
-      setInterval(() => {
-        // Once the switch point has been queried, the incoming pattern is simply what plays.
-        if (pending && r.scheduler.lastEnd >= pending.at + 1) {
-          playing = pending.pat;
-          pending = null;
-        }
-      }, 100);
+      r = repl({ defaultOutput: output, getTime: () => ac.currentTime, transpiler });
     })();
   }
   return ready;
@@ -134,25 +111,86 @@ export const onHap = (fn: Listener) => {
   return () => listeners.delete(fn);
 };
 
-/** Evaluate code now (edits) or so that it takes over exactly at a bar line. */
-export async function evaluate(code: string, at?: { cycle: number; period?: number }) {
-  if (at) nextSwitch = { at: at.cycle, period: at.period ?? 1 };
-  return r.evaluate(code);
+/** Turn a Strudel expression (e.g. `s("bd*4").bank("RolandTR909")`) into a pattern. Locations are relative to `code`. */
+export async function compile(code: string): Promise<any> {
+  const { pattern } = await evaluateCode(code, transpiler, {});
+  return pattern;
 }
 
-/** First bar line that has not been scheduled yet. */
-export const nextBar = () => (r?.scheduler.started ? Math.ceil(r.scheduler.lastEnd) : 0);
-export const cycleNow = () => (r?.scheduler.started ? r.scheduler.now() : 0);
-export const isStarted = () => !!r?.scheduler.started;
+const started = () => !!r?.scheduler.started;
+/** Everything before this cycle has already been handed to the audio engine. */
+const horizon = () => (started() ? r.scheduler.lastEnd : 0);
+
+function shifted(raw: any, at: number, period: number, shift: boolean) {
+  const offset = ((at % period) + period) % period;
+  return shift && offset ? raw.late(offset) : raw;
+}
+
+function rebuild() {
+  const h = horizon();
+  const parts: any[] = [];
+  for (const segs of tracks.values()) {
+    // Segments whose successor has already started can never be heard again.
+    while (segs.length > 1 && segs[1].at <= h) segs.shift();
+    let pat = silence;
+    for (const s of segs) pat = s.at <= h ? s.pat : switchAt(pat, s.pat, s.at);
+    parts.push(pat);
+  }
+  const all = parts.length ? stack(...parts) : silence;
+  r.setPattern(all, true);
+}
+
+export type LaunchOptions = {
+  /** Length of the clip (or chain) in bars; it starts at its own bar 1 whatever bar it launches on. */
+  period?: number;
+  /** Launch only on bars where bar % quantum === offset (default: any bar). */
+  quantum?: number;
+  offset?: number;
+  /** false: do not line the clip up (for comparison tests). */
+  shift?: boolean;
+};
+
+/** Start `pattern` on `track` at the next bar line. Returns the cycle (bar) it starts on. */
+export function launch(track: string, pattern: any, opts: LaunchOptions = {}): number {
+  const { period = 1, quantum = 1, offset = 0, shift = true } = opts;
+  let at = Math.ceil(horizon());
+  while (((at - offset) % quantum + quantum) % quantum !== 0) at++;
+  if (!started()) at = 0;
+  const segs = tracks.get(track) ?? [];
+  // A later launch on the same bar replaces an earlier one.
+  while (segs.length && segs[segs.length - 1].at >= at) segs.pop();
+  segs.push({ at, raw: pattern, pat: shifted(pattern, at, period, shift), period, shift });
+  tracks.set(track, segs);
+  rebuild();
+  return at;
+}
+
+/** Stop `track` at the next bar line. */
+export function stopTrack(track: string): number {
+  return launch(track, silence);
+}
+
+/** Replace the clip a track is playing (or about to play) without waiting for a bar line: for note edits. */
+export function edit(track: string, pattern: any) {
+  const segs = tracks.get(track);
+  if (!segs?.length) return launch(track, pattern);
+  const s = segs[segs.length - 1];
+  s.raw = pattern;
+  s.pat = shifted(pattern, s.at, s.period, s.shift);
+  rebuild();
+  return s.at;
+}
+
+export const nextBar = () => (started() ? Math.ceil(horizon()) : 0);
+export const cycleNow = () => (started() ? r.scheduler.now() : 0);
+export const isStarted = started;
 export const audioTime = () => getAudioContext().currentTime;
 export const setBpm = (bpm: number) => r?.setCps(bpm / 60 / 4);
 export const getCps = () => r?.scheduler.cps ?? 0.5;
 
 export function stop() {
   r?.stop();
-  playing = silence;
-  pending = null;
-  nextSwitch = null;
+  tracks.clear();
 }
 
 /** Play a sound immediately, bypassing the pattern scheduler (pads and keys). */

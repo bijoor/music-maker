@@ -21,7 +21,7 @@ The latest build of `main` is also published at <https://bijoor.github.io/music-
 |---|---|---|
 | 1 | Strudel plays | Events reach the audio output |
 | 2 | A clip switches exactly on the bar line | Clip B swaps the snare for a clap; no snare may sound after the switch bar and no clap before it |
-| 3 | A 2-bar clip launched mid-song starts at its bar 1 | The clip's bar 1 starts on c2; launched on an odd bar with `.late(n)` it must still start on c2 |
+| 3 | A 2-bar clip launched mid-song starts at its bar 1 | The clip's bar 1 starts on c2; launched on an odd bar it must still start on c2 |
 | 4 | Chained clips play in turn | `arrange([3, groove], [1, fill])` must be heard as A A A C |
 | 5 | Pad latency | Tap along to a metronome; the page reports the average offset |
 | 6 | Played notes map back to code | Every played event carries the character range of its code token |
@@ -31,7 +31,7 @@ The latest build of `main` is also published at <https://bijoor.github.io/music-
 
 ## How clips switch on the bar line
 
-`src/engine/strudel.ts` wraps one Strudel repl. When a change should land on the next bar, the newly evaluated pattern is combined with the playing one by `switchAt(before, after, cycle)`: queries before the bar line go to the old pattern and queries after it go to the new one. The switch bar is never earlier than what the scheduler has already queued, so it is exact regardless of timing.
+`src/engine/strudel.ts` keeps a timeline per track. Launching a clip compiles its code first, then picks the first bar line the scheduler has not queued yet, so a switch can never land in the past however slow the device is. Each track plays its old clip until the switch bar and the new one after it (`switchAt`); the tracks are stacked into one pattern. A clip of several bars is shifted so it always starts at its own bar 1.
 
 ## Project
 
