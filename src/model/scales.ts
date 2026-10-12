@@ -33,3 +33,46 @@ export function scalePitch(scale: ScaleDef, tonic: string, degree: number, octav
   const cents = scale.cents?.[degree] ?? 0;
   return (octave + 1) * 12 + tonicPc(tonic) + degree + cents / 100;
 }
+
+const degreeOf = (tonic: string, pitch: number) => ((Math.round(pitch) - tonicPc(tonic)) % 12 + 12) % 12;
+
+export const inScale = (scale: ScaleDef, tonic: string, pitch: number) => scale.degrees.includes(degreeOf(tonic, pitch));
+
+/** Label for a pitch: letter and octave (Eb3), or sargam (komal re) relative to the tonic as Sa. */
+export function pitchLabel(pitch: number, tonic: string, sargam: boolean, withOctave = true): string {
+  const r = Math.round(pitch);
+  const cents = Math.round((pitch - r) * 100);
+  const micro = cents ? ` ${cents > 0 ? '+' : '−'}${Math.abs(cents)}¢` : '';
+  if (sargam) return SARGAM[degreeOf(tonic, pitch)] + micro;
+  return TONICS[((r % 12) + 12) % 12] + (withOctave ? String(Math.floor(r / 12) - 1) : '') + micro;
+}
+
+/** Grid rows, highest first: two octaves of the scale from `octave`, the top Sa, plus any other pitches in use. */
+export function gridRows(scale: ScaleDef, tonic: string, octave: number, used: number[]): number[] {
+  const rows = [scalePitch(scale, tonic, 0, octave + 2)];
+  for (let o = octave + 1; o >= octave; o--) for (const d of [...scale.degrees].reverse()) rows.push(scalePitch(scale, tonic, d, o));
+  for (const p of used) if (!rows.some((r) => Math.abs(r - p) < 0.001)) rows.push(p);
+  return rows.sort((a, b) => b - a);
+}
+
+export interface Chord {
+  pitches: number[];
+  name: string;
+  /** Roman numeral for 7-note scales (I, ii, iii°…), else the degree number. */
+  numeral: string;
+}
+
+/** Triads built on each degree of the scale by stacking every other scale note. */
+export function scaleChords(scale: ScaleDef, tonic: string, octave: number, sargam: boolean): Chord[] {
+  const d = scale.degrees, n = d.length;
+  const roman = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII'];
+  return Array.from({ length: Math.min(n, 8) }, (_, i) => {
+    const pick = (k: number) => scalePitch(scale, tonic, d[(i + k) % n], octave + Math.floor((i + k) / n));
+    const pitches = [pick(0), pick(2), pick(4)];
+    const a = Math.round(pitches[1] - pitches[0]), b = Math.round(pitches[2] - pitches[0]);
+    const q = a === 4 && b === 7 ? '' : a === 3 && b === 7 ? 'm' : a === 3 && b === 6 ? '°' : a === 4 && b === 8 ? '+' : '';
+    const numeral = n === 7 ? (q === '' || q === '+' ? roman[i] : roman[i].toLowerCase()) + (q === '°' ? '°' : '') : String(i + 1);
+    // Chord names stay in letters (Cm, Ab); in sargam mode the numeral line shows the swara the chord is built on.
+    return { pitches, name: pitchLabel(pitches[0], tonic, false, false) + q, numeral: sargam ? `${numeral} · ${pitchLabel(pitches[0], tonic, true)}` : numeral };
+  });
+}

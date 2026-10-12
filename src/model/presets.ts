@@ -21,6 +21,8 @@ export interface InstrumentPreset {
   sound?: string;
   octave: number;
   poly: boolean;
+  /** Start with a held drone clip on the scale's drone notes (Sa–Pa). */
+  drone?: boolean;
 }
 
 export const INSTRUMENTS: InstrumentPreset[] = [
@@ -31,4 +33,7 @@ export const INSTRUMENTS: InstrumentPreset[] = [
   { label: 'Piano', name: 'Piano', kind: 'melodic', color: '#1c7ed6', sound: 'piano', octave: 3, poly: true },
   { label: 'Saw lead', name: 'Lead', kind: 'melodic', color: '#ae3ec9', sound: 'sawtooth', octave: 4, poly: false },
   { label: 'Strings', name: 'Strings', kind: 'melodic', color: '#0c8599', sound: 'gm_synth_strings_1', octave: 3, poly: true },
+  { label: 'Sitar', name: 'Sitar', kind: 'melodic', color: '#b35c00', sound: 'gm_sitar', octave: 3, poly: false },
+  { label: 'Flute (bansuri-like)', name: 'Flute', kind: 'melodic', color: '#3b8a8a', sound: 'gm_flute', octave: 4, poly: false },
+  { label: 'Drone (Sa–Pa)', name: 'Drone', kind: 'melodic', color: '#c2255c', sound: 'gm_reed_organ', octave: 3, poly: true, drone: true },
 ];

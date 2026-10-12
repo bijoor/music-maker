@@ -1,11 +1,13 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import ScaleEditor from './ScaleEditor';
 import { useStore } from '../state/store';
 import { SCALES, TONICS } from '../model/scales';
 import * as engine from '../engine/strudel';
 import * as player from '../engine/player';
 
 export default function Transport() {
-  const { song, transport, codeOpen, setBpm, setTonic, setScale, toggleCode, resetSong } = useStore();
+  const { song, transport, codeOpen, sargam, setBpm, setTonic, setScale, toggleCode, resetSong, setUi } = useStore();
+  const [editingScale, setEditingScale] = useState(false);
   const barRef = useRef<HTMLElement>(null);
   const dotsRef = useRef<HTMLSpanElement>(null);
 
@@ -54,15 +56,18 @@ export default function Transport() {
       <select aria-label="Key" value={song.key.tonic} onChange={(e) => setTonic(e.target.value)}>
         {TONICS.map((t) => <option key={t}>{t}</option>)}
       </select>
-      <select aria-label="Scale" value={song.key.scaleId} onChange={(e) => setScale(e.target.value)}>
+      <select aria-label="Scale" value={song.key.scaleId} onChange={(e) => (e.target.value === '__new' ? setEditingScale(true) : setScale(e.target.value))}>
         <optgroup label="Western">{group('Western')}</optgroup>
         <optgroup label="Ragas">{group('Ragas')}</optgroup>
         {song.customScales.length > 0 && <optgroup label="My scales">{group('Custom')}</optgroup>}
+        <option value="__new">New custom scale…</option>
       </select>
+      <button className={`btn sm${sargam ? ' on' : ''}`} aria-pressed={sargam} onClick={() => setUi({ sargam: !sargam })}>Sa Re Ga</button>
       <span className="spacer" />
       <button className="btn sm" onClick={() => { if (confirm('Replace your song with the demo song? Your current clips will be lost.')) resetSong(); }}>Reset demo</button>
       <a className="btn sm" href="#lab">Tests</a>
       <button className={`btn${codeOpen ? ' on' : ''}`} aria-pressed={codeOpen} onClick={toggleCode}>Code</button>
+      {editingScale && <ScaleEditor onClose={() => setEditingScale(false)} />}
     </header>
   );
 }

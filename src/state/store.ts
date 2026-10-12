@@ -4,11 +4,14 @@ import { produce } from 'immer';
 import { demoSong } from '../model/demo';
 import { emptyHits, newId, track as makeTrack, defaultFx } from '../model/build';
 import { DRUM_PRESETS, INSTRUMENTS } from '../model/presets';
-import { MAX_SLOTS, STEPS_PER_BAR, type Bars, type Clip, type Song, type Track } from '../model/types';
+import { MAX_SLOTS, STEPS_PER_BAR, type Bars, type Clip, type ScaleDef, type Song, type Track } from '../model/types';
+import { toggleNote as toggleNoteIn, writeNote } from '../model/clipEdit';
+import { findScale, scalePitch } from '../model/scales';
 import { loadSong, saveSong } from './persist';
 
 export type TransportState = 'stopped' | 'loading' | 'playing';
 export type EditorView = 'grid' | 'play';
+export type KeyboardLayout = 'piano' | 'pads';
 
 interface Selection {
   trackId: string;
@@ -25,12 +28,23 @@ interface State {
   /** Bar of the selected clip shown in the grid. */
   page: number;
   codeOpen: boolean;
+  /** Show Sa Re Ga labels instead of letter names. */
+  sargam: boolean;
+  keyboard: KeyboardLayout;
+  keyboardOctaves: 1 | 2;
+  scaleLock: boolean;
+  /** Length in steps of notes added in the grid, and of chords placed there. */
+  noteLen: number;
+  chordLen: number;
+  /** Step (within the clip) chosen in the grid for placing a chord. */
+  cursor: number;
 
   // Song settings
   setBpm(bpm: number): void;
   setTonic(tonic: string): void;
   setScale(scaleId: string): void;
   resetSong(): void;
+  addCustomScale(scale: Omit<ScaleDef, 'id' | 'group'>): void;
 
   // Tracks
   addTrack(instrument: number): void;
@@ -40,6 +54,8 @@ interface State {
   toggleMute(trackId: string): void;
   toggleSolo(trackId: string): void;
   addSlot(trackId: string): void;
+  setSound(trackId: string, sound: string): void;
+  setOctave(trackId: string, octave: number): void;
 
   // Launching
   tapSlot(trackId: string, slot: number): void;
@@ -55,11 +71,14 @@ interface State {
   setClipBars(trackId: string, slot: number, bars: Bars): void;
   toggleHit(trackId: string, slot: number, voice: string, step: number): boolean;
   applyPreset(trackId: string, slot: number, preset: string, bar: number): void;
+  toggleNote(trackId: string, slot: number, step: number, pitch: number): boolean;
+  placeChord(trackId: string, slot: number, step: number, pitches: number[]): void;
 
   // UI
   setView(view: EditorView): void;
   setPage(page: number): void;
   toggleCode(): void;
+  setUi(ui: Partial<Pick<State, 'sargam' | 'keyboard' | 'keyboardOctaves' | 'scaleLock' | 'noteLen' | 'chordLen' | 'cursor'>>): void;
   setTransport(t: TransportState): void;
   setPending(trackId: string, at: number | null): void;
 }
@@ -91,10 +110,22 @@ export const useStore = create<State>((set, get) => ({
   view: 'grid',
   page: 0,
   codeOpen: false,
+  sargam: false,
+  keyboard: 'piano',
+  keyboardOctaves: 2,
+  scaleLock: true,
+  noteLen: 2,
+  chordLen: 8,
+  cursor: 0,
 
   setBpm: (bpm) => set((s) => ({ song: { ...s.song, bpm: Math.min(200, Math.max(60, Math.round(bpm))) } })),
   setTonic: (tonic) => set((s) => ({ song: { ...s.song, key: { ...s.song.key, tonic } } })),
   setScale: (scaleId) => set((s) => ({ song: { ...s.song, key: { ...s.song.key, scaleId } } })),
+  addCustomScale: (scale) =>
+    set((s) => {
+      const id = newId('scale');
+      return { song: produce(s.song, (song) => { song.customScales.push({ ...scale, id, group: 'Custom' }); song.key.scaleId = id; }) };
+    }),
   resetSong: () => {
     const song = demoSong();
     set({ song, selected: { trackId: song.tracks[0].id, slot: 0 }, page: 0 });
@@ -105,9 +136,17 @@ export const useStore = create<State>((set, get) => ({
     const id = newId('t');
     set((s) => ({
       song: produce(s.song, (song) => {
-        song.tracks.push(makeTrack({ id, name: p.name, kind: p.kind, color: p.color, bank: p.bank, sound: p.sound, octave: p.octave, poly: p.poly, fx: defaultFx() }));
+        const t = makeTrack({ id, name: p.name, kind: p.kind, color: p.color, bank: p.bank, sound: p.sound, octave: p.octave, poly: p.poly, fx: defaultFx() });
+        if (p.drone) {
+          // A one-bar clip holding the scale's drone notes (Sa–Pa, or Sa–Ma for ragas like Malkauns).
+          const scale = findScale(song);
+          const pitches = (scale.drone ?? [0, 7]).map((d) => scalePitch(scale, song.key.tonic, d, p.octave));
+          t.slots[0] = { kind: 'melodic', id: newId('c'), name: 'Drone', bars: 1, notes: [{ step: 0, len: STEPS_PER_BAR, pitches, vel: 1 }] };
+          t.fx.gain = 0.6;
+        }
+        song.tracks.push(t);
       }),
-      selected: { trackId: id, slot: null },
+      selected: { trackId: id, slot: p.drone ? 0 : null },
     }));
   },
   removeTrack: (trackId) =>
@@ -121,6 +160,8 @@ export const useStore = create<State>((set, get) => ({
   toggleMute: (trackId) => set(onTrack(trackId, (t) => { t.mute = !t.mute; })),
   toggleSolo: (trackId) => set(onTrack(trackId, (t) => { t.solo = !t.solo; })),
   addSlot: (trackId) => set(onTrack(trackId, (t) => { if (t.slots.length < MAX_SLOTS) t.slots.push(null); })),
+  setSound: (trackId, sound) => set(onTrack(trackId, (t) => { t.sound = sound; })),
+  setOctave: (trackId, octave) => set(onTrack(trackId, (t) => { t.octave = Math.min(6, Math.max(1, octave)); })),
 
   tapSlot: (trackId, slot) => {
     set(onTrack(trackId, (t) => {
@@ -204,6 +245,24 @@ export const useStore = create<State>((set, get) => ({
       }
     })),
 
+  toggleNote: (trackId, slot, step, pitch) => {
+    let on = false;
+    const len = get().noteLen;
+    set(onTrack(trackId, (t) => {
+      const c = t.slots[slot];
+      if (c?.kind === 'melodic') on = toggleNoteIn(c, step, pitch, len, t.poly);
+    }));
+    return on;
+  },
+  placeChord: (trackId, slot, step, pitches) => {
+    const len = get().chordLen;
+    set(onTrack(trackId, (t) => {
+      const c = t.slots[slot];
+      if (c?.kind === 'melodic') writeNote(c, step, pitches, len);
+    }));
+  },
+
+  setUi: (ui) => set(ui),
   setView: (view) => set({ view }),
   setPage: (page) => set({ page }),
   toggleCode: () => set((s) => ({ codeOpen: !s.codeOpen })),

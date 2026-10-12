@@ -5,13 +5,16 @@ import { DRUM_PRESETS } from '../model/presets';
 import type { Bars } from '../model/types';
 import DrumGrid from './DrumGrid';
 import DrumPads from './DrumPads';
+import NoteGrid from './NoteGrid';
+import MelodicPlay from './MelodicPlay';
+import { SOUNDS } from '../model/sounds';
 
 const LETTERS = 'ABCDEFGH';
 
 /** The selected clip: its settings, and either the Grid (edit notes) or Play (pads/keys) view. */
 export default function ClipEditor() {
   const state = useStore();
-  const { view, setView, page, setPage, selected, setClipBars, setBank, applyPreset, duplicateClip, clearClip, deleteClip, removeTrack } = state;
+  const { view, setView, page, setPage, selected, setClipBars, setBank, setSound, applyPreset, duplicateClip, clearClip, deleteClip, removeTrack } = state;
   const track = selectedTrack(state);
   const clip = selectedClip(state);
   const [menu, setMenu] = useState<'clip' | 'track' | null>(null);
@@ -39,6 +42,14 @@ export default function ClipEditor() {
         {track.kind === 'drums' && (
           <select aria-label="Drum machine" value={track.bank} onChange={(e) => setBank(track.id, e.target.value)}>
             {BANKS.map((b) => <option key={b} value={b}>{b.replace('Roland', '')}</option>)}
+          </select>
+        )}
+        {track.kind === 'melodic' && (
+          <select aria-label="Instrument sound" value={track.sound} onChange={(e) => setSound(track.id, e.target.value)}>
+            {[...new Set(SOUNDS.map((x) => x.group))].map((g) => (
+              <optgroup key={g} label={g}>{SOUNDS.filter((x) => x.group === g).map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</optgroup>
+            ))}
+            {!SOUNDS.some((x) => x.id === track.sound) && <option value={track.sound}>{track.sound}</option>}
           </select>
         )}
         {track.kind === 'drums' && clip && slot !== null && view === 'grid' && (
@@ -70,8 +81,10 @@ export default function ClipEditor() {
         </div>
       </div>
       <div className="ebody">
-        {track.kind !== 'drums' ? (
-          <div className="placeholder"><p>Melodic clips get their note grid, keyboard and chord pads in Phase 3.</p></div>
+        {track.kind === 'melodic' ? (
+          view === 'play' ? <MelodicPlay track={track} />
+          : clip?.kind === 'melodic' && slot !== null ? <NoteGrid track={track} clip={clip} slot={slot} bar={bar} />
+          : <div className="placeholder"><p>Tap <b>+</b> in an empty slot above to make a clip, then tap the grid to add notes.</p></div>
         ) : view === 'play' ? (
           <DrumPads track={track} />
         ) : clip?.kind === 'drums' && slot !== null ? (
