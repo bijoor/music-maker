@@ -7,16 +7,16 @@ import { drumHint } from './keymap';
 import { slideVelocity2D, strikeVelocity2D } from './strike';
 
 /** Finger-sized pads: large main pads (kick and snare double width), smaller pads for less frequent sounds. Indian kits show their strokes. */
-/** Pads whose pitch bends when the finger slides up (semitones over the pad's height): the tabla's Ge. */
-const BENDING = new Set(['tabla_ge']);
+/** Pads whose pitch bends when the finger slides up (semitones over the pad's height): the tabla's Ge and the mridangam's Thom. */
+const BENDING = new Set(['tabla_ge', 'thom']);
 const MAX_BEND = 5;
 
 export default function DrumPads({ track }: { track: Track }) {
   const kit = kitVoices(track.bank);
   // Where the pad is struck sets the velocity (soft top-left, full bottom-right); keeping the finger down and
   // sliding any way then swells or fades the hit while it rings (right and down louder). On a bending pad (the
-  // tabla's Ge, like pressing the heel into the bayan), sliding up raises the pitch instead and only left/right
-  // changes the volume.
+  // tabla's Ge or the mridangam's Thom, like pressing into the bass head), sliding up raises the pitch instead and
+  // only left/right changes the volume.
   const hit = (k: KitVoice, e: PointerEvent<HTMLElement>) => {
     const el = e.currentTarget, id = e.pointerId, r = el.getBoundingClientRect();
     const vel0 = strikeVelocity2D(e.clientX, e.clientY, el), x0 = e.clientX, y0 = e.clientY;
