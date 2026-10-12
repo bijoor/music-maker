@@ -6,7 +6,7 @@ import type { Track } from '../model/types';
 import * as recorder from '../engine/recorder';
 import StepStrip from './StepStrip';
 import { PAD_ROWS, PIANO_HINT } from './keymap';
-import { strikeVelocity } from './strike';
+import { slideVelocity, strikeVelocity } from './strike';
 import { keyLine, pitchAlong } from './glide';
 
 const BLACK = [1, 3, 6, 8, 10];
@@ -19,7 +19,8 @@ export default function MelodicPlay({ track }: { track: Track }) {
   const chords = scaleChords(scale, tonic, track.octave, sargam);
   const play = (pitches: number[], e: PointerEvent<HTMLElement>, chord = false) => {
     const el = e.currentTarget;
-    recorder.press(track.id, pitches, e.pointerId, chord, e.timeStamp, strikeVelocity(e.clientY, el));
+    const vel0 = strikeVelocity(e.clientY, el);
+    recorder.press(track.id, pitches, e.pointerId, chord, e.timeStamp, vel0);
     el.classList.add('down');
     const id = e.pointerId;
     if (chord) {
@@ -30,16 +31,18 @@ export default function MelodicPlay({ track }: { track: Track }) {
       return;
     }
     // Keys: sliding the held finger sideways glides the pitch, measured from where it struck (not the key's
-    // centre): moving one key's width reaches the next key's pitch. Up and down do nothing once struck.
+    // centre): moving one key's width reaches the next key's pitch. Sliding up or down changes the volume from
+    // the velocity it was struck at, on the same scale as striking.
     if (el.hasPointerCapture?.(id)) el.releasePointerCapture(id);
     const line = keyLine(el);
     const start = line.findIndex((k) => k.el === el);
-    const x0 = e.clientX;
+    const x0 = e.clientX, y0 = e.clientY, height = el.getBoundingClientRect().height;
     let lit = el;
     const move = (ev: globalThis.PointerEvent) => {
       if (ev.pointerId !== id || start < 0) return;
       const pos = line[start].x + (ev.clientX - x0);
       const { pitch, nearest } = pitchAlong(line, pos);
+      recorder.swell(id, slideVelocity(vel0, ev.clientY - y0, height));
       recorder.glide(id, pitch, nearest.pitch, ev.timeStamp);
       if (nearest.el !== lit) { lit.classList.remove('down'); lit = nearest.el; lit.classList.add('down'); }
     };

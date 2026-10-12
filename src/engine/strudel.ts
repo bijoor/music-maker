@@ -313,9 +313,16 @@ function wrapSound(s: string) {
   soundMap.setKey(key, {
     ...entry,
     onTrigger: async (t: number, value: Record<string, unknown>, ...rest: unknown[]) => {
-      const voice = await onTrigger(t, value, ...rest);
+      let voice = await onTrigger(t, value, ...rest);
       const take = holders.get(String(value.holdId));
-      if (take && voice) take(voice);
+      if (take && voice?.node) {
+        // A held note gets a volume control of its own after the instrument's envelope, so a sliding finger
+        // can make it louder or softer without disturbing the envelope.
+        const level = getAudioContext().createGain();
+        voice.node.connect(level);
+        voice = { ...voice, node: level };
+        take(voice);
+      }
       return voice;
     },
   });
@@ -352,6 +359,8 @@ export interface HeldNote {
   stop(): void;
   /** Slide the pitch to `semitones` away from the note's own pitch (fractional for a smooth glide). */
   glide(semitones: number): void;
+  /** Change the volume smoothly to `ratio` times the volume it was struck at. */
+  level(ratio: number): void;
 }
 
 /**
@@ -361,10 +370,17 @@ export interface HeldNote {
 export function hold(value: Record<string, unknown>, max = 30): HeldNote {
   wrapSound(String(value.s ?? 'triangle'));
   const id = String(++holdId);
-  let voice: Voice | null = null, released = false, cents = 0;
+  let voice: Voice | null = null, released = false, cents = 0, ratio = 1;
+  const setLevel = (v: Voice) => {
+    const g = v.node?.gain, now = getAudioContext().currentTime;
+    if (!g) return;
+    g.cancelScheduledValues(now);
+    g.setTargetAtTime(ratio, now, 0.015);
+  };
   holders.set(id, (v) => {
     voice = v;
     if (cents) detuneVoice(v, cents);
+    if (ratio !== 1) setLevel(v);
     if (released) { releaseVoice(v); holders.delete(id); }
   });
   void trigger({ ...value, holdId: id }, max);
@@ -377,6 +393,10 @@ export function hold(value: Record<string, unknown>, max = 30): HeldNote {
     glide(semitones) {
       cents = semitones * 100;
       if (voice && !released) detuneVoice(voice, cents);
+    },
+    level(r) {
+      ratio = Math.max(0, r);
+      if (voice && !released) setLevel(voice);
     },
   };
 }

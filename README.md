@@ -56,7 +56,7 @@ Plan: see the project plan document (shared separately).
 ## Expression: velocity and bends
 
 - **Strike velocity** (as in GeoShred): where you strike a pad, key or scale pad sets how hard the note plays — soft at the top, full near the bottom (More → Strike velocity flips it or turns it off). MIDI velocity is used too. Softer notes and hits show lighter on the grids; a note's velocity can be changed on the note grid. In code: `.velocity("…")` in the notes' rhythm (a drum voice with softer hits gets a layer of its own).
-- **Bends**: a note can bend in from the previous note or a semitone or two away (note grid → Bend, with a speed). On the keys and scale pads, sliding a held finger sideways glides the pitch smoothly, measured from where it struck: one key's width reaches the next key's pitch (up and down do nothing once struck). Record and Edit write each key the finger passes as a note bending in from the last. In code: Strudel's pitch envelope, `.penv("…").pattack(…)`.
+- **Bends**: a note can bend in from the previous note or a semitone or two away (note grid → Bend, with a speed). On the keys and scale pads, sliding a held finger sideways glides the pitch smoothly, measured from where it struck: one key's width reaches the next key's pitch (sliding up and down changes the volume smoothly from the velocity it was struck at). Record and Edit write each key the finger passes as a note bending in from the last. In code: Strudel's pitch envelope, `.penv("…").pattack(…)`.
 
 ## Sounds and credits
 

@@ -191,17 +191,18 @@ export function preview(trackId: string, value: Record<string, unknown>, steps =
  */
 export function hold(trackId: string, value: Record<string, unknown>, steps?: number): engine.HeldNote {
   const track = useStore.getState().song.tracks.find((t) => t.id === trackId);
-  if (!track) return { stop() {}, glide() {} };
+  if (!track) return { stop() {}, glide() {}, level() {} };
   const v = { ...value, ...fxValues(track) };
   const max = () => (steps ? steps / 16 / engine.getCps() : 30);
   if (engine.isReady()) return engine.hold(v, max());
   // First sound: the engine is still starting; pass on what happens meanwhile.
-  let note: engine.HeldNote | null = null, stopped = false, semis = 0;
+  let note: engine.HeldNote | null = null, stopped = false, semis = 0, ratio = 1;
   engine.unlockAudio();
-  engine.initEngine().then(() => { note = engine.hold(v, max()); if (semis) note.glide(semis); if (stopped) note.stop(); warm(); });
+  engine.initEngine().then(() => { note = engine.hold(v, max()); if (semis) note.glide(semis); if (ratio !== 1) note.level(ratio); if (stopped) note.stop(); warm(); });
   return {
     stop() { stopped = true; note?.stop(); },
     glide(s) { semis = s; note?.glide(s); },
+    level(r) { ratio = r; note?.level(r); },
   };
 }
 

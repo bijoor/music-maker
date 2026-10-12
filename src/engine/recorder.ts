@@ -128,7 +128,7 @@ const sounding = new Map<number, () => void>();
  * What each pointer is playing, so sliding the finger can glide its pitch: `base` is the pitch the note started
  * on, `landed` the key it is nearest now (what gets recorded).
  */
-const voices = new Map<number, { trackId: string; base: number; landed: number; vel: number; notes: engine.HeldNote[] }>();
+const voices = new Map<number, { trackId: string; base: number; landed: number; struck: number; vel: number; notes: engine.HeldNote[] }>();
 /** Seconds a recorded slide takes to reach the new note when played back. */
 export const SLIDE_TIME = 0.12;
 /** Hold the sustain pedal (Shift on a computer keyboard) while it is down. */
@@ -145,7 +145,7 @@ export function press(trackId: string, pitches: number[], pointerId: number, cho
   const previewLen = chord && st.mode === 'edit' ? st.chordLen : st.noteLen;
   const notes = pitches.map((p) => player.hold(trackId, { note: p, s: track.sound ?? 'piano', ...velocityValue(vel) }, sustained ? undefined : previewLen));
   if (sustained) sounding.set(pointerId, () => notes.forEach((n) => n.stop()));
-  voices.set(pointerId, { trackId, base: pitches[0], landed: pitches[0], vel, notes });
+  voices.set(pointerId, { trackId, base: pitches[0], landed: pitches[0], struck: vel, vel, notes });
   recordPress(track, pitches, pointerId, chord, timeStamp, vel);
 }
 
@@ -186,6 +186,17 @@ export function release(pointerId: number, timeStamp?: number) {
   sounding.delete(pointerId);
   voices.delete(pointerId);
   finishHeld(pointerId, timeStamp);
+}
+
+/**
+ * The finger holding a key moved up or down: the note gets louder or softer smoothly, to velocity `vel`. Notes
+ * recorded from here on (keys the finger slides onto) take that velocity.
+ */
+export function swell(pointerId: number, vel: number) {
+  const v = voices.get(pointerId);
+  if (!v) return;
+  v.vel = Math.round(vel * 100) / 100;
+  v.notes.forEach((n) => n.level(vel / v.struck));
 }
 
 /**
