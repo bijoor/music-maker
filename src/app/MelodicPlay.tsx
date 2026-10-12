@@ -7,7 +7,11 @@ import * as recorder from '../engine/recorder';
 import StepStrip from './StepStrip';
 import { PAD_ROWS, PIANO_HINT } from './keymap';
 import { slideVelocity, strikeVelocity } from './strike';
-import { keyLine, pitchAlong } from './glide';
+import { anchors, keyAt, keyLine, pitchAlong } from './glide';
+
+/** A sliding finger that stops for this long settles onto the key under it, easing over SETTLE_EASE seconds. */
+const SETTLE_AFTER_MS = 100;
+const SETTLE_EASE = 0.08;
 
 const BLACK = [1, 3, 6, 8, 10];
 
@@ -30,24 +34,27 @@ export default function MelodicPlay({ track }: { track: Track }) {
       el.addEventListener('pointerleave', up);
       return;
     }
-    // Keys: sliding the held finger sideways glides the pitch, measured from where it struck (not the key's
-    // centre): moving one key's width reaches the next key's pitch. Sliding up or down changes the volume from
-    // the velocity it was struck at, on the same scale as striking.
+    // Keys: sliding the held finger sideways glides the pitch: it starts exactly on the struck key wherever it was
+    // struck, and moves evenly to each other key's pitch at that key's centre. When the finger stops on a key, the
+    // pitch settles onto that key (unless turned off in More). Sliding up or down changes the volume from the
+    // velocity it was struck at, on the same scale as striking.
     if (el.hasPointerCapture?.(id)) el.releasePointerCapture(id);
     const line = keyLine(el);
-    const start = line.findIndex((k) => k.el === el);
-    const x0 = e.clientX, y0 = e.clientY, height = el.getBoundingClientRect().height;
-    let lit = el;
+    const path = anchors(line, el, e.clientX);
+    const y0 = e.clientY, height = el.getBoundingClientRect().height;
+    let lit = el, settle: ReturnType<typeof setTimeout> | undefined;
     const move = (ev: globalThis.PointerEvent) => {
-      if (ev.pointerId !== id || start < 0) return;
-      const pos = line[start].x + (ev.clientX - x0);
-      const { pitch, nearest } = pitchAlong(line, pos);
+      if (ev.pointerId !== id || !line.length) return;
+      const on = keyAt(line, ev.clientX, document.elementFromPoint(ev.clientX, ev.clientY));
       recorder.swell(id, slideVelocity(vel0, ev.clientY - y0, height));
-      recorder.glide(id, pitch, nearest.pitch, ev.timeStamp);
-      if (nearest.el !== lit) { lit.classList.remove('down'); lit = nearest.el; lit.classList.add('down'); }
+      recorder.glide(id, pitchAlong(path, ev.clientX), on.pitch, ev.timeStamp);
+      if (on.el !== lit) { lit.classList.remove('down'); lit = on.el; lit.classList.add('down'); }
+      clearTimeout(settle);
+      if (useStore.getState().pitchSnap) settle = setTimeout(() => recorder.glide(id, on.pitch, on.pitch, undefined, SETTLE_EASE), SETTLE_AFTER_MS);
     };
     const up = (ev: globalThis.PointerEvent) => {
       if (ev.pointerId !== id) return;
+      clearTimeout(settle);
       recorder.release(id, ev.timeStamp);
       lit.classList.remove('down');
       removeEventListener('pointermove', move);

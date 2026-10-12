@@ -345,20 +345,23 @@ function releaseVoice(v: Voice, fade = 0.12) {
  * Move a voice's pitch to `cents` from where it started, smoothly (a finger sliding along the keys). Works for
  * oscillators and recorded samples, whose `detune` is the pitch; other sources (e.g. supersaw) keep their pitch.
  */
-function detuneVoice(v: Voice, cents: number) {
+function detuneVoice(v: Voice, cents: number, ease = 0.012) {
   const now = getAudioContext().currentTime;
   for (const src of sources(v)) {
     if (!(src instanceof OscillatorNode || src instanceof AudioBufferSourceNode)) continue;
     src.detune.cancelScheduledValues(now);
-    src.detune.setTargetAtTime(cents, now, 0.012);
+    src.detune.setTargetAtTime(cents, now, ease);
   }
 }
 
 export interface HeldNote {
   /** Let go: fade out and stop. */
   stop(): void;
-  /** Slide the pitch to `semitones` away from the note's own pitch (fractional for a smooth glide). */
-  glide(semitones: number): void;
+  /**
+   * Slide the pitch to `semitones` away from the note's own pitch (fractional for a smooth glide), following the
+   * finger closely, or easing over about `ease` seconds (settling onto a key).
+   */
+  glide(semitones: number, ease?: number): void;
   /** Change the volume smoothly to `ratio` times the volume it was struck at. */
   level(ratio: number): void;
 }
@@ -390,9 +393,9 @@ export function hold(value: Record<string, unknown>, max = 30): HeldNote {
       released = true;
       if (voice) { releaseVoice(voice); holders.delete(id); } else setTimeout(() => holders.delete(id), 5000); // still loading
     },
-    glide(semitones) {
+    glide(semitones, ease) {
       cents = semitones * 100;
-      if (voice && !released) detuneVoice(voice, cents);
+      if (voice && !released) detuneVoice(voice, cents, ease ? ease / 3 : undefined);
     },
     level(r) {
       ratio = Math.max(0, r);

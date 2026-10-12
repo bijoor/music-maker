@@ -49,6 +49,8 @@ interface State {
    * towards the top, 0 = off (always full).
    */
   touchVelocity: number;
+  /** Sliding: when the finger stops on a key, the pitch settles onto that key (per device; off = free bends). */
+  pitchSnap: boolean;
   /** Length in steps of notes added in the grid, and of chords placed there. */
   noteLen: number;
   chordLen: number;
@@ -141,6 +143,7 @@ interface State {
   setMessage(message: string | null): void;
   setRecordOffset(ms: number): void;
   setTouchVelocity(v: number): void;
+  setPitchSnap(on: boolean): void;
   /** Set the velocity (0–1) of the note starting at `step`. */
   setNoteVelocity(trackId: string, slot: number, step: number, vel: number): void;
 
@@ -256,6 +259,7 @@ export const useStore = create<State>((set, get) => {
   metronome: false,
   recordOffsetMs: loadNumber('recordOffsetMs', 0),
   touchVelocity: loadNumber('touchVelocity', 1),
+  pitchSnap: loadNumber('pitchSnap', 1) === 1,
   chain: false,
   songMode: false,
   past: [],
@@ -523,6 +527,10 @@ export const useStore = create<State>((set, get) => {
       const song = produce(s.song, (d) => { d.arrangement.splice(index, 1); });
       return { song, songMode: s.songMode && song.arrangement.length > 0, past: [...s.past.slice(-49), s.song], future: [], historyGroup: null };
     }),
+  setPitchSnap: (on) => {
+    saveNumber('pitchSnap', on ? 1 : 0);
+    set({ pitchSnap: on });
+  },
   setTouchVelocity: (v) => {
     saveNumber('touchVelocity', v);
     set({ touchVelocity: v });

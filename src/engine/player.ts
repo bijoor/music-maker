@@ -201,7 +201,7 @@ export function hold(trackId: string, value: Record<string, unknown>, steps?: nu
   engine.initEngine().then(() => { note = engine.hold(v, max()); if (semis) note.glide(semis); if (ratio !== 1) note.level(ratio); if (stopped) note.stop(); warm(); });
   return {
     stop() { stopped = true; note?.stop(); },
-    glide(s) { semis = s; note?.glide(s); },
+    glide(s, ease) { semis = s; note?.glide(s, ease); },
     level(r) { ratio = r; note?.level(r); },
   };
 }

@@ -201,13 +201,13 @@ export function swell(pointerId: number, vel: number) {
 
 /**
  * The finger holding a key moved sideways: the note's pitch follows it smoothly to `pitch` (fractional between
- * keys), like a string bend. `landed` is the key nearest the finger: when that changes, Record and Edit write the
+ * keys), like a string bend, or with `ease` (seconds) eases there (settling onto a key). `landed` is the key under the finger: when that changes, Record and Edit write the
  * new key's note, bending in from the previous one, so the grid keeps an outline of the slide.
  */
-export function glide(pointerId: number, pitch: number, landed: number, timeStamp?: number) {
+export function glide(pointerId: number, pitch: number, landed: number, timeStamp?: number, ease?: number) {
   const v = voices.get(pointerId);
   if (!v) return;
-  v.notes.forEach((n) => n.glide(pitch - v.base));
+  v.notes.forEach((n) => n.glide(pitch - v.base, ease));
   if (Math.abs(landed - v.landed) < 0.001) return;
   const from = v.landed;
   v.landed = landed;
