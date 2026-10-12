@@ -6,7 +6,7 @@ import * as player from '../engine/player';
 import { connectMidi, type MidiState } from '../engine/midi';
 
 export default function Transport() {
-  const { song, transport, panel, setPanel, updateReady, sargam, mode, countIn, metronome, setBpm, setTonic, setScale, toggleCode, resetSong, setUi, setMode } = useStore();
+  const { song, transport, panel, setPanel, updateReady, sargam, mode, countIn, metronome, setBpm, setTonic, setScale, toggleCode, resetSong, setUi, setMode, touchVelocity, setTouchVelocity } = useStore();
   const [more, setMore] = useState(false);
   const [confirmReset, setConfirmReset] = useState(false);
   const [midi, setMidi] = useState<{ state: MidiState; devices: string[] }>({ state: 'off', devices: [] });
@@ -90,6 +90,9 @@ export default function Transport() {
             <button role="menuitem" onClick={() => { connect(); setMore(false); }}>{midi.state === 'connected' ? `MIDI: ${midi.devices.join(', ')}` : midi.state === 'waiting' ? 'MIDI on (no device yet)' : 'Connect a MIDI keyboard or pads'}</button>
             <button role="menuitemcheckbox" aria-checked={sargam} onClick={() => { setUi({ sargam: !sargam }); setMore(false); }}>{sargam ? '✓ ' : ''}Sa Re Ga labels</button>
             <button role="menuitem" onClick={() => { if (confirmReset) { resetSong(); setMore(false); setConfirmReset(false); } else setConfirmReset(true); }}>{confirmReset ? 'Tap again: your clips will be replaced' : 'Reset to the demo song'}</button>
+            <button role="menuitem" onClick={() => setTouchVelocity(touchVelocity === 1 ? -1 : touchVelocity === -1 ? 0 : 1)}>
+              Strike velocity: {touchVelocity === 1 ? 'louder towards the bottom' : touchVelocity === -1 ? 'louder towards the top' : 'off (always full)'}
+            </button>
             <button role="menuitem" onClick={() => { setPanel('about'); setMore(false); }}>About and sound credits</button>
             <a role="menuitem" className="menulink" href="#lab" onClick={() => setMore(false)}>Phase 0 tests</a>
           </div>

@@ -53,6 +53,11 @@ The latest build of `main` is also published at <https://bijoor.github.io/music-
 
 Plan: see the project plan document (shared separately).
 
+## Expression: velocity and bends
+
+- **Strike velocity** (as in GeoShred): where you strike a pad, key or scale pad sets how hard the note plays — soft at the top, full near the bottom (More → Strike velocity flips it or turns it off). MIDI velocity is used too. Softer notes and hits show lighter on the grids; a note's velocity can be changed on the note grid. In code: `.velocity("…")` in the notes' rhythm (a drum voice with softer hits gets a layer of its own).
+- **Bends**: a note can bend in from the previous note or a semitone or two away (note grid → Bend, with a speed), or slide a finger from one key to another while holding. In code: Strudel's pitch envelope, `.penv("…").pattack(…)`.
+
 ## Sounds and credits
 
 Sounds load from these collections the first time they are used (the installed app then keeps them offline). The same list is in the app under More → About and sound credits.

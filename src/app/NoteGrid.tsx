@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, type ReactNode, type RefObject } from 'react';
+import { useEffect, useMemo, useRef, type CSSProperties, type ReactNode, type RefObject } from 'react';
 import { useStore } from '../state/store';
 import { findScale, gridRows, inScale, pitchLabel, scaleChords } from '../model/scales';
 import { bendFromPrevious, noteCovering } from '../model/clipEdit';
@@ -17,13 +17,15 @@ interface Props {
 
 const LENGTHS: [number, string][] = [[1, '1/16'], [2, '1/8'], [4, '1/4'], [8, '1/2'], [16, '1 bar']];
 /** Bend speeds, in seconds (Strudel's pattack). */
+/** Velocities offered for a note on the grid. */
+const VELOCITIES: [number, string][] = [[1, 'Full'], [0.8, 'Loud'], [0.6, 'Medium'], [0.4, 'Soft'], [0.25, 'Very soft']];
 const SPEEDS: [number, string][] = [[0.08, 'Fast'], [0.2, 'Medium'], [0.4, 'Slow'], [0.8, 'Very slow']];
 const semis = (b: number) => `${Math.abs(b) === 1 ? 'a semitone' : `${num(Math.abs(b))} semitones`} ${b < 0 ? 'below' : 'above'}`;
 const key = (p: number) => (Math.round(p * 100) / 100).toString();
 
 /** Rows are the notes of the scale (or raga) over two octaves; tap a cell to add or remove a note. */
 export default function NoteGrid({ track, clip, slot, bar }: Props) {
-  const { song, sargam, noteLen, chordLen, cursor, toggleNote, placeChord, setBend, setUi } = useStore();
+  const { song, sargam, noteLen, chordLen, cursor, toggleNote, placeChord, setBend, setNoteVelocity, setUi } = useStore();
   const scale = findScale(song);
   const tonic = song.key.tonic;
   const off = bar * STEPS_PER_BAR;
@@ -81,6 +83,7 @@ export default function NoteGrid({ track, clip, slot, bar }: Props) {
                   data-step={n && has ? n.step : step}
                   aria-label={`${pitchLabel(pitch, tonic, false)}, step ${s + 1}${has ? ', on' : ''}`}
                   aria-pressed={has}
+                  style={has && n!.vel < 1 ? ({ '--v': n!.vel } as CSSProperties) : undefined}
                   onClick={() => tap(step, pitch)}
                 />
               );
@@ -96,6 +99,15 @@ export default function NoteGrid({ track, clip, slot, bar }: Props) {
         <span className="muted-text">Chord at step {(cursor % STEPS_PER_BAR) + 1}</span>
         <select aria-label="Chord length" value={chordLen} onChange={(e) => setUi({ chordLen: +e.target.value })}>
           {LENGTHS.map(([n, l]) => <option key={n} value={n}>{l}</option>)}
+        </select>
+        <span className="muted-text">Velocity</span>
+        <select aria-label={target ? `Velocity of the note at step ${(target.step % STEPS_PER_BAR) + 1}` : 'Velocity: select a note first'} disabled={!target} value={String(target?.vel ?? 1)} onChange={(e) => {
+          if (!target) return;
+          setNoteVelocity(track.id, slot, target.step, +e.target.value);
+          target.pitches.forEach((p) => player.preview(track.id, { note: p, s: track.sound ?? 'piano', ...(+e.target.value < 1 ? { velocity: +e.target.value } : {}) }, target.len));
+        }}>
+          {VELOCITIES.map(([v, l]) => <option key={v} value={String(v)}>{l}</option>)}
+          {target && !VELOCITIES.some(([v]) => v === target.vel) && <option value={String(target.vel)}>{Math.round(target.vel * 100)}%</option>}
         </select>
         <span className="muted-text">Bend</span>
         <select aria-label={target ? `Bend into the note at step ${(target.step % STEPS_PER_BAR) + 1}` : 'Bend: select a note first'} disabled={!target} value={bendValue} onChange={(e) => applyBend(+e.target.value)}>

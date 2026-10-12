@@ -49,17 +49,26 @@ function detectBars(evs: Ev[]): Bars | null {
 
 const onGrid = (x: number) => Math.abs(x * STEPS_PER_BAR - Math.round(x * STEPS_PER_BAR)) < 1e-6;
 
+/** An event's velocity as the grid stores it (1 = full), or null when it is not one the grid can show. */
+function velocityOf(v: Record<string, unknown>): number | null {
+  if (v.velocity === undefined) return 1;
+  const x = Number(v.velocity);
+  return Number.isFinite(x) && x > 0 && x <= 1 ? Math.round(x * 100) / 100 : null;
+}
+
 function toDrums(evs: Ev[], bars: Bars, track: Track): Record<string, number[]> | null {
   const bank = track.bank ?? 'RolandTR909';
   const hits = emptyHits(bars);
   for (const e of evs.filter((x) => x.b < bars)) {
-    if (!onGrid(e.b) || Object.keys(e.v).some((k) => !['s', 'n', 'bank'].includes(k)) || typeof e.v.s !== 'string') return null;
+    if (!onGrid(e.b) || Object.keys(e.v).some((k) => !['s', 'n', 'bank', 'velocity'].includes(k)) || typeof e.v.s !== 'string') return null;
+    const vel = velocityOf(e.v);
+    if (vel === null) return null;
     const voice = e.v.n ? `${e.v.s}:${e.v.n}` : e.v.s;
     // The grid always writes the track's machine (or the machine it borrows from, or none for an Indian kit);
     // anything else would change the sound.
     if (!kitHas(bank, voice) || (e.v.bank ?? '') !== voiceBank(bank, voice)) return null;
     hits[voice] ??= Array(bars * STEPS_PER_BAR).fill(0);
-    hits[voice][Math.round(e.b * STEPS_PER_BAR)] = 1;
+    hits[voice][Math.round(e.b * STEPS_PER_BAR)] = vel;
   }
   return hits;
 }
@@ -67,7 +76,9 @@ function toDrums(evs: Ev[], bars: Bars, track: Track): Record<string, number[]> 
 function toNotes(evs: Ev[], bars: Bars, track: Track): Note[] | null {
   const byStep = new Map<number, Note>();
   for (const e of evs.filter((x) => x.b < bars)) {
-    if (!onGrid(e.b) || !onGrid(e.d) || Object.keys(e.v).some((k) => !['note', 's', 'penv', 'pattack'].includes(k))) return null;
+    if (!onGrid(e.b) || !onGrid(e.d) || Object.keys(e.v).some((k) => !['note', 's', 'penv', 'pattack', 'velocity'].includes(k))) return null;
+    const vel = velocityOf(e.v);
+    if (vel === null) return null;
     if (e.v.s !== track.sound) return null;
     const pitch = typeof e.v.note === 'number' ? e.v.note : typeof e.v.note === 'string' ? core.noteToMidi(e.v.note) : NaN;
     if (!Number.isFinite(pitch)) return null;
@@ -78,9 +89,9 @@ function toNotes(evs: Ev[], bars: Bars, track: Track): Note[] | null {
     if (!Number.isFinite(penv) || (pattack !== undefined && !(pattack >= 0))) return null;
     const bend = penv ? -penv : undefined;
     const n = byStep.get(step);
-    if (n && (n.len !== len || n.bend !== bend || (bend && n.bendTime !== pattack))) return null; // a chord's notes share one length and bend
+    if (n && (n.len !== len || n.vel !== vel || n.bend !== bend || (bend && n.bendTime !== pattack))) return null; // a chord's notes share one length, velocity and bend
     if (n) n.pitches.push(pitch);
-    else byStep.set(step, { step, len, pitches: [pitch], vel: 1, ...(bend ? { bend, bendTime: pattack ?? DEFAULT_BEND_TIME } : {}) });
+    else byStep.set(step, { step, len, pitches: [pitch], vel, ...(bend ? { bend, bendTime: pattack ?? DEFAULT_BEND_TIME } : {}) });
   }
   const notes = [...byStep.values()].sort((a, b) => a.step - b.step);
   for (let i = 1; i < notes.length; i++) if (notes[i - 1].step + notes[i - 1].len > notes[i].step) return null;

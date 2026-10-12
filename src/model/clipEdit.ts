@@ -13,7 +13,7 @@ export function noteCovering(clip: MelodicClip, step: number): Note | undefined 
  * starting at that step; otherwise the new note replaces it. A note held over `step` is cut short, notes
  * starting inside the new note are removed, and the length stops at the bar line.
  */
-export function writeNote(clip: MelodicClip, step: number, pitches: number[], len: number, add = false) {
+export function writeNote(clip: MelodicClip, step: number, pitches: number[], len: number, add = false, vel = 1) {
   const barEnd = (Math.floor(step / STEPS_PER_BAR) + 1) * STEPS_PER_BAR;
   len = Math.max(1, Math.min(len, barEnd - step, clip.bars * STEPS_PER_BAR - step));
   const existing = clip.notes.find((n) => n.step === step);
@@ -24,7 +24,7 @@ export function writeNote(clip: MelodicClip, step: number, pitches: number[], le
     existing.len = len;
   } else {
     clip.notes = clip.notes.filter((n) => n.step !== step);
-    clip.notes.push({ step, len, pitches: [...pitches].sort((a, b) => a - b), vel: 1 });
+    clip.notes.push({ step, len, pitches: [...pitches].sort((a, b) => a - b), vel });
   }
   for (const n of clip.notes) if (n.step < step && n.step + n.len > step) n.len = step - n.step;
   clip.notes = clip.notes.filter((n) => !(n.step > step && n.step < step + len));

@@ -44,6 +44,11 @@ interface State {
   scaleLock: boolean;
   /** Sustain: notes played on the keys sound for as long as they are held (in Record, the written length follows the hold too). */
   sustain: boolean;
+  /**
+   * Velocity from where a key or pad is struck (per device): 1 = louder towards the bottom edge, -1 = louder
+   * towards the top, 0 = off (always full).
+   */
+  touchVelocity: number;
   /** Length in steps of notes added in the grid, and of chords placed there. */
   noteLen: number;
   chordLen: number;
@@ -129,12 +134,15 @@ interface State {
   setUi(ui: Partial<Pick<State, 'soundOpen' | 'sargam' | 'keyboard' | 'keyboardOctaves' | 'scaleLock' | 'sustain' | 'noteLen' | 'chordLen' | 'cursor' | 'quantize' | 'countIn' | 'metronome'>>): void;
   setMode(mode: Mode): void;
   /** Recording: add a drum hit or a note (held notes are written again with a longer length on release). */
-  recordHit(trackId: string, slot: number, voice: string, step: number, group: string): void;
-  recordNote(trackId: string, slot: number, step: number, pitches: number[], len: number, group: string, bend?: { bend: number; time: number }): void;
+  recordHit(trackId: string, slot: number, voice: string, step: number, group: string, vel?: number): void;
+  recordNote(trackId: string, slot: number, step: number, pitches: number[], len: number, group: string, bend?: { bend: number; time: number }, vel?: number): void;
   undo(): void;
   redo(): void;
   setMessage(message: string | null): void;
   setRecordOffset(ms: number): void;
+  setTouchVelocity(v: number): void;
+  /** Set the velocity (0–1) of the note starting at `step`. */
+  setNoteVelocity(trackId: string, slot: number, step: number, vel: number): void;
 
   // Chains, scenes, song
   setChain(on: boolean): void;
@@ -247,6 +255,7 @@ export const useStore = create<State>((set, get) => {
   countIn: true,
   metronome: false,
   recordOffsetMs: loadNumber('recordOffsetMs', 0),
+  touchVelocity: loadNumber('touchVelocity', 1),
   chain: false,
   songMode: false,
   past: [],
@@ -514,23 +523,33 @@ export const useStore = create<State>((set, get) => {
       const song = produce(s.song, (d) => { d.arrangement.splice(index, 1); });
       return { song, songMode: s.songMode && song.arrangement.length > 0, past: [...s.past.slice(-49), s.song], future: [], historyGroup: null };
     }),
+  setTouchVelocity: (v) => {
+    saveNumber('touchVelocity', v);
+    set({ touchVelocity: v });
+  },
+  setNoteVelocity: (trackId, slot, step, vel) =>
+    edit(onTrack(trackId, (t) => {
+      const c = t.slots[slot];
+      const n = c?.kind === 'melodic' ? c.notes.find((x) => x.step === step) : undefined;
+      if (n) n.vel = Math.round(Math.max(0.05, Math.min(1, vel)) * 100) / 100;
+    })),
   setRecordOffset: (ms) => {
     const v = Math.round(Math.max(-200, Math.min(300, ms)));
     saveNumber('recordOffsetMs', v);
     set({ recordOffsetMs: v });
   },
-  recordHit: (trackId, slot, voice, step, group) =>
+  recordHit: (trackId, slot, voice, step, group, vel = 1) =>
     edit(onTrack(trackId, (t) => {
       const c = t.slots[slot];
       if (c?.kind !== 'drums') return;
       if (!c.hits[voice]) c.hits[voice] = Array(c.bars * STEPS_PER_BAR).fill(0);
-      c.hits[voice][step] = 1;
+      c.hits[voice][step] = Math.round(vel * 100) / 100;
     }), group),
-  recordNote: (trackId, slot, step, pitches, len, group, bend) =>
+  recordNote: (trackId, slot, step, pitches, len, group, bend, vel = 1) =>
     edit(onTrack(trackId, (t) => {
       const c = t.slots[slot];
       if (c?.kind !== 'melodic') return;
-      writeNote(c, step, pitches, len, t.poly);
+      writeNote(c, step, pitches, len, t.poly, vel);
       if (bend) setBendIn(c, step, bend.bend, bend.time);
     }), group),
   undo: () =>

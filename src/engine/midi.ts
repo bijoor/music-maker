@@ -16,6 +16,8 @@ export type MidiState = 'off' | 'unsupported' | 'denied' | 'waiting' | 'connecte
 
 let access: MIDIAccess | null = null;
 const idFor = (note: number) => 30_000 + note;
+/** MIDI velocity 1–127 as the grid's 0–1, in steps of 0.05. */
+const midiVelocity = (v: number) => Math.max(0.05, Math.round((v / 127) * 20) / 20);
 
 function onMessage(e: MIDIMessageEvent) {
   const data = e.data;
@@ -29,12 +31,12 @@ function onMessage(e: MIDIMessageEvent) {
       // Indian kits: the strokes in pad order from C2 (MIDI 36) up.
       const voice = isIndianKit(track.bank) ? kitVoices(track.bank)[note - 36]?.voice : GM_DRUMS[note];
       if (!voice) return;
-      recorder.drum(track.id, voice, voiceSound(track.bank, voice), e.timeStamp);
+      recorder.drum(track.id, voice, voiceSound(track.bank, voice), e.timeStamp, midiVelocity(vel));
     } else {
       // In-scale notes play the scale's own pitch (including microtonal offsets); others play as sent.
       const scale = findScale(s.song), tonic = s.song.key.tonic;
       const pitch = inScale(scale, tonic, note) ? scalePitch(scale, tonic, ((note - tonicPc(tonic)) % 12 + 12) % 12, Math.floor((note - tonicPc(tonic)) / 12) - 1) : note;
-      recorder.press(track.id, [pitch], idFor(note), false, e.timeStamp);
+      recorder.press(track.id, [pitch], idFor(note), false, e.timeStamp, undefined, midiVelocity(vel));
     }
   } else if (kind === 0x80 || (kind === 0x90 && vel === 0)) {
     recorder.release(idFor(note), e.timeStamp);

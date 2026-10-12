@@ -6,6 +6,7 @@ import type { Track } from '../model/types';
 import * as recorder from '../engine/recorder';
 import StepStrip from './StepStrip';
 import { PAD_ROWS, PIANO_HINT } from './keymap';
+import { strikeVelocity } from './strike';
 
 const BLACK = [1, 3, 6, 8, 10];
 
@@ -16,7 +17,7 @@ export default function MelodicPlay({ track }: { track: Track }) {
   const tonic = song.key.tonic;
   const chords = scaleChords(scale, tonic, track.octave, sargam);
   const play = (pitches: number[], e: PointerEvent<HTMLElement>, chord = false) => {
-    recorder.press(track.id, pitches, e.pointerId, chord, e.timeStamp);
+    recorder.press(track.id, pitches, e.pointerId, chord, e.timeStamp, undefined, strikeVelocity(e.clientY, e.currentTarget));
     let el = e.currentTarget;
     el.classList.add('down');
     const id = e.pointerId;

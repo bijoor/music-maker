@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ReactNode } from 'react';
+import { useEffect, useRef, type CSSProperties, type ReactNode } from 'react';
 import { useStore } from '../state/store';
 import { kitVoices, voiceSound } from '../model/kit';
 import { STEPS_PER_BAR, type DrumClip, type Track } from '../model/types';
@@ -76,7 +76,7 @@ export default function DrumGrid({ track, clip, slot, bar }: Props) {
         <Row key={k.voice} name={k.name} aux={!k.main}>
           {Array.from({ length: STEPS_PER_BAR }, (_, s) => {
             const step = off + s;
-            const on = (clip.hits[k.voice]?.[step] ?? 0) > 0;
+            const v = clip.hits[k.voice]?.[step] ?? 0, on = v > 0;
             return (
               <button
                 key={s}
@@ -85,6 +85,7 @@ export default function DrumGrid({ track, clip, slot, bar }: Props) {
                 data-cell={`${k.voice}:${step}`}
                 aria-label={`${k.name}, step ${s + 1}${on ? ', on' : ''}`}
                 aria-pressed={on}
+                style={on && v < 1 ? ({ '--v': v } as CSSProperties) : undefined}
                 onClick={() => tap(k.voice, step)}
               />
             );

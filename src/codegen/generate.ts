@@ -85,9 +85,13 @@ export const clipVar = (label: string, slot: number) => `${label}_${SLOT_LETTERS
 
 // ---------- Drums ----------
 
-/** One voice's hits in one bar as compact mini-notation tokens, e.g. `bd*4`, `[~ hh]*4`, `bd ~ ~ bd ...`. */
-function writeVoiceBar(w: Writer, clip: DrumClip, voice: string, bar: number) {
-  const row = clip.hits[voice].slice(bar * STEPS_PER_BAR, (bar + 1) * STEPS_PER_BAR).map((v) => v > 0);
+/**
+ * One voice's hits in one bar as compact mini-notation tokens, e.g. `bd*4`, `[~ hh]*4`, `bd ~ ~ bd ...`. With
+ * `velocities`, the same rhythm carrying each hit's velocity instead (the two always share one structure,
+ * because repeats are found on the velocities themselves).
+ */
+function writeVoiceBar(w: Writer, clip: DrumClip, voice: string, bar: number, velocities = false) {
+  const row = clip.hits[voice].slice(bar * STEPS_PER_BAR, (bar + 1) * STEPS_PER_BAR).map((v) => (v > 0 ? Math.round(v * 100) / 100 : 0));
   // Coarsest grid that holds every hit: 1, 2, 4, 8 or 16 slots per bar.
   let res = STEPS_PER_BAR;
   for (const r of [1, 2, 4, 8]) {
@@ -103,27 +107,32 @@ function writeVoiceBar(w: Writer, clip: DrumClip, voice: string, bar: number) {
   }
   const reps = res / period;
   const stepsOf = (i: number) => Array.from({ length: reps }, (_, r) => bar * STEPS_PER_BAR + (i + r * period) * g);
+  const hit = (i: number) => (velocities ? w.add(num(coarse[i])) : w.token(voice, clip.id, stepsOf(i)));
   if (reps > 1 && coarse[0] && coarse.slice(1, period).every((h) => !h)) {
-    w.token(voice, clip.id, stepsOf(0)).add(`*${reps}`);
+    hit(0);
+    w.add(`*${reps}`);
     return;
   }
   if (reps > 1) w.add('[');
   for (let i = 0; i < period; i++) {
     if (i) w.add(' ');
-    if (coarse[i]) w.token(voice, clip.id, stepsOf(i));
+    if (coarse[i]) hit(i);
     else w.add('~');
   }
   if (reps > 1) w.add(`]*${reps}`);
 }
 
-function writeDrumBar(w: Writer, clip: DrumClip, voices: string[], bar: number) {
+function writeDrumBar(w: Writer, clip: DrumClip, voices: string[], bar: number, velocities = false) {
   const playing = voices.filter((v) => clip.hits[v].slice(bar * STEPS_PER_BAR, (bar + 1) * STEPS_PER_BAR).some((x) => x > 0));
   if (!playing.length) { w.add('~'); return; }
   playing.forEach((v, i) => {
     if (i) w.add(', ');
-    writeVoiceBar(w, clip, v, bar);
+    writeVoiceBar(w, clip, v, bar, velocities);
   });
 }
+
+/** Whether any hit of the voice is softer than full. */
+const hasVelocity = (clip: DrumClip, voice: string) => clip.hits[voice].some((x) => x > 0 && Math.round(x * 100) < 100);
 
 function writeBars(w: Writer, bars: number, writeBar: (bar: number) => void) {
   if (bars === 1) { writeBar(0); return; }
@@ -144,18 +153,28 @@ function writeDrumClip(w: Writer, track: Track, clip: DrumClip) {
   const used = Object.keys(clip.hits).filter((v) => kitHas(bank, v) && clip.hits[v].some((x) => x > 0)).sort((a, b) => order(a) - order(b));
   if (!used.length) { w.add('silence'); return; }
   // Voices the machine lacks are borrowed from another machine, as a separate layer. Indian kits have no machine.
-  const groups = new Map<string, string[]>();
+  // A voice with softer hits gets a layer of its own, carrying its velocities in the same rhythm.
+  const groups = new Map<string, { bank: string; voices: string[]; velocity: boolean }>();
   for (const v of used) {
-    const b = voiceBank(bank, v);
-    groups.set(b, [...(groups.get(b) ?? []), v]);
+    const b = voiceBank(bank, v), velocity = hasVelocity(clip, v);
+    const key = velocity ? `${b}|${v}` : b;
+    const g = groups.get(key) ?? { bank: b, voices: [], velocity };
+    g.voices.push(v);
+    groups.set(key, g);
   }
   const many = groups.size > 1;
   if (many) w.add('stack(');
-  [...groups].forEach(([b, voices], i) => {
+  [...groups.values()].forEach(({ bank: b, voices, velocity }, i) => {
     if (i) w.add(', ');
     w.add('s("');
     writeBars(w, clip.bars, (bar) => writeDrumBar(w, clip, voices, bar));
-    w.add(b ? `").bank("${b}")` : '")');
+    w.add('")');
+    if (velocity) {
+      w.add('.velocity("');
+      writeBars(w, clip.bars, (bar) => writeDrumBar(w, clip, voices, bar, true));
+      w.add('")');
+    }
+    if (b) w.add(`.bank("${b}")`);
   });
   if (many) w.add(')');
 }
@@ -192,8 +211,14 @@ function writeMelodicClip(w: Writer, track: Track, clip: MelodicClip) {
   w.add('note("');
   writeBars(w, clip.bars, (bar) => writeMelodicBar(w, clip, bar));
   w.add(`").s("${track.sound ?? 'piano'}")`);
-  // Bends: the pitch envelope, one value per note in the same rhythm (0 = no bend).
   const notes = clip.notes.filter((n) => n.pitches.length);
+  // Velocity, when any note is softer than full: one value per note in the same rhythm.
+  if (notes.some((n) => Math.round(n.vel * 100) < 100)) {
+    w.add('.velocity("');
+    writeBars(w, clip.bars, (bar) => writeMelodicBar(w, clip, bar, (n) => num(n.vel)));
+    w.add('")');
+  }
+  // Bends: the pitch envelope, one value per note in the same rhythm (0 = no bend).
   const bent = notes.filter((n) => n.bend);
   if (!bent.length) return;
   w.add('.penv("');
