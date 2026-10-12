@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useRef, type ReactNode, type RefObject } from 'react';
 import { useStore } from '../state/store';
 import { findScale, gridRows, inScale, pitchLabel, scaleChords } from '../model/scales';
-import { noteCovering } from '../model/clipEdit';
+import { bendFromPrevious, noteCovering } from '../model/clipEdit';
 import { pitchToCode } from '../model/notes';
 import { STEPS_PER_BAR, type MelodicClip, type Track } from '../model/types';
-import { findToken } from '../codegen/generate';
+import { DEFAULT_BEND_TIME, findToken, num } from '../codegen/generate';
 import * as engine from '../engine/strudel';
 import * as player from '../engine/player';
 
@@ -16,11 +16,14 @@ interface Props {
 }
 
 const LENGTHS: [number, string][] = [[1, '1/16'], [2, '1/8'], [4, '1/4'], [8, '1/2'], [16, '1 bar']];
+/** Bend speeds, in seconds (Strudel's pattack). */
+const SPEEDS: [number, string][] = [[0.08, 'Fast'], [0.2, 'Medium'], [0.4, 'Slow'], [0.8, 'Very slow']];
+const semis = (b: number) => `${Math.abs(b) === 1 ? 'a semitone' : `${num(Math.abs(b))} semitones`} ${b < 0 ? 'below' : 'above'}`;
 const key = (p: number) => (Math.round(p * 100) / 100).toString();
 
 /** Rows are the notes of the scale (or raga) over two octaves; tap a cell to add or remove a note. */
 export default function NoteGrid({ track, clip, slot, bar }: Props) {
-  const { song, sargam, noteLen, chordLen, cursor, toggleNote, placeChord, setUi } = useStore();
+  const { song, sargam, noteLen, chordLen, cursor, toggleNote, placeChord, setBend, setUi } = useStore();
   const scale = findScale(song);
   const tonic = song.key.tonic;
   const off = bar * STEPS_PER_BAR;
@@ -39,6 +42,21 @@ export default function NoteGrid({ track, clip, slot, bar }: Props) {
     setUi({ cursor: step });
   };
 
+  // Bend: applies to the note sounding at the selected step.
+  const target = noteCovering(clip, cursor);
+  const fromPrev = target ? bendFromPrevious(clip, target.step) : null;
+  const bendValue = target?.bend ? String(target.bend) : '0';
+  const bendOptions: [string, string][] = [['0', 'No bend']];
+  if (fromPrev) bendOptions.push([String(fromPrev), `From the previous note (${semis(fromPrev)})`]);
+  for (const b of [-2, -1, 1, 2]) if (b !== fromPrev) bendOptions.push([String(b), `From ${semis(b)}`]);
+  if (target?.bend && !bendOptions.some(([v]) => v === bendValue)) bendOptions.push([bendValue, `From ${semis(target.bend)}`]);
+  const bendTime = target?.bendTime ?? DEFAULT_BEND_TIME;
+  const applyBend = (bend: number, time = bendTime) => {
+    if (!target) return;
+    setBend(track.id, slot, target.step, bend || null, bend ? time : undefined);
+    if (bend) target.pitches.forEach((p) => player.preview(track.id, { note: p, s: track.sound ?? 'piano', penv: -bend, pattack: time }, target.len));
+  };
+
   return (
     <div className="ngrid-wrap">
       <div className="ngrid" ref={ref}>
@@ -54,7 +72,7 @@ export default function NoteGrid({ track, clip, slot, bar }: Props) {
               const step = off + s;
               const n = noteCovering(clip, step);
               const has = !!n && n.pitches.some((p) => Math.abs(p - pitch) < 0.001);
-              const cls = has ? (n!.step === step ? ' on' : ' cont') : '';
+              const cls = has ? (n!.step === step ? ` on${n!.bend ? (n!.bend < 0 ? ' bend-up' : ' bend-down') : ''}` : ' cont') : '';
               return (
                 <button
                   key={s}
@@ -79,6 +97,16 @@ export default function NoteGrid({ track, clip, slot, bar }: Props) {
         <select aria-label="Chord length" value={chordLen} onChange={(e) => setUi({ chordLen: +e.target.value })}>
           {LENGTHS.map(([n, l]) => <option key={n} value={n}>{l}</option>)}
         </select>
+        <span className="muted-text">Bend</span>
+        <select aria-label={target ? `Bend into the note at step ${(target.step % STEPS_PER_BAR) + 1}` : 'Bend: select a note first'} disabled={!target} value={bendValue} onChange={(e) => applyBend(+e.target.value)}>
+          {target ? bendOptions.map(([v, l]) => <option key={v} value={v}>{l}</option>) : <option value="0">Select a note</option>}
+        </select>
+        {target?.bend ? (
+          <select aria-label="Bend speed" value={String(SPEEDS.find(([t]) => Math.abs(t - bendTime) < 0.001)?.[0] ?? bendTime)} onChange={(e) => applyBend(target.bend!, +e.target.value)}>
+            {SPEEDS.map(([t, l]) => <option key={t} value={t}>{l}</option>)}
+            {!SPEEDS.some(([t]) => Math.abs(t - bendTime) < 0.001) && <option value={bendTime}>{num(bendTime)} s</option>}
+          </select>
+        ) : null}
         <div className="chordrow">
           {chords.map((c, i) => (
             <button key={i} className="chip" onClick={() => { placeChord(track.id, slot, cursor, c.pitches); preview(c.pitches, chordLen); setUi({ cursor: Math.min(clip.bars * STEPS_PER_BAR - 1, cursor + chordLen) }); }}>

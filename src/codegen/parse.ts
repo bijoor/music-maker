@@ -8,7 +8,7 @@ import { transpiler } from '@strudel/transpiler';
 import { kitHas, voiceBank } from '../model/kit';
 import { emptyHits, newId } from '../model/build';
 import { MAX_SLOTS, STEPS_PER_BAR, type Bars, type Clip, type Fx, type Note, type Song, type Track } from '../model/types';
-import { clipCode, trackLabels } from './generate';
+import { DEFAULT_BEND_TIME, clipCode, trackLabels } from './generate';
 
 export interface ParseResult {
   song: Song;
@@ -67,16 +67,20 @@ function toDrums(evs: Ev[], bars: Bars, track: Track): Record<string, number[]> 
 function toNotes(evs: Ev[], bars: Bars, track: Track): Note[] | null {
   const byStep = new Map<number, Note>();
   for (const e of evs.filter((x) => x.b < bars)) {
-    if (!onGrid(e.b) || !onGrid(e.d) || Object.keys(e.v).some((k) => !['note', 's'].includes(k))) return null;
+    if (!onGrid(e.b) || !onGrid(e.d) || Object.keys(e.v).some((k) => !['note', 's', 'penv', 'pattack'].includes(k))) return null;
     if (e.v.s !== track.sound) return null;
     const pitch = typeof e.v.note === 'number' ? e.v.note : typeof e.v.note === 'string' ? core.noteToMidi(e.v.note) : NaN;
     if (!Number.isFinite(pitch)) return null;
     const step = Math.round(e.b * STEPS_PER_BAR), len = Math.round(e.d * STEPS_PER_BAR);
     if (len < 1 || (step % STEPS_PER_BAR) + len > STEPS_PER_BAR) return null; // notes never cross a bar line
+    // A bend is the pitch envelope: penv semitones below the note (the grid's bend is its negative).
+    const penv = e.v.penv === undefined ? 0 : Number(e.v.penv), pattack = e.v.pattack === undefined ? undefined : Number(e.v.pattack);
+    if (!Number.isFinite(penv) || (pattack !== undefined && !(pattack >= 0))) return null;
+    const bend = penv ? -penv : undefined;
     const n = byStep.get(step);
-    if (n && n.len !== len) return null; // a chord's notes share one length
+    if (n && (n.len !== len || n.bend !== bend || (bend && n.bendTime !== pattack))) return null; // a chord's notes share one length and bend
     if (n) n.pitches.push(pitch);
-    else byStep.set(step, { step, len, pitches: [pitch], vel: 1 });
+    else byStep.set(step, { step, len, pitches: [pitch], vel: 1, ...(bend ? { bend, bendTime: pattack ?? DEFAULT_BEND_TIME } : {}) });
   }
   const notes = [...byStep.values()].sort((a, b) => a.step - b.step);
   for (let i = 1; i < notes.length; i++) if (notes[i - 1].step + notes[i - 1].len > notes[i].step) return null;

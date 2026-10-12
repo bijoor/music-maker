@@ -45,3 +45,29 @@ export function toggleNote(clip: MelodicClip, step: number, pitch: number, len: 
   writeNote(clip, step, [pitch], len, poly);
   return true;
 }
+
+/** The note before the one starting at `step` (the latest note that starts earlier), if any. */
+export function previousNote(clip: MelodicClip, step: number): Note | undefined {
+  return clip.notes.filter((n) => n.step < step && n.pitches.length).sort((a, b) => b.step - a.step)[0];
+}
+
+/**
+ * Semitones a note at `step` would bend in from to slide from the previous note's pitch (lowest pitch of each,
+ * so a melody line reads naturally), limited to an octave; null when there is no previous note.
+ */
+export function bendFromPrevious(clip: MelodicClip, step: number): number | null {
+  const n = clip.notes.find((x) => x.step === step), prev = previousNote(clip, step);
+  if (!n?.pitches.length || !prev) return null;
+  const d = prev.pitches[0] - n.pitches[0];
+  return Math.max(-12, Math.min(12, Math.round(d * 100) / 100));
+}
+
+/** Set (or with `bend` 0 / null, clear) the bend of the note starting at `step`. Returns false when there is none. */
+export function setBend(clip: MelodicClip, step: number, bend: number | null, time?: number): boolean {
+  const n = clip.notes.find((x) => x.step === step);
+  if (!n) return false;
+  if (!bend) { delete n.bend; delete n.bendTime; return true; }
+  n.bend = bend;
+  if (time !== undefined) n.bendTime = time;
+  return true;
+}

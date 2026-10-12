@@ -336,3 +336,9 @@ select.sm { min-height: 30px; padding: 3px 6px; font-size: 13px; }
 .about ul { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 8px; }
 .about a { color: var(--accent); }
 .about .lic { font-size: 12px; color: var(--muted); }
+
+/* Bent notes: a small curve in the note's first cell, rising (from below) or falling (from above). */
+.cell.bend-up, .cell.bend-down { position: relative; }
+.cell.bend-up::before, .cell.bend-down::before { position: absolute; left: 2px; top: 50%; transform: translateY(-50%); font-size: 11px; line-height: 1; color: #fff; opacity: .9; pointer-events: none; }
+.cell.bend-up::before { content: '⤴'; }
+.cell.bend-down::before { content: '⤵'; }

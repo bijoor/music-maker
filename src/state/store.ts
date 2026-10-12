@@ -6,7 +6,7 @@ import { emptyHits, newId, track as makeTrack, defaultFx } from '../model/build'
 import { drumPresets, INSTRUMENTS } from '../model/presets';
 import { kitHas } from '../model/kit';
 import { MAX_SLOTS, STEPS_PER_BAR, type Bars, type Clip, type Fx, type ScaleDef, type Song, type Track } from '../model/types';
-import { toggleNote as toggleNoteIn, writeNote } from '../model/clipEdit';
+import { setBend as setBendIn, toggleNote as toggleNoteIn, writeNote } from '../model/clipEdit';
 import { findScale, scalePitch } from '../model/scales';
 import { deleteSongById, listSongs, loadCurrent, loadNumber, loadSongById, saveNumber, saveSongById } from './persist';
 
@@ -112,6 +112,8 @@ interface State {
   toggleHit(trackId: string, slot: number, voice: string, step: number): boolean;
   applyPreset(trackId: string, slot: number, preset: string, bar: number): void;
   toggleNote(trackId: string, slot: number, step: number, pitch: number): boolean;
+  /** Bend into the note starting at `step` from `bend` semitones away (0 / null clears), sliding over `time` seconds. */
+  setBend(trackId: string, slot: number, step: number, bend: number | null, time?: number): void;
   placeChord(trackId: string, slot: number, step: number, pitches: number[]): void;
 
   // UI
@@ -412,6 +414,11 @@ export const useStore = create<State>((set, get) => {
     }));
     return on;
   },
+  setBend: (trackId, slot, step, bend, time) =>
+    edit(onTrack(trackId, (t) => {
+      const c = t.slots[slot];
+      if (c?.kind === 'melodic') setBendIn(c, step, bend, time);
+    })),
   placeChord: (trackId, slot, step, pitches) => {
     const len = get().chordLen;
     edit(onTrack(trackId, (t) => {

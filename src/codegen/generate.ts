@@ -6,7 +6,7 @@
 import { isIndianKit, kitHas, kitVoices, voiceBank, voiceOrder } from '../model/kit';
 import { pitchToCode } from '../model/notes';
 import { findScale } from '../model/scales';
-import { STEPS_PER_BAR, type Clip, type DrumClip, type MelodicClip, type Song, type Track } from '../model/types';
+import { STEPS_PER_BAR, type Clip, type DrumClip, type MelodicClip, type Note, type Song, type Track } from '../model/types';
 
 export interface CodeToken {
   start: number;
@@ -162,7 +162,11 @@ function writeDrumClip(w: Writer, track: Track, clip: DrumClip) {
 
 // ---------- Melodic ----------
 
-function writeMelodicBar(w: Writer, clip: MelodicClip, bar: number) {
+/**
+ * One bar of a melodic clip. Normally the notes; with `value`, the same rhythm carrying one value per note
+ * instead (for pattern controls such as the pitch envelope, which must line up with the notes).
+ */
+function writeMelodicBar(w: Writer, clip: MelodicClip, bar: number, value?: (n: Note) => string) {
   const start = bar * STEPS_PER_BAR, end = start + STEPS_PER_BAR;
   const byStep = new Map(clip.notes.filter((n) => n.step >= start && n.step < end && n.pitches.length).map((n) => [n.step, n]));
   let s = start, first = true;
@@ -172,8 +176,9 @@ function writeMelodicBar(w: Writer, clip: MelodicClip, bar: number) {
     const n = byStep.get(s);
     if (n) {
       const len = Math.max(1, Math.min(n.len, end - s));
-      const body = n.pitches.length > 1 ? `[${n.pitches.map(pitchToCode).join(',')}]` : pitchToCode(n.pitches[0]);
-      w.token(body + (len > 1 ? `@${len}` : ''), clip.id, [s]);
+      const at = len > 1 ? `@${len}` : '';
+      if (value) w.add(value(n) + at);
+      else w.token((n.pitches.length > 1 ? `[${n.pitches.map(pitchToCode).join(',')}]` : pitchToCode(n.pitches[0])) + at, clip.id, [s]);
       s += len;
     } else {
       w.add('~');
@@ -187,7 +192,22 @@ function writeMelodicClip(w: Writer, track: Track, clip: MelodicClip) {
   w.add('note("');
   writeBars(w, clip.bars, (bar) => writeMelodicBar(w, clip, bar));
   w.add(`").s("${track.sound ?? 'piano'}")`);
+  // Bends: the pitch envelope, one value per note in the same rhythm (0 = no bend).
+  const notes = clip.notes.filter((n) => n.pitches.length);
+  const bent = notes.filter((n) => n.bend);
+  if (!bent.length) return;
+  w.add('.penv("');
+  writeBars(w, clip.bars, (bar) => writeMelodicBar(w, clip, bar, (n) => num(-(n.bend ?? 0))));
+  w.add('")');
+  const times = [...new Set(bent.map((n) => n.bendTime ?? DEFAULT_BEND_TIME))];
+  if (times.length === 1) { w.add(`.pattack(${num(times[0])})`); return; }
+  w.add('.pattack("');
+  writeBars(w, clip.bars, (bar) => writeMelodicBar(w, clip, bar, (n) => num(n.bend ? n.bendTime ?? DEFAULT_BEND_TIME : times[0])));
+  w.add('")');
 }
+
+/** Seconds a bend takes when a note does not say (Strudel's own default for pattack). */
+export const DEFAULT_BEND_TIME = 0.2;
 
 function writeClip(w: Writer, track: Track, clip: Clip) {
   if (clip.code) w.add(clip.code);

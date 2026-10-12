@@ -22,6 +22,12 @@ export interface Note {
   /** MIDI note numbers; fractional values are microtones (cents / 100). */
   pitches: number[];
   vel: number;
+  /**
+   * Bend into the note: it starts this many semitones away (negative = from below) and slides to its pitch over
+   * `bendTime` seconds. Written as Strudel's pitch envelope, `.penv(-bend).pattack(bendTime)`.
+   */
+  bend?: number;
+  bendTime?: number;
 }
 
 export interface MelodicClip {
