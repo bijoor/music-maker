@@ -21,3 +21,21 @@ export function saveSong(song: Song) {
     // Storage full or blocked (private browsing): keep working without saving.
   }
 }
+
+/** Per-device settings (not part of the song). */
+export function loadNumber(key: string, fallback: number): number {
+  try {
+    const v = localStorage.getItem(`music-maker:${key}`);
+    return v === null || isNaN(+v) ? fallback : +v;
+  } catch {
+    return fallback;
+  }
+}
+
+export function saveNumber(key: string, value: number) {
+  try {
+    localStorage.setItem(`music-maker:${key}`, String(value));
+  } catch {
+    // Not saved; the value still applies for this session.
+  }
+}

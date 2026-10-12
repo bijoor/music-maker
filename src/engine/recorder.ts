@@ -19,6 +19,15 @@ interface Held {
 }
 
 const held = new Map<number, Held>();
+
+/**
+ * Bar position you heard when you touched (from the touch's timestamp), corrected by this device's
+ * calibrated record offset: positive offsets mean taps register late, so they are moved earlier.
+ */
+function heardAt(timeStamp?: number): number {
+  const cycle = engine.cycleHeardAt(timeStamp ?? performance.now());
+  return cycle - (state().recordOffsetMs / 1000) * engine.getCps();
+}
 let editGroup = 0;
 
 const state = () => useStore.getState();
@@ -53,11 +62,11 @@ function readyToRecord(track: Track, slot: number): boolean {
 }
 
 /**
- * The quantised step of the selected clip that was heard when the touch happened (`ago` seconds before now,
- * from the event's own timestamp, so a busy moment cannot push the note later), and its recording pass.
+ * The quantised step of the selected clip that was heard when the touch happened (from the event's own
+ * timestamp, so a busy moment cannot push the note later), and its recording pass.
  */
-function recordStep(track: Track, slot: number, ago: number): { step: number; cycle: number; group: string } | null {
-  const cycle = engine.heardCycle(ago);
+function recordStep(track: Track, slot: number, timeStamp: number | undefined): { step: number; cycle: number; group: string } | null {
+  const cycle = heardAt(timeStamp);
   const pos = engine.position(track.id, cycle);
   const clip = track.slots[slot];
   if (!pos || !clip) return null;
@@ -91,7 +100,6 @@ function needClip(track: Track): number | null {
 /** A drum pad. `timeStamp` is the pointer event's timestamp. */
 export function drum(trackId: string, voice: string, sound: Record<string, unknown>, timeStamp?: number) {
   player.preview(trackId, sound);
-  const ago = engine.secondsSince(timeStamp);
   const track = trackOf(trackId);
   const s = state();
   if (!track || s.mode === 'perform') return;
@@ -103,7 +111,7 @@ export function drum(trackId: string, voice: string, sound: Record<string, unkno
     return;
   }
   if (!readyToRecord(track, slot)) return;
-  const at = recordStep(track, slot, ago);
+  const at = recordStep(track, slot, timeStamp);
   if (at) s.recordHit(trackId, slot, voice, at.step, at.group);
 }
 
@@ -112,7 +120,6 @@ export function press(trackId: string, pitches: number[], pointerId: number, cho
   const track = trackOf(trackId);
   if (!track) return;
   pitches.forEach((p) => player.preview(trackId, { note: p, s: track.sound ?? 'piano' }));
-  const ago = engine.secondsSince(timeStamp);
   const s = state();
   if (s.mode === 'perform') return;
   const slot = needClip(track);
@@ -124,7 +131,7 @@ export function press(trackId: string, pitches: number[], pointerId: number, cho
     return;
   }
   if (!readyToRecord(track, slot)) return;
-  const at = recordStep(track, slot, ago);
+  const at = recordStep(track, slot, timeStamp);
   if (!at) return;
   s.recordNote(trackId, slot, at.step, pitches, s.quantize, at.group);
   held.set(pointerId, { trackId, slot, step: at.step, pitches, startCycle: at.cycle, group: at.group });
@@ -136,7 +143,7 @@ export function release(pointerId: number, timeStamp?: number) {
   if (!h) return;
   held.delete(pointerId);
   const q = state().quantize;
-  const steps = (engine.heardCycle(engine.secondsSince(timeStamp)) - h.startCycle) * STEPS_PER_BAR;
+  const steps = (heardAt(timeStamp) - h.startCycle) * STEPS_PER_BAR;
   const len = Math.max(q, Math.round(steps / q) * q);
   if (len > q) state().recordNote(h.trackId, h.slot, h.step, h.pitches, len, h.group);
 }

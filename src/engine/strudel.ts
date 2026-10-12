@@ -45,7 +45,11 @@ export function switchAt(before: any, after: any, cycle: number): any {
   });
 }
 
+/** The latest scheduled sound: which bar position starts at which audio-clock time. */
+let clockMap: { cycle: number; time: number } | null = null;
+
 function output(hap: any, deadline: number, duration: number, cps: number, t: number) {
+  if (hap.whole) clockMap = { cycle: hap.whole.begin.valueOf(), time: t };
   const ev: HapEvent = {
     time: t,
     cycle: hap.whole?.begin.valueOf() ?? 0,
@@ -208,6 +212,25 @@ export function heardCycle(ago = 0): number {
   return r.scheduler.now() - delay * r.scheduler.cps;
 }
 
+/**
+ * The audio-clock time that was coming out of the speaker at a moment on the performance.now() clock (e.g. a
+ * touch's event.timeStamp). Uses the browser's output timestamp when it has one, which includes the output
+ * device's delay; otherwise the current time minus the reported output latency.
+ */
+export function audioTimeAt(perfTime = performance.now()): number {
+  const ac = getAudioContext() as AudioContext;
+  const ts = typeof ac.getOutputTimestamp === 'function' ? ac.getOutputTimestamp() : null;
+  if (ts && ts.performanceTime && ts.contextTime !== undefined) return ts.contextTime + (perfTime - ts.performanceTime) / 1000;
+  return ac.currentTime - ((ac as any).outputLatency ?? ac.baseLatency ?? 0) - (performance.now() - perfTime) / 1000;
+}
+
+/** Bar position that was being heard at a moment on the performance.now() clock (default: now). */
+export function cycleHeardAt(perfTime = performance.now()): number {
+  if (!started()) return 0;
+  if (!clockMap) return heardCycle((performance.now() - perfTime) / 1000);
+  return clockMap.cycle + (audioTimeAt(perfTime) - clockMap.time) * r.scheduler.cps;
+}
+
 /** Seconds since a DOM event happened (its timeStamp is on the performance.now() clock). */
 export const secondsSince = (eventTimeStamp?: number) =>
   eventTimeStamp === undefined ? 0 : Math.max(0, Math.min(0.5, (performance.now() - eventTimeStamp) / 1000));
@@ -216,7 +239,7 @@ export const secondsSince = (eventTimeStamp?: number) =>
  * Where `track` is at a bar position (default: what you hear now): bars into its current clip or chain modulo
  * its period, and how many times it has looped. Null if silent.
  */
-export function position(track: string, cycle = heardCycle()): { bars: number; period: number; pass: number } | null {
+export function position(track: string, cycle = cycleHeardAt()): { bars: number; period: number; pass: number } | null {
   if (!started()) return null;
   let cur: Segment | undefined;
   for (const s of tracks.get(track) ?? []) if (s.at <= cycle) cur = s;
@@ -226,7 +249,7 @@ export function position(track: string, cycle = heardCycle()): { bars: number; p
 }
 
 export const nextBar = () => (started() ? Math.ceil(horizon()) : 0);
-export const cycleNow = () => (started() ? heardCycle() : 0);
+export const cycleNow = () => (started() ? cycleHeardAt() : 0);
 export const isStarted = started;
 export const audioTime = () => getAudioContext().currentTime;
 export const setBpm = (bpm: number) => r?.setCps(bpm / 60 / 4);
@@ -235,6 +258,7 @@ export const getCps = () => r?.scheduler.cps ?? 0.5;
 export function stop() {
   r?.stop();
   tracks.clear();
+  clockMap = null;
 }
 
 /** Play a sound immediately, bypassing the pattern scheduler (pads and keys). */

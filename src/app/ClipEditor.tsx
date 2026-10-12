@@ -4,6 +4,7 @@ import { BANKS } from '../model/kit';
 import { DRUM_PRESETS } from '../model/presets';
 import type { Bars } from '../model/types';
 import DrumGrid from './DrumGrid';
+import Calibrate from './Calibrate';
 import DrumPads from './DrumPads';
 import NoteGrid from './NoteGrid';
 import MelodicPlay from './MelodicPlay';
@@ -18,6 +19,7 @@ export default function ClipEditor() {
   const track = selectedTrack(state);
   const clip = selectedClip(state);
   const [menu, setMenu] = useState(false);
+  const [calibrating, setCalibrating] = useState(false);
   if (!track) return <section className="card editor empty-editor"><p className="muted-text">Add a track to start.</p></section>;
   const slot = selected.slot;
   const bar = clip ? Math.min(page, clip.bars - 1) : 0;
@@ -66,6 +68,7 @@ export default function ClipEditor() {
               <option value={4}>Snap 1/4</option>
             </select>
             <button className={`btn sm${state.countIn ? ' on' : ''}`} aria-pressed={state.countIn} onClick={() => state.setUi({ countIn: !state.countIn })}>Count-in</button>
+            <button className="btn sm" onClick={() => setCalibrating(true)} title={`Record offset ${state.recordOffsetMs} ms`}>Calibrate</button>
           </>
         )}
         <button className="btn sm" disabled={!state.past.length} onClick={state.undo} aria-label="Undo">↶<span className="wide-only"> Undo</span></button>
@@ -91,6 +94,7 @@ export default function ClipEditor() {
           )}
         </div>
       </div>
+      {calibrating && <Calibrate onClose={() => setCalibrating(false)} />}
       <div className="ebody">
         {track.kind === 'melodic' ? (
           view === 'play' ? <MelodicPlay track={track} />

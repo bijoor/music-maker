@@ -7,7 +7,7 @@ import { DRUM_PRESETS, INSTRUMENTS } from '../model/presets';
 import { MAX_SLOTS, STEPS_PER_BAR, type Bars, type Clip, type ScaleDef, type Song, type Track } from '../model/types';
 import { toggleNote as toggleNoteIn, writeNote } from '../model/clipEdit';
 import { findScale, scalePitch } from '../model/scales';
-import { loadSong, saveSong } from './persist';
+import { loadNumber, loadSong, saveNumber, saveSong } from './persist';
 
 export type TransportState = 'stopped' | 'loading' | 'playing';
 export type EditorView = 'grid' | 'play';
@@ -44,6 +44,8 @@ interface State {
   quantize: number;
   countIn: boolean;
   metronome: boolean;
+  /** This device's calibrated recording delay in ms (positive: taps register late). Saved per device. */
+  recordOffsetMs: number;
   /** Undo history of the song's content (launches, mute and volume are not undone). */
   past: Song[];
   future: Song[];
@@ -99,6 +101,7 @@ interface State {
   undo(): void;
   redo(): void;
   setMessage(message: string | null): void;
+  setRecordOffset(ms: number): void;
   setTransport(t: TransportState): void;
   setPending(trackId: string, at: number | null): void;
 }
@@ -165,6 +168,7 @@ export const useStore = create<State>((set, get) => {
   quantize: 1,
   countIn: true,
   metronome: false,
+  recordOffsetMs: loadNumber('recordOffsetMs', 0),
   past: [],
   future: [],
   historyGroup: null,
@@ -329,6 +333,11 @@ export const useStore = create<State>((set, get) => {
 
   setMode: (mode) => set({ mode }),
   setMessage: (message) => set({ message }),
+  setRecordOffset: (ms) => {
+    const v = Math.round(Math.max(-200, Math.min(300, ms)));
+    saveNumber('recordOffsetMs', v);
+    set({ recordOffsetMs: v });
+  },
   recordHit: (trackId, slot, voice, step, group) =>
     edit(onTrack(trackId, (t) => {
       const c = t.slots[slot];
