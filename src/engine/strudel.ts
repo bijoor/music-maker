@@ -20,6 +20,8 @@ export type HapEvent = {
   duration: number;
   value: Record<string, unknown>;
   locations: Location[];
+  /** Track the event came from (set by launch/edit). */
+  track?: string;
 };
 type Listener = (e: HapEvent) => void;
 type Segment = { at: number; raw: any; pat: any; period: number; shift: boolean };
@@ -50,6 +52,7 @@ function output(hap: any, deadline: number, duration: number, cps: number, t: nu
     // Copy: superdough rewrites the value object while playing it (e.g. merging the bank into the sound name).
     value: typeof hap.value === 'object' ? { ...hap.value } : { value: hap.value },
     locations: hap.context?.locations ?? [],
+    track: hap.context?.track,
   };
   listeners.forEach((l) => l(ev));
   return webaudioOutput(hap, deadline, duration, cps, t);
@@ -108,7 +111,9 @@ export function initEngine(): Promise<void> {
 
 export const onHap = (fn: Listener) => {
   listeners.add(fn);
-  return () => listeners.delete(fn);
+  return () => {
+    listeners.delete(fn);
+  };
 };
 
 /** Turn a Strudel expression (e.g. `s("bd*4").bank("RolandTR909")`) into a pattern. Locations are relative to `code`. */
@@ -121,10 +126,14 @@ const started = () => !!r?.scheduler.started;
 /** Everything before this cycle has already been handed to the audio engine. */
 const horizon = () => (started() ? r.scheduler.lastEnd : 0);
 
-function shifted(raw: any, at: number, period: number, shift: boolean) {
+function shifted(track: string, raw: any, at: number, period: number, shift: boolean) {
   const offset = ((at % period) + period) % period;
-  return shift && offset ? raw.late(offset) : raw;
+  const pat = shift && offset ? raw.late(offset) : raw;
+  // Tag events with their track so played notes can be mapped back to that track's code.
+  return pat.withContext((ctx: any) => ({ ...ctx, track }));
 }
+
+export { silence };
 
 function rebuild() {
   const h = horizon();
@@ -159,7 +168,7 @@ export function launch(track: string, pattern: any, opts: LaunchOptions = {}): n
   const segs = tracks.get(track) ?? [];
   // A later launch on the same bar replaces an earlier one.
   while (segs.length && segs[segs.length - 1].at >= at) segs.pop();
-  segs.push({ at, raw: pattern, pat: shifted(pattern, at, period, shift), period, shift });
+  segs.push({ at, raw: pattern, pat: shifted(track, pattern, at, period, shift), period, shift });
   tracks.set(track, segs);
   rebuild();
   return at;
@@ -170,13 +179,14 @@ export function stopTrack(track: string): number {
   return launch(track, silence);
 }
 
-/** Replace the clip a track is playing (or about to play) without waiting for a bar line: for note edits. */
-export function edit(track: string, pattern: any) {
+/** Replace the clip a track is playing (or about to play) without waiting for a bar line: for note edits and mutes. */
+export function edit(track: string, pattern: any, period?: number) {
   const segs = tracks.get(track);
-  if (!segs?.length) return launch(track, pattern);
+  if (!segs?.length) return launch(track, pattern, { period });
   const s = segs[segs.length - 1];
   s.raw = pattern;
-  s.pat = shifted(pattern, s.at, s.period, s.shift);
+  if (period) s.period = period;
+  s.pat = shifted(track, pattern, s.at, s.period, s.shift);
   rebuild();
   return s.at;
 }

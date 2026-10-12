@@ -2,7 +2,7 @@
 
 A loop-based music maker for iPad that writes [Strudel](https://strudel.cc) code as you play. Build short clips with drum pads, a keyboard and step grids, launch them on the bar line, and read or edit the generated code when you want to.
 
-Status: **Phase 0** — a test page that checks Strudel can do what the loop editor needs. The app itself starts in Phase 1.
+Status: **Phase 1** — song model, Strudel code generator with tests, and a first screen: play/stop, tempo, key and scale, a clip grid that launches clips on the bar line, and the generated code with notes lighting up as they play. The Phase 0 test page is at `#lab`.
 
 ## Run it
 
@@ -11,7 +11,13 @@ npm install
 npm run dev -- --host
 ```
 
-Open the printed `Network` address on the iPad (same Wi-Fi), tap **Start audio**, then run the tests.
+Open the printed `Network` address on the iPad (same Wi-Fi). Add `#lab` to the address for the Phase 0 tests.
+
+```bash
+npm test
+```
+
+runs the code generator tests: generated code is compiled with Strudel and must play exactly what the model says.
 
 The latest build of `main` is also published at <https://bijoor.github.io/music-maker/>.
 
@@ -36,7 +42,11 @@ The latest build of `main` is also published at <https://bijoor.github.io/music-
 ## Project
 
 - `mockup/` — the interactive UI mockups (`index.html` is the current loop-editor design)
-- `src/engine/` — Strudel integration
+- `src/model/` — song, track, clip and scene types; drum kit; scales and ragas; demo song
+- `src/codegen/` — song → Strudel code, with a map from code tokens to clip steps
+- `src/engine/` — Strudel integration (`strudel.ts`) and the player that keeps it in step with the song (`player.ts`)
+- `src/state/` — app state (zustand)
+- `src/app/` — the app screen
 - `src/lab/` — the Phase 0 test page
 
 Plan: see the project plan document (shared separately).

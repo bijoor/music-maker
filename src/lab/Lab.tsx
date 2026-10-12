@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
+import './lab.css';
 import * as engine from '../engine/strudel';
 import type { HapEvent } from '../engine/strudel';
 import { BANK, BANKS, BASS_2BAR, CHAIN, CLIP_A, CLIP_B, GROOVE, KIT_VOICES, METRONOME } from './tests';
