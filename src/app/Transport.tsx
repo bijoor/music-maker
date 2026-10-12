@@ -3,11 +3,23 @@ import { useStore } from '../state/store';
 import { SCALES, TONICS } from '../model/scales';
 import * as engine from '../engine/strudel';
 import * as player from '../engine/player';
+import { connectMidi, type MidiState } from '../engine/midi';
 
 export default function Transport() {
   const { song, transport, panel, setPanel, sargam, mode, countIn, metronome, setBpm, setTonic, setScale, toggleCode, resetSong, setUi, setMode } = useStore();
   const [more, setMore] = useState(false);
   const [confirmReset, setConfirmReset] = useState(false);
+  const [midi, setMidi] = useState<{ state: MidiState; devices: string[] }>({ state: 'off', devices: [] });
+  const connect = () =>
+    connectMidi((state, devices) => {
+      setMidi({ state, devices });
+      const msg: Record<MidiState, string> = {
+        off: '', unsupported: 'This browser has no Web MIDI (Safari and iPad do not support it); use Chrome or Edge on a computer',
+        denied: 'MIDI access was not allowed', waiting: 'MIDI on: plug in a keyboard or pad controller',
+        connected: `MIDI: ${devices.join(', ')} plays the selected track`,
+      };
+      useStore.getState().setMessage(msg[state]);
+    });
   const barRef = useRef<HTMLElement>(null);
   const dotsRef = useRef<HTMLSpanElement>(null);
 
@@ -74,6 +86,7 @@ export default function Transport() {
         {more && (
           <div className="menu right" role="menu">
             <button role="menuitem" onClick={() => { setPanel('songs'); setMore(false); }}>Songs: new, open, export, import…</button>
+            <button role="menuitem" onClick={() => { connect(); setMore(false); }}>{midi.state === 'connected' ? `MIDI: ${midi.devices.join(', ')}` : midi.state === 'waiting' ? 'MIDI on (no device yet)' : 'Connect a MIDI keyboard or pads'}</button>
             <button role="menuitemcheckbox" aria-checked={sargam} onClick={() => { setUi({ sargam: !sargam }); setMore(false); }}>{sargam ? '✓ ' : ''}Sa Re Ga labels</button>
             <button role="menuitem" onClick={() => { if (confirmReset) { resetSong(); setMore(false); setConfirmReset(false); } else setConfirmReset(true); }}>{confirmReset ? 'Tap again: your clips will be replaced' : 'Reset to the demo song'}</button>
             <a role="menuitem" className="menulink" href="#lab" onClick={() => setMore(false)}>Phase 0 tests</a>
