@@ -22,7 +22,7 @@ button, select, input { font: inherit; color: inherit; }
 button { cursor: pointer; touch-action: manipulation; }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
-.app { box-sizing: border-box; height: 100%; display: grid; grid-template-rows: auto minmax(0, 1fr); gap: 8px; padding: 8px 12px; position: relative; user-select: none; -webkit-user-select: none; }
+.app { box-sizing: border-box; height: 100%; display: grid; grid-template-rows: auto minmax(0, 1fr); gap: 8px; padding: max(8px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) max(8px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left)); position: relative; user-select: none; -webkit-user-select: none; }
 .btn { white-space: nowrap; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 7px 11px; line-height: 1.2; min-height: 36px; }
 .btn.on { background: var(--fg); color: var(--bg); border-color: var(--fg); }
 .btn.sm { min-height: 30px; padding: 4px 9px; font-size: 13px; }

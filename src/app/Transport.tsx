@@ -6,7 +6,7 @@ import * as player from '../engine/player';
 import { connectMidi, type MidiState } from '../engine/midi';
 
 export default function Transport() {
-  const { song, transport, panel, setPanel, sargam, mode, countIn, metronome, setBpm, setTonic, setScale, toggleCode, resetSong, setUi, setMode } = useStore();
+  const { song, transport, panel, setPanel, updateReady, sargam, mode, countIn, metronome, setBpm, setTonic, setScale, toggleCode, resetSong, setUi, setMode } = useStore();
   const [more, setMore] = useState(false);
   const [confirmReset, setConfirmReset] = useState(false);
   const [midi, setMidi] = useState<{ state: MidiState; devices: string[] }>({ state: 'off', devices: [] });
@@ -81,6 +81,7 @@ export default function Transport() {
       </div>
       <button className={`btn sm${metronome ? ' on' : ''}`} aria-pressed={metronome} onClick={() => setUi({ metronome: !metronome })}>Click</button>
       <span className="spacer" />
+      {updateReady && <button className="btn sm on" onClick={updateReady} title="A new version is ready">Update ready · reload</button>}
       <div className="menuwrap">
         <button className="btn sm" aria-expanded={more} onClick={() => { setMore(!more); setConfirmReset(false); }}>More ⋯</button>
         {more && (

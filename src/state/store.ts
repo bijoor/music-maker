@@ -64,6 +64,8 @@ interface State {
   historyGroup: string | null;
   /** A short message shown briefly (e.g. "Count-in…"). */
   message: string | null;
+  /** Set when a new version of the app is ready; calling it switches to the new version. */
+  updateReady: (() => void) | null;
 
   // Song settings
   setBpm(bpm: number): void;
@@ -245,6 +247,7 @@ export const useStore = create<State>((set, get) => {
   future: [],
   historyGroup: null,
   message: null,
+  updateReady: null,
 
   setBpm: (bpm) => set((s) => ({ song: { ...s.song, bpm: Math.min(200, Math.max(60, Math.round(bpm))) } })),
   setTonic: (tonic) => set((s) => ({ song: { ...s.song, key: { ...s.song.key, tonic } } })),
