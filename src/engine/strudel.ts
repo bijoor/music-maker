@@ -274,7 +274,11 @@ function soundData(s: string, bank?: string): { samples?: string[] | Record<stri
 /** The sample file a value plays, keyed as superdough's buffer cache keys it; null for synths and soundfonts. */
 function sampleUrl(value: Record<string, unknown>): string | null {
   const samples = soundData(String(value.s ?? ''), value.bank as string | undefined)?.samples;
-  return samples ? String(getSampleInfo(value, samples).url).replace('#', '%23') : null;
+  try {
+    return samples ? String(getSampleInfo(value, samples).url).replace('#', '%23') : null;
+  } catch {
+    return null; // let superdough report it
+  }
 }
 
 /**
@@ -291,6 +295,60 @@ export function trigger(value: Record<string, unknown>, duration = 0.25) {
   return loadBuffer(url, ac).then(() => (performance.now() - asked < 1500 ? play() : undefined), () => undefined);
 }
 
+// Held notes: a sound's trigger is wrapped so the voice it starts can be faded out when the key is released
+// (superdough itself only plays notes of a fixed length).
+type Voice = { node?: { gain?: AudioParam }; stop?: (t: number) => void; nodes?: { source?: AudioScheduledSourceNode[] } };
+const holders = new Map<string, (v: Voice) => void>();
+const wrapped = new Set<string>();
+let holdId = 0;
+
+function wrapSound(s: string) {
+  const key = s.toLowerCase();
+  const entry = (soundMap.get() as Record<string, any>)[key];
+  if (!entry || wrapped.has(key)) return;
+  wrapped.add(key);
+  const onTrigger = entry.onTrigger;
+  soundMap.setKey(key, {
+    ...entry,
+    onTrigger: async (t: number, value: Record<string, unknown>, ...rest: unknown[]) => {
+      const voice = await onTrigger(t, value, ...rest);
+      const take = holders.get(String(value.holdId));
+      if (take && voice) take(voice);
+      return voice;
+    },
+  });
+}
+
+/** Fade a voice out over `fade` seconds from now and stop it. */
+function releaseVoice(v: Voice, fade = 0.12) {
+  const now = getAudioContext().currentTime, end = now + fade;
+  const g = v.node?.gain;
+  if (g) {
+    g.cancelScheduledValues(now);
+    g.setValueAtTime(g.value, now);
+    g.linearRampToValueAtTime(0, end);
+  }
+  try { v.stop?.(end + 0.01); } catch { /* already stopped */ }
+  v.nodes?.source?.forEach((src) => { try { src.stop(end + 0.01); } catch { /* already stopped */ } });
+}
+
+/**
+ * Play a sound until the returned function is called (a held key), up to `max` seconds. Samples without a loop
+ * still end where the recording ends.
+ */
+export function hold(value: Record<string, unknown>, max = 30): () => void {
+  wrapSound(String(value.s ?? 'triangle'));
+  const id = String(++holdId);
+  let voice: Voice | null = null, released = false;
+  holders.set(id, (v) => { voice = v; if (released) { releaseVoice(v); holders.delete(id); } });
+  void trigger({ ...value, holdId: id }, max);
+  return () => {
+    if (released) return;
+    released = true;
+    if (voice) { releaseVoice(voice); holders.delete(id); } else setTimeout(() => holders.delete(id), 5000); // still loading
+  };
+}
+
 export type SoundRef = { s: string; bank?: string; n?: number; notes?: number[] };
 
 /**
@@ -305,8 +363,11 @@ export function preload(sounds: SoundRef[]) {
     const data = soundData(x.s, x.bank);
     const notes = x.notes?.length ? [...new Set(x.notes.map(Math.round))] : [undefined];
     if (data?.samples) {
-      new Set(notes.map((note) => String(getSampleInfo({ s: x.s, n: x.n ?? 0, note }, data.samples).url)))
-        .forEach((u) => loadBuffer(u, ac).catch(() => {}));
+      const urls = new Set<string>();
+      for (const note of notes) {
+        try { urls.add(String(getSampleInfo({ s: x.s, n: x.n ?? 0, note }, data.samples).url)); } catch { /* malformed map */ }
+      }
+      urls.forEach((u) => loadBuffer(u, ac).catch(() => {}));
     } else if (data?.fonts) {
       const font = data.fonts[(x.n ?? 0) % data.fonts.length];
       notes.forEach((note) => note !== undefined && getFontBufferSource(font, { note }, ac).catch(() => {}));

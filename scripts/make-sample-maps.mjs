@@ -21,7 +21,8 @@ const TONEJS = {
 
 const tonejs = { _base: 'https://cdn.jsdelivr.net/gh/nbrosowsky/tonejs-instruments@master/samples/' };
 for (const [folder, name] of Object.entries(TONEJS)) {
-  const files = (await list('nbrosowsky/tonejs-instruments', `samples/${folder}`)).filter((f) => f.endsWith('.mp3'));
+  // Only files named by a plain note (A2.mp3, Cs3.mp3): a few folders also hold extra takes such as "F2 v2.mp3".
+  const files = (await list('nbrosowsky/tonejs-instruments', `samples/${folder}`)).filter((f) => /^[A-G]s?\d\.mp3$/.test(f));
   // Files are named by note (A2.mp3, Cs3.mp3); Strudel picks the nearest and re-pitches it.
   tonejs[name] = Object.fromEntries(files.map((f) => [f.replace('.mp3', ''), `${folder}/${f}`]));
 }

@@ -116,6 +116,8 @@ export function drum(trackId: string, voice: string, sound: Record<string, unkno
 }
 
 let pedal = false;
+/** Held notes still sounding (sustain on), by pointer: call to let go. */
+const sounding = new Map<number, () => void>();
 /** Hold the sustain pedal (Shift on a computer keyboard) while it is down. */
 export const setPedal = (down: boolean) => { pedal = down; };
 
@@ -125,9 +127,14 @@ export function press(trackId: string, pitches: number[], pointerId: number, cho
   if (!track) return;
   const st = state();
   // The preview lasts as long as the note that will be written: chord length for chords in Edit, else the "New notes" length.
-  // With the sustain pedal down (button or Shift), the note rings for a bar instead.
-  const previewLen = st.sustain || pedal ? 16 : chord && st.mode === 'edit' ? st.chordLen : st.noteLen;
-  pitches.forEach((p) => player.preview(trackId, { note: p, s: track.sound ?? 'piano' }, previewLen));
+  // With sustain on (button or Shift held), the note sounds for as long as the key is held.
+  if (st.sustain || pedal) {
+    const stops = pitches.map((p) => player.hold(trackId, { note: p, s: track.sound ?? 'piano' }));
+    sounding.set(pointerId, () => stops.forEach((stop) => stop()));
+  } else {
+    const previewLen = chord && st.mode === 'edit' ? st.chordLen : st.noteLen;
+    pitches.forEach((p) => player.preview(trackId, { note: p, s: track.sound ?? 'piano' }, previewLen));
+  }
   const s = state();
   if (s.mode === 'perform') return;
   const slot = needClip(track);
@@ -146,8 +153,10 @@ export function press(trackId: string, pitches: number[], pointerId: number, cho
   held.set(pointerId, { trackId, slot, step: at.step, pitches, startCycle: at.cycle, group: at.group });
 }
 
-/** The key or chord was released: set the recorded note's length to how long it was held. */
+/** The key or chord was released: stop a sustained note, and set the recorded note's length to how long it was held. */
 export function release(pointerId: number, timeStamp?: number) {
+  sounding.get(pointerId)?.();
+  sounding.delete(pointerId);
   const h = held.get(pointerId);
   if (!h) return;
   held.delete(pointerId);

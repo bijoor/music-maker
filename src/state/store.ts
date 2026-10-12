@@ -42,7 +42,7 @@ interface State {
   keyboard: KeyboardLayout;
   keyboardOctaves: 1 | 2;
   scaleLock: boolean;
-  /** Sustain pedal: notes played on the keys ring for a bar (what you hear only; recorded lengths are unchanged). */
+  /** Sustain: notes played on the keys sound for as long as they are held (in Record, the written length follows the hold too). */
   sustain: boolean;
   /** Length in steps of notes added in the grid, and of chords placed there. */
   noteLen: number;

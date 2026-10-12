@@ -37,7 +37,7 @@ export default function MelodicPlay({ track }: { track: Track }) {
           <button aria-pressed={keyboardOctaves === 2} onClick={() => setUi({ keyboardOctaves: 2 })}>2 oct</button>
         </div>
         {keyboard === 'piano' && <button className={`btn sm${scaleLock ? ' on' : ''}`} aria-pressed={scaleLock} onClick={() => setUi({ scaleLock: !scaleLock })}>Scale lock</button>}
-        <button className={`btn sm${sustain ? ' on' : ''}`} aria-pressed={sustain} title="Notes ring for a bar (or hold Shift)" onClick={() => setUi({ sustain: !sustain })}>Sustain</button>
+        <button className={`btn sm${sustain ? ' on' : ''}`} aria-pressed={sustain} title="Notes sound as long as you hold the key (or hold Shift)" onClick={() => setUi({ sustain: !sustain })}>Sustain</button>
         <span className="muted-text">{tonic} {scale.name}</span>
       </div>
       <StepStrip />

@@ -185,6 +185,18 @@ export function preview(trackId: string, value: Record<string, unknown>, steps =
   engine.initEngine().then(() => { go(); warm(); });
 }
 
+/** Like preview, but the note sounds until the returned function is called (a key held with sustain on). */
+export function hold(trackId: string, value: Record<string, unknown>): () => void {
+  const track = useStore.getState().song.tracks.find((t) => t.id === trackId);
+  if (!track) return () => {};
+  const v = { ...value, ...fxValues(track) };
+  if (engine.isReady()) return engine.hold(v);
+  let release: (() => void) | null = null, up = false;
+  engine.unlockAudio();
+  engine.initEngine().then(() => { release = engine.hold(v); if (up) release(); warm(); });
+  return () => { up = true; release?.(); };
+}
+
 // Note edits (e.g. while recording) are batched so a burst of notes compiles once, keeping taps responsive.
 // Launches, stops and mutes apply at once.
 let pendingEdit: ReturnType<typeof setTimeout> | undefined;
