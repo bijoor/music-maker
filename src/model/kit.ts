@@ -9,7 +9,17 @@ export interface KitVoice {
   main: boolean;
   /** Main pads per row of four that this pad covers (2 for kick and snare, 4 for a full-width pad). */
   span?: 2 | 4;
+  /** Indian kits: the hand that plays the stroke (pads are laid out left hand | both | right hand). */
+  hand?: Hand;
 }
+
+export type Hand = 'left' | 'both' | 'right';
+
+/** What each hand's drum is called, per Indian kit. */
+export const HAND_NAMES: Record<string, Record<Hand, string>> = {
+  Tabla: { left: 'Left hand · bayan', both: 'Both hands', right: 'Right hand · dayan' },
+  Mridangam: { left: 'Left hand · thoppi', both: 'Both hands', right: 'Right hand · valanthalai' },
+};
 
 export const KIT: KitVoice[] = [
   { voice: 'cr', name: 'Crash', main: true },
@@ -31,34 +41,42 @@ export const KIT: KitVoice[] = [
 ];
 
 /**
- * Indian kits: each voice is a sample set of its own (no drum machine), named by stroke. Mridangam strokes are
- * from yaxu/mrid (CC BY-SA, Arthur Carabott, played by Harishankar V Menon); tabla strokes are TidalCycles
- * Dirt-Samples recordings grouped under the nearest bol (see scripts/make-sample-maps.mjs).
+ * Indian kits: each voice is a sample set of its own (no drum machine), named by stroke, in grid order: right hand
+ * (treble) on top, strokes for both hands, then the left hand (bass) at the bottom. Mridangam strokes are from
+ * yaxu/mrid (CC BY-SA, Arthur Carabott, played by Harishankar V Menon); tabla strokes were chosen by ear from three
+ * Freesound packs (see scripts/make-sample-maps.mjs and the README).
  */
 export const INDIAN_KITS: Record<string, KitVoice[]> = {
   Mridangam: [
-    { voice: 'nam', name: 'Nam', main: true },
-    { voice: 'dhin', name: 'Dhin', main: true },
-    { voice: 'chaapu', name: 'Chapu', main: true },
-    { voice: 'ardha', name: 'Ardha chapu', main: true },
-    { voice: 'ta', name: 'Ta', main: true },
-    { voice: 'ki', name: 'Ki', main: true },
-    { voice: 'dhi', name: 'Dhi', main: true },
-    { voice: 'dhum', name: 'Dhum', main: true },
-    { voice: 'thom', name: 'Thom', main: true, span: 2 },
-    { voice: 'tha', name: 'Tha', main: true, span: 2 },
-    { voice: 'gumki', name: 'Gumki', main: false },
-    { voice: 'ka', name: 'Ka', main: false },
-    { voice: 'na', name: 'Na', main: false },
+    { voice: 'nam', name: 'Nam', main: true, hand: 'right' },
+    { voice: 'dhin', name: 'Dhin', main: true, hand: 'right' },
+    { voice: 'chaapu', name: 'Chapu', main: true, hand: 'right' },
+    { voice: 'ardha', name: 'Ardha chapu', main: true, hand: 'right' },
+    { voice: 'ta', name: 'Ta', main: true, hand: 'right' },
+    { voice: 'ki', name: 'Ki', main: true, hand: 'right' },
+    { voice: 'dhi', name: 'Dhi', main: true, hand: 'right' },
+    { voice: 'na', name: 'Na', main: true, hand: 'right' },
+    { voice: 'dhum', name: 'Dhum', main: true, hand: 'both' },
+    { voice: 'thom', name: 'Thom', main: true, hand: 'left' },
+    { voice: 'tha', name: 'Tha', main: true, hand: 'left' },
+    { voice: 'gumki', name: 'Gumki', main: true, hand: 'left' },
+    { voice: 'ka', name: 'Ka', main: true, hand: 'left' },
   ],
   Tabla: [
-    { voice: 'tabla_na', name: 'Na', main: true },
-    { voice: 'tabla_tin', name: 'Tin', main: true },
-    { voice: 'tabla_ta', name: 'Ta', main: true },
-    { voice: 'tabla_tun', name: 'Tun', main: true },
-    { voice: 'tabla_ke', name: 'Ke', main: true, span: 2 },
-    { voice: 'tabla_ghe', name: 'Ghe', main: true, span: 2 },
-    { voice: 'tabla_ge', name: 'Ge', main: true, span: 4 },
+    { voice: 'tabla_na', name: 'Na', main: true, hand: 'right' },
+    { voice: 'tabla_ta', name: 'Ta', main: true, hand: 'right' },
+    { voice: 'tabla_tin', name: 'Tin', main: true, hand: 'right' },
+    { voice: 'tabla_tun', name: 'Tun', main: true, hand: 'right' },
+    { voice: 'tabla_te', name: 'Te', main: true, hand: 'right' },
+    { voice: 'tabla_te2', name: 'Te 2', main: true, hand: 'right' },
+    { voice: 'tabla_tak', name: 'Tak', main: true, hand: 'right' },
+    { voice: 'tabla_dha', name: 'Dha', main: true, hand: 'both' },
+    { voice: 'tabla_dhin', name: 'Dhin', main: true, hand: 'both' },
+    { voice: 'tabla_ge', name: 'Ge', main: true, hand: 'left' },
+    { voice: 'tabla_ghe', name: 'Ghe', main: true, hand: 'left' },
+    { voice: 'tabla_gha', name: 'Gha', main: true, hand: 'left' },
+    { voice: 'tabla_ke', name: 'Ke', main: true, hand: 'left' },
+    { voice: 'tabla_kat', name: 'Kat', main: true, hand: 'left' },
   ],
 };
 

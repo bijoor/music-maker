@@ -1,7 +1,7 @@
 // Builds the sample maps for instruments beyond Strudel's defaults (run when sources change):
 //   node scripts/make-sample-maps.mjs
 // - public/samples/tonejs.json: tonejs-instruments (samples CC-BY 3.0), recorded note by note
-// - public/samples/tabla.json:  TidalCycles Dirt-Samples tabla strokes, grouped by bol
+// - public/samples/tabla.json:  tabla strokes from Freesound, saved in public/samples/tabla/
 // Files are served from jsDelivr's GitHub mirror (fast, cacheable by the installed app).
 import { writeFileSync, mkdirSync } from 'node:fs';
 
@@ -27,16 +27,29 @@ for (const [folder, name] of Object.entries(TONEJS)) {
   tonejs[name] = Object.fromEntries(files.map((f) => [f.replace('.mp3', ''), `${folder}/${f}`]));
 }
 
-// Tabla strokes from Dirt-Samples, grouped under bol names (the recordings are labelled by sound, not bol).
-const TABLA_GROUPS = {
-  tabla_ge: /bass_flick/, tabla_ghe: /bass_lick/, tabla_ke: /dead_hit/, tabla_ta: /d_sharp_hit/,
-  tabla_tin: /hi_flick/, tabla_na: /hi_hit\d/, tabla_tun: /lower\d_hit/,
+// Tabla: strokes chosen by ear from three Freesound packs (see README "Sounds and credits"), saved into the app
+// so they do not depend on Freesound. Files are Freesound's 128 kbps previews; names are the bols the player uses.
+//   A: "tabla bols" by mmiron, CC0 · B: "Tabla Strokes" by ajaysm, CC BY 4.0 · C: "Tabla" by msarkar, Sampling Plus 1.0
+const TABLA = {
+  // right hand (dayan)
+  tabla_na: ['C', 56148], tabla_ta: ['C', 56150], tabla_tin: ['C', 56152], tabla_tun: ['C', 56153],
+  tabla_te: ['C', 56151], tabla_te2: ['A', 130415], tabla_tak: ['A', 130427],
+  // both hands
+  tabla_dha: ['C', 56144], tabla_dhin: ['C', 56145],
+  // left hand (bayan)
+  tabla_ge: ['A', 130406], tabla_ghe: ['A', 130405], tabla_gha: ['A', 130409], tabla_ke: ['B', 171906], tabla_kat: ['B', 171901],
 };
-const files = await list('tidalcycles/Dirt-Samples', 'tabla');
-const tabla = { _base: 'https://cdn.jsdelivr.net/gh/tidalcycles/Dirt-Samples@master/tabla/' };
-for (const [name, re] of Object.entries(TABLA_GROUPS)) tabla[name] = files.filter((f) => re.test(f)).sort();
+const FREESOUND_USER = { A: 1565498, B: 2385996, C: 693224 };
+mkdirSync('public/samples/tabla', { recursive: true });
+const tabla = {}; // no _base: files resolve next to tabla.json
+for (const [name, [set, id]] of Object.entries(TABLA)) {
+  const res = await fetch(`https://cdn.freesound.org/previews/${Math.floor(id / 1000)}/${id}_${FREESOUND_USER[set]}-hq.mp3`);
+  if (!res.ok) throw new Error(`freesound ${id}: ${res.status}`);
+  writeFileSync(`public/samples/tabla/${name.slice(6)}.mp3`, Buffer.from(await res.arrayBuffer()));
+  tabla[name] = [`tabla/${name.slice(6)}.mp3`];
+}
 
 mkdirSync('public/samples', { recursive: true });
 writeFileSync('public/samples/tonejs.json', JSON.stringify(tonejs, null, 1) + '\n');
 writeFileSync('public/samples/tabla.json', JSON.stringify(tabla, null, 1) + '\n');
-console.log('tonejs:', Object.keys(tonejs).length - 1, 'instruments; tabla:', Object.entries(tabla).filter(([k]) => k !== '_base').map(([k, v]) => `${k}×${v.length}`).join(' '));
+console.log('tonejs:', Object.keys(tonejs).length - 1, 'instruments; tabla:', Object.keys(tabla).join(' '));

@@ -30,7 +30,7 @@ export default defineConfig(({ command }) => ({
         ],
       },
       workbox: {
-        globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
+        globPatterns: ['**/*.{js,css,html,svg,png,woff2,json,mp3}'],
         // Control the page from the first visit, so sounds are cached right away (updates still wait for the prompt).
         clientsClaim: true,
         maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,

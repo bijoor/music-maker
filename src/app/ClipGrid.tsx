@@ -12,7 +12,8 @@ const LETTERS = 'ABCDEFGH';
 const LANE: Record<string, number> = {
   cr: 0, rd: 0, oh: 0, hh: 0, tb: 0, sh: 0, rim: 1, sd: 1, 'sd:1': 1, cp: 1, cb: 1, bd: 2, 'bd:1': 2, lt: 2, mt: 2, ht: 2,
   nam: 0, dhin: 0, chaapu: 0, ardha: 0, na: 0, ta: 1, ki: 1, dhi: 1, ka: 1, thom: 2, tha: 2, dhum: 2, gumki: 2,
-  tabla_na: 0, tabla_tin: 0, tabla_ta: 1, tabla_tun: 1, tabla_ke: 1, tabla_ge: 2, tabla_ghe: 2,
+  tabla_na: 0, tabla_ta: 0, tabla_tin: 0, tabla_tun: 0, tabla_te: 0, tabla_te2: 0, tabla_tak: 0, tabla_dha: 1, tabla_dhin: 1,
+  tabla_ge: 2, tabla_ghe: 2, tabla_gha: 2, tabla_ke: 2, tabla_kat: 2,
 };
 
 export default function ClipGrid() {

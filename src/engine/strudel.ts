@@ -111,7 +111,8 @@ export function initEngine(): Promise<void> {
         samples(`${SAMPLE_BASE}/mridangam.json`),
         // Our own maps (scripts/make-sample-maps.mjs): tonejs-instruments and tabla strokes.
         samples(`${import.meta.env.BASE_URL}samples/tonejs.json`),
-        samples(`${import.meta.env.BASE_URL}samples/tabla.json`),
+        // Tabla strokes ship with the app; their map lists paths relative to samples/ (Strudel's own base drops the slash).
+        samples(`${import.meta.env.BASE_URL}samples/tabla.json`, new URL(`${import.meta.env.BASE_URL}samples/`, location.href).href),
       ].map((p) => p.catch((e: unknown) => console.warn('[engine] sample map not loaded', e))));
       r = repl({ defaultOutput: output, getTime: () => ac.currentTime, transpiler });
       loaded = true;

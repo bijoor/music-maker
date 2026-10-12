@@ -12,20 +12,13 @@ export const DRUM_PRESETS: Record<string, Record<string, number[]>> = {
   'Teentaal (kit)': { bd: [0, 1, 2, 3, 4, 5, 6, 7, 12, 13, 14, 15], rim: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15], oh: [0] },
 };
 
-/**
- * Presets for the Indian kits, one bar of 16 steps. Two strokes on one step make a combined bol: Dha = Na + Ge,
- * Dhin = Tin + Ge on tabla.
- */
+/** Presets for the Indian kits, one bar of 16 steps. */
 export const INDIAN_PRESETS: Record<string, Record<string, Record<string, number[]>>> = {
   Tabla: {
     // Dha Dhin Dhin Dha | Dha Dhin Dhin Dha | Dha Tin Tin Ta | Ta Dhin Dhin Dha — one matra per step.
-    Teentaal: {
-      tabla_ge: [0, 1, 2, 3, 4, 5, 6, 7, 8, 13, 14, 15],
-      tabla_na: [0, 3, 4, 7, 8, 11, 12, 15],
-      tabla_tin: [1, 2, 5, 6, 9, 10, 13, 14],
-    },
-    // Dha Ge Na Ti | Na Ka Dhi Na — one matra per eighth note.
-    Keherwa: { tabla_ge: [0, 2, 12], tabla_na: [0, 4, 8, 14], tabla_ke: [6, 10], tabla_tin: [12] },
+    Teentaal: { tabla_dha: [0, 3, 4, 7, 8, 15], tabla_dhin: [1, 2, 5, 6, 13, 14], tabla_tin: [9, 10], tabla_ta: [11, 12] },
+    // Dha Ge Na Te | Na Ka Dhin Na — one matra per eighth note.
+    Keherwa: { tabla_dha: [0], tabla_ge: [2], tabla_na: [4, 8, 14], tabla_te: [6], tabla_kat: [10], tabla_dhin: [12] },
   },
   Mridangam: {
     // Adi talam (8 beats, two steps each): Tha Dhi Thom Nam, twice.

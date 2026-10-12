@@ -5,12 +5,15 @@
 //   Q W E R   toms ×3, rim            A S D F G H J K L ;     white keys from C
 //   A S = kick   D F = snare          Z / X octave down / up, 1–8 chords, hold Shift to sustain
 //   T Y G H B N  the smaller pads     Scale pads: A S D F … the scale from Sa, Q W E R … the octave above
-// (Mridangam and tabla pads use the same blocks, in their pad order.)
+// Mridangam and tabla: left-hand strokes on F D S A / R E W Q / V C X Z, right-hand strokes on J K L ; / U I O P /
+// M , . /, strokes for both hands on G H T Y B N.
 
-import { kitVoices } from '../model/kit';
+import { kitVoices, type Hand } from '../model/kit';
 
 const MAIN_ROWS = ['1234', 'qwer', 'asdf'];
 const AUX_KEYS = 'tyghbn';
+// Indian kits: each hand plays its own side of the keyboard, from the home row outwards (index finger first).
+const HAND_KEYS: Record<Hand, string> = { left: 'fdsarewqvcxz', both: 'ghtybn', right: 'jkl;uiopm,./' };
 
 /**
  * Keys for a kit's pads, laid out like the pads: main pads take the 4×3 block 1–4 / Q–R / A–F in order (a wide
@@ -20,7 +23,13 @@ function layout(bank?: string) {
   const keys: Record<string, string> = {}, hints: Record<string, string> = {};
   const cells = MAIN_ROWS.join('').split('');
   let c = 0, a = 0;
+  const used: Record<Hand, number> = { left: 0, both: 0, right: 0 };
   for (const k of kitVoices(bank)) {
+    if (k.hand) {
+      const key = HAND_KEYS[k.hand][used[k.hand]++];
+      if (key) { keys[key] = k.voice; hints[k.voice] = key.toUpperCase(); }
+      continue;
+    }
     const mine = k.main ? cells.slice(c, (c += k.span ?? 1)) : AUX_KEYS[a++] ? [AUX_KEYS[a - 1]] : [];
     mine.forEach((key) => (keys[key] = k.voice));
     if (mine.length) hints[k.voice] = (mine.length > 2 ? `${mine[0]}–${mine[mine.length - 1]}` : mine.join(' ')).toUpperCase();

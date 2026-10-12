@@ -1,4 +1,4 @@
-import { kitVoices, voiceSound, type KitVoice } from '../model/kit';
+import { HAND_NAMES, kitVoices, voiceSound, type Hand, type KitVoice } from '../model/kit';
 import type { Track } from '../model/types';
 import * as recorder from '../engine/recorder';
 import StepStrip from './StepStrip';
@@ -27,10 +27,22 @@ export default function DrumPads({ track }: { track: Track }) {
   return (
     <div className="padview">
       <StepStrip />
-      <div className="kit">
-        <div className="kit-main">{kit.filter((k) => k.main).map(pad)}</div>
-        {kit.some((k) => !k.main) && <div className="kit-aux">{kit.filter((k) => !k.main).map(pad)}</div>}
-      </div>
+      {kit.some((k) => k.hand) ? (
+        // Indian kits: laid out as the drums sit, left hand | both hands | right hand.
+        <div className="kit hands">
+          {(['left', 'both', 'right'] as Hand[]).map((h) => (
+            <section key={h} className={`hand ${h}`} aria-label={HAND_NAMES[track.bank ?? '']?.[h] ?? h}>
+              <h3>{HAND_NAMES[track.bank ?? '']?.[h] ?? h}</h3>
+              <div className="hand-pads">{kit.filter((k) => k.hand === h).map(pad)}</div>
+            </section>
+          ))}
+        </div>
+      ) : (
+        <div className="kit">
+          <div className="kit-main">{kit.filter((k) => k.main).map(pad)}</div>
+          <div className="kit-aux">{kit.filter((k) => !k.main).map(pad)}</div>
+        </div>
+      )}
     </div>
   );
 }

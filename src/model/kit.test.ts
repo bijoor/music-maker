@@ -26,7 +26,7 @@ describe('Indian kits', () => {
     const s = tablaSong();
     const t = s.tracks[4];
     const { code } = clipCode(t, t.slots[0]!);
-    expect(code).toBe('s("tabla_na ~ tabla_na ~ tabla_na ~ ~ tabla_na, ~ ~ ~ tabla_tin, ~ ~ ~ tabla_ke ~ tabla_ke ~ ~, tabla_ge tabla_ge ~ ~ ~ ~ tabla_ge ~")');
+    expect(code).toBe('s("~ ~ tabla_na ~ tabla_na ~ ~ tabla_na, ~ ~ ~ tabla_te ~ ~ ~ ~, tabla_dha, ~ ~ ~ tabla_dhin, ~ tabla_ge ~ ~ ~ ~ ~ ~, ~ ~ ~ ~ ~ tabla_kat ~ ~")');
   });
 
   it('round-trips an Indian kit clip unchanged', async () => {
@@ -68,9 +68,9 @@ describe('Indian kits', () => {
     // The standard kit keeps its keys.
     expect(['1', '4', 'q', 'r', 'a', 's', 'd', 'f', 't', 'n'].map((k) => drumKey('RolandTR909', k))).toEqual(['cr', 'hh', 'ht', 'rim', 'bd', 'bd', 'sd', 'sd', 'cp', 'sd:1']);
     expect(drumHint('RolandTR909', 'bd')).toBe('A S');
-    // Tabla: right-hand strokes on 1–4, Ke and Ghe on Q W / E R, Ge across A–F.
-    expect(['1', '4', 'q', 'e', 'a', 'f'].map((k) => drumKey('Tabla', k))).toEqual(['tabla_na', 'tabla_tun', 'tabla_ke', 'tabla_ghe', 'tabla_ge', 'tabla_ge']);
-    expect(drumHint('Tabla', 'tabla_ge')).toBe('A–F');
-    expect(['1', 'r', 'a', 'd', 't', 'h'].map((k) => drumKey('Mridangam', k))).toEqual(['nam', 'dhum', 'thom', 'tha', 'gumki', undefined]);
+    // Indian kits: left hand from F outwards, right hand from J, both hands in the middle.
+    expect(['f', 'd', 'r', 'j', 'k', 'o', 'g', 'h'].map((k) => drumKey('Tabla', k))).toEqual(['tabla_ge', 'tabla_ghe', 'tabla_kat', 'tabla_na', 'tabla_ta', 'tabla_tak', 'tabla_dha', 'tabla_dhin']);
+    expect(drumHint('Tabla', 'tabla_ge')).toBe('F');
+    expect(['f', 'a', 'j', 'o', 'g', '1'].map((k) => drumKey('Mridangam', k))).toEqual(['thom', 'ka', 'nam', 'dhi', 'dhum', undefined]);
   });
 });

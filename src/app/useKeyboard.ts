@@ -59,7 +59,8 @@ function resolve(key: string): { voice?: string; pitches?: number[]; chord?: boo
 function keyOf(e: KeyboardEvent): string {
   if (e.code.startsWith('Key')) return e.code.slice(3).toLowerCase();
   if (e.code.startsWith('Digit')) return e.code.slice(5);
-  if (e.code === 'Semicolon') return ';';
+  const punct: Record<string, string> = { Semicolon: ';', Comma: ',', Period: '.', Slash: '/' };
+  if (punct[e.code]) return punct[e.code];
   return e.key.toLowerCase();
 }
 

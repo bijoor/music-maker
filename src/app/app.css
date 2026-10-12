@@ -132,7 +132,12 @@ select.sm { min-height: 30px; padding: 3px 6px; font-size: 13px; }
 .pad code { font-family: var(--mono); font-size: 12px; color: var(--muted); }
 .pad.wide { grid-column: span 2; }
 .pad.full { grid-column: span 4; }
-.kit:not(:has(.kit-aux)) { grid-template-columns: minmax(0, 1fr); }
+.kit.hands { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 2fr); }
+.hand { display: flex; flex-direction: column; gap: 6px; min-height: 0; min-width: 0; }
+.hand h3 { margin: 0; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); text-align: center; }
+.hand-pads { flex: 1; min-height: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-auto-rows: minmax(0, 1fr); gap: 8px; }
+.hand.both .hand-pads { grid-template-columns: minmax(0, 1fr); }
+.hand.both { padding: 0 2px; }
 .pad.wide strong, .pad.full strong { font-size: 20px; }
 .pad.aux { border-radius: 12px; background: var(--panel); }
 .pad.aux strong { font-size: 13px; }
