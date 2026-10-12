@@ -313,7 +313,35 @@ export function generate(song: Song, opts: GenerateOptions = {}): GeneratedSong 
     tracks.push(writeTrack(w, song, t, labels.get(t.id)!, opts));
     w.add('\n');
   }
+  writeScenes(w, song, labels);
   return { code: w.text, tracks, tokens: w.tokens };
+}
+
+/** A scene name as an object key: bare when it is a plain identifier, quoted otherwise. */
+const key = (name: string) => (/^[A-Za-z_$][\w$]*$/.test(name) ? name : JSON.stringify(name));
+
+/** Scene names in the song line are separated by ·, so a name cannot contain one. */
+export const songName = (name: string) => name.replace(/·/g, '-').trim();
+
+/**
+ * Scenes and the song order, after the tracks. Scenes are real Strudel: each names what its tracks play (so
+ * `stack(...Object.values(scenes.Verse))` plays one in the REPL); tracks a scene leaves out keep playing.
+ * The song order is a line of scene names with bar counts.
+ */
+function writeScenes(w: Writer, song: Song, labels: Map<string, string>) {
+  if (!song.scenes.length && !song.arrangement.length) return;
+  w.add('\n// @scenes\nconst scenes = {\n');
+  for (const sc of song.scenes) {
+    const parts = song.tracks
+      .filter((t) => sc.active[t.id])
+      .map((t) => `${labels.get(t.id)}: ${chainExpr(t, labels.get(t.id)!, sc.active[t.id]).expr}`);
+    w.add(`  ${key(songName(sc.name))}: { ${parts.join(', ')} },\n`);
+  }
+  w.add('}\n// @end scenes\n');
+  if (song.arrangement.length) {
+    const steps = song.arrangement.map((st) => `${songName(song.scenes.find((x) => x.id === st.sceneId)?.name ?? '?')} ${st.bars}`);
+    w.add(`\n// @arrangement\n// ${steps.join(' · ')}\n// @end arrangement\n`);
+  }
 }
 
 /** The code for a single clip expression (used by tests and previews). */

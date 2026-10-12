@@ -84,3 +84,61 @@ describe('reading edited code back into the song', () => {
     expect(strip(song.tracks[1])).toEqual(strip(demoSong().tracks[1]));
   });
 });
+
+describe('scenes and song order in the code', () => {
+  const withScenes = () => {
+    const s = demoSong();
+    s.scenes = [
+      { id: 'v', name: 'Verse', active: { t1: [0], t2: [0], t3: [0] } },
+      { id: 'c', name: 'Big Chorus', active: { t1: [1, 1, 1, 2], t3: [1], t4: [] } },
+    ];
+    s.arrangement = [{ sceneId: 'v', bars: 4 }, { sceneId: 'c', bars: 8 }];
+    return s;
+  };
+
+  it('writes scenes as Strudel and the song order as a line', () => {
+    const c = generate(withScenes()).code;
+    expect(c).toContain('const scenes = {\n  Verse: { drums: drums_A, bass: bass_A, keys: keys_A },\n  "Big Chorus": { drums: arrange([3, drums_B], [1, drums_C]), keys: keys_B, lead: silence },\n}');
+    expect(c).toContain('// @arrangement\n// Verse 4 · Big Chorus 8\n// @end arrangement');
+  });
+
+  it('round-trips scenes and song order unchanged', async () => {
+    const s = withScenes();
+    const res = await parseCode(generate(s).code, s);
+    expect(res.errors).toEqual([]);
+    expect(res.notes).toEqual([]);
+    expect(strip(res.song)).toEqual(strip(s));
+  });
+
+  it('reads renamed and changed scenes, keeping their place in the song', async () => {
+    const s = withScenes();
+    const edited = generate(s).code
+      .replace('Verse: { drums: drums_A, bass: bass_A, keys: keys_A }', 'Intro: { drums: drums_C, keys: silence }')
+      .replace('// Verse 4 · Big Chorus 8', '// Intro 2 · Big Chorus 8 · Intro 2');
+    const { song, notes, errors } = await parseCode(edited, s);
+    expect(errors).toEqual([]);
+    expect(song.scenes[0]).toEqual({ id: 'v', name: 'Intro', active: { t1: [2], t3: [] } });
+    expect(song.arrangement).toEqual([{ sceneId: 'v', bars: 2 }, { sceneId: 'c', bars: 8 }, { sceneId: 'v', bars: 2 }]);
+    expect(notes).toEqual(expect.arrayContaining(['Scene Verse: renamed to Intro', 'Song order updated']));
+  });
+
+  it('keeps a renamed scene in the song when only the scenes block is edited', async () => {
+    const s = withScenes();
+    const { song, errors } = await parseCode(generate(s).code.replace('Verse: {', 'Opening: {'), s);
+    expect(errors).toEqual([]);
+    expect(song.arrangement).toEqual(s.arrangement);
+    expect(generate(song).code).toContain('// Opening 4 · Big Chorus 8');
+  });
+
+  it('adds and deletes scenes, and reports unknown names', async () => {
+    const s = withScenes();
+    const edited = generate(s).code
+      .replace(/  "Big Chorus": [^\n]*\n/, '  Outro: { lead: lead_A },\n')
+      .replace('// Verse 4 · Big Chorus 8', '// Verse 4 · Outro 4 · Bridge 4');
+    const { song, errors } = await parseCode(edited, s);
+    expect(song.scenes.map((x) => x.name)).toEqual(['Verse', 'Outro']);
+    expect(song.scenes[1].id).toBe('c'); // matched by position
+    expect(errors).toEqual(['Song: there is no scene called Bridge']);
+    expect(song.arrangement.map((x) => x.bars)).toEqual([4, 4]);
+  });
+});

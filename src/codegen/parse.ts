@@ -8,7 +8,7 @@ import { transpiler } from '@strudel/transpiler';
 import { voiceBank } from '../model/kit';
 import { emptyHits, newId } from '../model/build';
 import { MAX_SLOTS, STEPS_PER_BAR, type Bars, type Clip, type Fx, type Note, type Song, type Track } from '../model/types';
-import { clipCode } from './generate';
+import { clipCode, trackLabels } from './generate';
 
 export interface ParseResult {
   song: Song;
@@ -114,6 +114,28 @@ async function readClip(text: string, track: Track, existing: Clip | null, name?
   return { clip: { ...base, id, name: clipName, bars: keepBars, code: text }, custom: true };
 }
 
+/**
+ * A track's chain as the launcher writes it: 'silence', 'drums_A', or 'arrange([3, drums_A], [1, drums_C])'.
+ * Returns the slots in turn, or null if the text is something else.
+ */
+function readChain(text: string, track: Track): number[] | null {
+  const t = text.trim();
+  if (t === 'silence') return [];
+  const ref = /^[A-Za-z0-9_$]+_([A-H])$/.exec(t);
+  if (ref) return track.slots[LETTERS.indexOf(ref[1])] ? [LETTERS.indexOf(ref[1])] : null;
+  const arr = /^arrange\(([\s\S]*)\)$/.exec(t);
+  if (!arr) return null;
+  const entry = /\[\s*(\d+)\s*,\s*[A-Za-z0-9_$]+_([A-H])\s*\]/g;
+  if (arr[1].replace(entry, '').replace(/[\s,]/g, '') !== '') return null;
+  const seq: number[] = [];
+  for (const m of arr[1].matchAll(entry)) {
+    const slot = LETTERS.indexOf(m[2]), clip = track.slots[slot];
+    if (!clip || +m[1] % clip.bars) return null;
+    for (let i = 0; i < +m[1] / clip.bars; i++) seq.push(slot);
+  }
+  return seq;
+}
+
 /** The play line: which slots play (as the launcher would write them) and the effects; otherwise custom. */
 function readPlay(text: string, label: string | undefined, track: Track, song: Song, notes: string[]) {
   const anySolo = song.tracks.some((t) => t.solo);
@@ -128,25 +150,8 @@ function readPlay(text: string, label: string | undefined, track: Track, song: S
     fx[k] = +m[2];
     core_ = core_.slice(0, m.index).trimEnd();
   }
-  const ref = /^[A-Za-z0-9_$]+_([A-H])$/;
-  let active: number[] | null = null;
-  if (core_ === 'silence') active = [];
-  else if (ref.test(core_)) active = [LETTERS.indexOf(ref.exec(core_)![1])];
-  else {
-    const arr = /^arrange\(([\s\S]*)\)$/.exec(core_);
-    if (arr) {
-      const entry = /\[\s*(\d+)\s*,\s*[A-Za-z0-9_$]+_([A-H])\s*\]/g;
-      const seq: number[] = [];
-      let ok = arr[1].replace(entry, '').replace(/[\s,]/g, '') === '';
-      for (const m of arr[1].matchAll(entry)) {
-        const slot = LETTERS.indexOf(m[2]), clip = track.slots[slot];
-        if (!clip || +m[1] % clip.bars) { ok = false; break; }
-        for (let i = 0; i < +m[1] / clip.bars; i++) seq.push(slot);
-      }
-      if (ok) active = seq;
-    }
-  }
-  if (active && active.every((i) => track.slots[i])) {
+  const active = readChain(core_, track);
+  if (active) {
     if (track.playCode) notes.push(`${track.name}: play line back to normal`);
     track.playCode = undefined;
     track.active = active;
@@ -220,5 +225,73 @@ export async function parseCode(code: string, song: Song): Promise<ParseResult> 
       }
     });
   }
+  readScenes(code, out, notes, errors);
   return { song: out, notes, errors };
+}
+
+/**
+ * The scenes block and song order. Scenes match the existing ones by position, so renaming one keeps it (and
+ * its place in the song); extra scenes are added and missing ones deleted. A missing block leaves scenes as they are.
+ */
+function readScenes(code: string, song: Song, notes: string[], errors: string[]) {
+  const labels = trackLabels(song);
+  const byLabel = new Map([...labels].map(([id, label]) => [label, song.tracks.find((t) => t.id === id)!]));
+  const block = /^\/\/ @scenes\n([\s\S]*?)^\/\/ @end scenes/m.exec(code);
+  // Old names still find their scene in the song line, so renaming a scene only in the scenes block keeps it in the song.
+  const oldNames = new Map(song.scenes.map((x) => [x.name, x.id]));
+  if (block) {
+    let ast: acorn.Program;
+    try {
+      ast = acorn.parse(block[1], { ecmaVersion: 2022, sourceType: 'script' });
+    } catch (err) {
+      errors.push(`Scenes: ${(err as Error).message}`);
+      return;
+    }
+    const decl = ast.body.find((n): n is acorn.VariableDeclaration => n.type === 'VariableDeclaration');
+    const obj = decl?.declarations[0]?.init;
+    if (!obj || obj.type !== 'ObjectExpression') { errors.push('Scenes: expected const scenes = { … }'); return; }
+    const scenes: Song['scenes'] = [];
+    for (const prop of obj.properties) {
+      if (prop.type !== 'Property') continue;
+      const name = prop.key.type === 'Identifier' ? prop.key.name : prop.key.type === 'Literal' ? String(prop.key.value) : '';
+      if (!name || prop.value.type !== 'ObjectExpression') { errors.push(`Scenes: ${name || 'an entry'} is not { track: clips }`); continue; }
+      const active: Record<string, number[]> = {};
+      for (const tp of prop.value.properties) {
+        if (tp.type !== 'Property') continue;
+        const label = tp.key.type === 'Identifier' ? tp.key.name : tp.key.type === 'Literal' ? String(tp.key.value) : '';
+        const track = byLabel.get(label);
+        const chain = track && readChain(block[1].slice(tp.value.start, tp.value.end), track);
+        if (!track) errors.push(`Scene ${name}: no track called ${label}`);
+        else if (!chain) errors.push(`Scene ${name}: ${label} must be silence, a clip (${label}_A) or arrange([...])`);
+        else active[track.id] = chain;
+      }
+      const old = song.scenes[scenes.length];
+      scenes.push({ id: old?.id ?? newId('s'), name, active });
+      if (!old) notes.push(`Scene ${name}: added`);
+      else if (old.name !== name) notes.push(`Scene ${old.name}: renamed to ${name}`);
+      else if (JSON.stringify(old.active) !== JSON.stringify(active)) notes.push(`Scene ${name}: updated`);
+    }
+    for (const gone of song.scenes.slice(scenes.length)) notes.push(`Scene ${gone.name}: deleted`);
+    const kept = new Set(scenes.map((x) => x.id));
+    song.arrangement = song.arrangement.filter((st) => kept.has(st.sceneId));
+    song.scenes = scenes;
+  }
+  const arr = /^\/\/ @arrangement\n([\s\S]*?)^\/\/ @end arrangement/m.exec(code);
+  if (arr) {
+    const line = arr[1].split('\n').map((l) => l.replace(/^\/\/\s?/, '').trim()).filter(Boolean).join(' · ');
+    const steps: Song['arrangement'] = [];
+    for (const part of line.split('·').map((x) => x.trim()).filter(Boolean)) {
+      const m = /^(.*?)\s+(\d+)$/.exec(part);
+      const name = m?.[1].trim();
+      const scene = m && (song.scenes.find((x) => x.name === name) ?? song.scenes.find((x) => x.id === oldNames.get(name!)));
+      if (!m) errors.push(`Song: "${part}" should be a scene name and a bar count`);
+      else if (!scene) errors.push(`Song: there is no scene called ${m[1].trim()}`);
+      else steps.push({ sceneId: scene.id, bars: Math.max(1, Math.min(64, +m[2])) });
+    }
+    if (JSON.stringify(steps) !== JSON.stringify(song.arrangement)) notes.push('Song order updated');
+    song.arrangement = steps;
+  } else if (block && song.arrangement.length) {
+    notes.push('Song order cleared');
+    song.arrangement = [];
+  }
 }
