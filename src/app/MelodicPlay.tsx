@@ -5,6 +5,7 @@ import { pitchToCode } from '../model/notes';
 import type { Track } from '../model/types';
 import * as recorder from '../engine/recorder';
 import StepStrip from './StepStrip';
+import { PAD_ROWS, PIANO_HINT } from './keymap';
 
 const BLACK = [1, 3, 6, 8, 10];
 
@@ -41,8 +42,8 @@ export default function MelodicPlay({ track }: { track: Track }) {
       <StepStrip />
       <div className="chords" style={{ gridTemplateColumns: `repeat(${chords.length}, minmax(0, 1fr))` }}>
         {chords.map((c, i) => (
-          <button key={i} className="chord" onPointerDown={(e) => play(c.pitches, e, true)}>
-            <strong>{c.name}</strong><span>{c.numeral}</span>
+          <button key={i} className="chord" data-chord={i} onPointerDown={(e) => play(c.pitches, e, true)}>
+            <strong>{c.name}</strong><span>{c.numeral}</span><span className="kbd-hint">{i + 1}</span>
           </button>
         ))}
       </div>
@@ -61,13 +62,14 @@ export default function MelodicPlay({ track }: { track: Track }) {
     const row = (oct: number, top: boolean) => {
       const pitches = scale.degrees.map((d) => scalePitch(scale, tonic, d, oct));
       if (top) pitches.push(scalePitch(scale, tonic, 0, oct + 1));
+      const keys = oct === track.octave ? PAD_ROWS.low : PAD_ROWS.high;
       return (
         <div className="padrow">
-          {pitches.map((p) => {
+          {pitches.map((p, i) => {
             const sa = pitchLabel(p, tonic, true) === 'Sa';
             return (
-              <button key={p} className={`spad${sa ? ' sa' : ''}`} onPointerDown={(e) => play([p], e)}>
-                <strong>{pitchLabel(p, tonic, sargam, false)}</strong><span>{pitchToCode(p)}</span>
+              <button key={p} className={`spad${sa ? ' sa' : ''}`} data-pitch={p} onPointerDown={(e) => play([p], e)}>
+                <strong>{pitchLabel(p, tonic, sargam, false)}</strong><span>{pitchToCode(p)}</span><span className="kbd-hint">{keys[i]?.toUpperCase()}</span>
               </button>
             );
           })}
@@ -96,13 +98,15 @@ export default function MelodicPlay({ track }: { track: Track }) {
       const pitch = ok ? scalePitch(scale, tonic, deg, Math.floor((m - tonicPc(tonic)) / 12) - 1) : m;
       const label = ok || !scaleLock ? pitchLabel(m, tonic, sargam, pc === tonicPc(tonic) || i === 0) : '';
       const props = {
+        'data-pitch': pitch,
         'aria-label': pitchLabel(m, tonic, false),
         'aria-disabled': off || undefined,
         onPointerDown: (e: PointerEvent<HTMLButtonElement>) => { if (!off) play([pitch], e); },
       };
       const w = 100 / whites;
-      if (black) blacks.push(<button key={m} className={`bk${off ? ' off' : ''}${ok ? ' in' : ''}`} style={{ left: `${wi * w - w * 0.32}%`, width: `${w * 0.64}%` }} {...props}><span>{label}</span></button>);
-      else { keys.push(<button key={m} className={`wk${off ? ' off' : ''}${ok ? ' in' : ''}`} style={{ left: `${wi * w}%`, width: `${w}%` }} {...props}><span>{label}</span></button>); wi++; }
+      const hint = !off && PIANO_HINT[i] ? <span className="kbd-hint">{PIANO_HINT[i]}</span> : null;
+      if (black) blacks.push(<button key={m} className={`bk${off ? ' off' : ''}${ok ? ' in' : ''}`} style={{ left: `${wi * w - w * 0.32}%`, width: `${w * 0.64}%` }} {...props}>{hint}<span>{label}</span></button>);
+      else { keys.push(<button key={m} className={`wk${off ? ' off' : ''}${ok ? ' in' : ''}`} style={{ left: `${wi * w}%`, width: `${w}%` }} {...props}>{hint}<span>{label}</span></button>); wi++; }
     }
     return <div className="kb">{keys}{blacks}</div>;
   }

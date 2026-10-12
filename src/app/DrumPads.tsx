@@ -2,6 +2,7 @@ import { KIT, voiceBank, type KitVoice } from '../model/kit';
 import type { Track } from '../model/types';
 import * as recorder from '../engine/recorder';
 import StepStrip from './StepStrip';
+import { DRUM_HINT } from './keymap';
 
 /** Finger-sized pads: large main pads (kick and snare double width), smaller pads for less frequent sounds. */
 export default function DrumPads({ track }: { track: Track }) {
@@ -15,10 +16,12 @@ export default function DrumPads({ track }: { track: Track }) {
     <button
       key={k.voice}
       className={`pad${k.voice === 'bd' || k.voice === 'sd' ? ' wide' : ''}${k.main ? '' : ' aux'}`}
+      data-voice={k.voice}
       onPointerDown={(e) => hit(k, e.currentTarget, e.timeStamp)}
     >
       <strong>{k.name}</strong>
       <code>{k.voice}</code>
+      <span className="kbd-hint">{DRUM_HINT[k.voice]}</span>
     </button>
   );
   return (

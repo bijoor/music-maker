@@ -4,7 +4,7 @@ import { produce } from 'immer';
 import { demoSong } from '../model/demo';
 import { emptyHits, newId, track as makeTrack, defaultFx } from '../model/build';
 import { DRUM_PRESETS, INSTRUMENTS } from '../model/presets';
-import { MAX_SLOTS, STEPS_PER_BAR, type Bars, type Clip, type ScaleDef, type Song, type Track } from '../model/types';
+import { MAX_SLOTS, STEPS_PER_BAR, type Bars, type Clip, type Fx, type ScaleDef, type Song, type Track } from '../model/types';
 import { toggleNote as toggleNoteIn, writeNote } from '../model/clipEdit';
 import { findScale, scalePitch } from '../model/scales';
 import { loadNumber, loadSong, saveNumber, saveSong } from './persist';
@@ -34,6 +34,8 @@ interface State {
   panel: Panel | null;
   /** Show Sa Re Ga labels instead of letter names. */
   sargam: boolean;
+  /** Show the sound controls strip in the clip editor. */
+  soundOpen: boolean;
   keyboard: KeyboardLayout;
   keyboardOctaves: 1 | 2;
   scaleLock: boolean;
@@ -72,6 +74,8 @@ interface State {
   addTrack(instrument: number): void;
   removeTrack(trackId: string): void;
   setGain(trackId: string, gain: number): void;
+  /** Change a track's effects (cutoff, reverb, delay, pan, volume); not undoable, like a mixer. */
+  setFx(trackId: string, fx: Partial<Fx>): void;
   setBank(trackId: string, bank: string): void;
   toggleMute(trackId: string): void;
   toggleSolo(trackId: string): void;
@@ -106,7 +110,7 @@ interface State {
   resetClipCode(trackId: string, slot: number): void;
   resetPlayCode(trackId: string): void;
   toggleCode(): void;
-  setUi(ui: Partial<Pick<State, 'sargam' | 'keyboard' | 'keyboardOctaves' | 'scaleLock' | 'noteLen' | 'chordLen' | 'cursor' | 'quantize' | 'countIn' | 'metronome'>>): void;
+  setUi(ui: Partial<Pick<State, 'soundOpen' | 'sargam' | 'keyboard' | 'keyboardOctaves' | 'scaleLock' | 'noteLen' | 'chordLen' | 'cursor' | 'quantize' | 'countIn' | 'metronome'>>): void;
   setMode(mode: Mode): void;
   /** Recording: add a drum hit or a note (held notes are written again with a longer length on release). */
   recordHit(trackId: string, slot: number, voice: string, step: number, group: string): void;
@@ -191,6 +195,7 @@ export const useStore = create<State>((set, get) => {
   page: 0,
   panel: null,
   sargam: false,
+  soundOpen: false,
   keyboard: 'piano',
   keyboardOctaves: 2,
   scaleLock: true,
@@ -247,6 +252,13 @@ export const useStore = create<State>((set, get) => {
       return { song, selected };
     }),
   setGain: (trackId, gain) => set(onTrack(trackId, (t) => { t.fx.gain = Math.round(gain * 100) / 100; })),
+  setFx: (trackId, fx) =>
+    set(onTrack(trackId, (t) => {
+      for (const [k, v] of Object.entries(fx) as [keyof Fx, number | undefined][]) {
+        if (v === undefined) delete t.fx[k];
+        else t.fx[k] = Math.round(v * 100) / 100;
+      }
+    })),
   setBank: (trackId, bank) => set(onTrack(trackId, (t) => { t.bank = bank; })),
   toggleMute: (trackId) => set(onTrack(trackId, (t) => { t.mute = !t.mute; })),
   toggleSolo: (trackId) => set(onTrack(trackId, (t) => { t.solo = !t.solo; })),

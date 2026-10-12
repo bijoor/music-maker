@@ -5,6 +5,7 @@ import { DRUM_PRESETS } from '../model/presets';
 import type { Bars } from '../model/types';
 import DrumGrid from './DrumGrid';
 import Calibrate from './Calibrate';
+import SoundStrip from './SoundStrip';
 import SongEditor from './SongEditor';
 import ScaleEditor from './ScaleEditor';
 // The code editor (CodeMirror) loads only when the code panel is first opened.
@@ -82,6 +83,7 @@ export default function ClipEditor() {
         <button className="btn sm" disabled={!state.past.length} onClick={state.undo} aria-label="Undo">↶<span className="wide-only"> Undo</span></button>
         <button className="btn sm" disabled={!state.future.length} onClick={state.redo} aria-label="Redo">↷</button>
         <span className="spacer" />
+        <button className={`btn sm${state.soundOpen ? ' on' : ''}`} aria-pressed={state.soundOpen} onClick={() => state.setUi({ soundOpen: !state.soundOpen })}>Sound</button>
         <div className="seg" role="group" aria-label="View">
           <button aria-pressed={view === 'grid'} onClick={() => setView('grid')}>Grid</button>
           <button aria-pressed={view === 'play'} onClick={() => setView('play')}>Play</button>
@@ -103,6 +105,7 @@ export default function ClipEditor() {
           )}
         </div>
       </div>
+      {state.soundOpen && <SoundStrip track={track} />}
       <div className="ebody">
         {clip?.code && slot !== null && view === 'grid' ? (
           <div className="custom-banner">
