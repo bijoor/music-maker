@@ -13,6 +13,8 @@ npm run dev -- --host
 
 Open the printed `Network` address on the iPad (same Wi-Fi), tap **Start audio**, then run the tests.
 
+The latest build of `main` is also published at <https://bijoor.github.io/music-maker/>.
+
 ## Phase 0 checks
 
 | # | Check | How it is measured |
