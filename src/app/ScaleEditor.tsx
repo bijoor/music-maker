@@ -2,10 +2,12 @@ import { useState } from 'react';
 import { useStore } from '../state/store';
 import { findScale, SARGAM, TONICS, tonicPc } from '../model/scales';
 import * as player from '../engine/player';
+import PanelFrame from './PanelFrame';
 
 /** Build a scale or raga: pick the swaras of one octave and nudge any of them by cents (shrutis). */
-export default function ScaleEditor({ onClose }: { onClose(): void }) {
-  const { song, addCustomScale } = useStore();
+export default function ScaleEditor() {
+  const { song, addCustomScale, setPanel } = useStore();
+  const onClose = () => setPanel(null);
   const base = findScale(song);
   const tonic = song.key.tonic;
   const [name, setName] = useState(base.group === 'Custom' ? base.name : `My ${base.name}`);
@@ -27,10 +29,8 @@ export default function ScaleEditor({ onClose }: { onClose(): void }) {
   };
 
   return (
-    <div className="overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="dialog" role="dialog" aria-modal="true" aria-labelledby="se-h">
-        <div className="dialog-h"><h2 id="se-h">Custom scale or raga</h2><button className="btn sm" onClick={onClose}>Close</button></div>
-        <div className="dialog-b">
+    <PanelFrame title="Custom scale or raga">
+        <div className="pcontent">
           <p className="muted-text">Tap the notes of one octave, with Sa on {tonic}. Nudge a note in cents for shrutis; those notes are written as decimal MIDI numbers in the code, for example <code>note("62.88")</code>.</p>
           <label className="field"><span className="muted-text">Name</span><input value={name} onChange={(e) => setName(e.target.value)} /></label>
           <div className="swaras">
@@ -49,7 +49,6 @@ export default function ScaleEditor({ onClose }: { onClose(): void }) {
             <button className="btn" onClick={playScale}>Play scale</button>
           </div>
         </div>
-      </div>
-    </div>
+    </PanelFrame>
   );
 }

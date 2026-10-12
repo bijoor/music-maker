@@ -1,20 +1,18 @@
 import { useEffect, useRef, useState } from 'react';
 import { useStore } from '../state/store';
 import * as player from '../engine/player';
-import SongEditor from './SongEditor';
 
 /**
  * Saved scenes and song mode. + Save scene saves at once with a default name. Tap a scene to launch it; in
  * Edit mode the tap turns it into a name box, with a menu to replace, add to the song or delete it.
  */
 export default function ScenesBar() {
-  const { song, mode, songMode, transport, saveScene, launchScene, updateScene, renameScene, deleteScene, addSongStep, setSongMode } = useStore();
+  const { song, mode, songMode, transport, panel, setPanel, saveScene, launchScene, updateScene, renameScene, deleteScene, addSongStep, setSongMode } = useStore();
   const [editing, setEditing] = useState<string | null>(null);
   const [menuFor, setMenuFor] = useState<string | null>(null);
   // The scene list scrolls sideways, so the menu is placed on the screen (fixed) under its button.
   const [menuAt, setMenuAt] = useState({ left: 0, top: 0 });
   const close = () => { setMenuFor(null); setEditing(null); };
-  const [songOpen, setSongOpen] = useState(false);
   const posRef = useRef<HTMLSpanElement>(null);
 
   useEffect(() => {
@@ -83,8 +81,7 @@ export default function ScenesBar() {
       >
         {songMode ? '■ Song' : '▶ Song'}
       </button>
-      <button className="btn sm" onClick={() => setSongOpen(true)}>Song order{song.arrangement.length ? ` (${song.arrangement.length})` : ''}</button>
-      {songOpen && <SongEditor onClose={() => setSongOpen(false)} />}
+      <button className={`btn sm${panel === 'song' ? ' on' : ''}`} aria-pressed={panel === 'song'} onClick={() => setPanel(panel === 'song' ? null : 'song')}>Song order{song.arrangement.length ? ` (${song.arrangement.length})` : ''}</button>
     </div>
   );
 }

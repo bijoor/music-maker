@@ -1,14 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
-import ScaleEditor from './ScaleEditor';
 import { useStore } from '../state/store';
 import { SCALES, TONICS } from '../model/scales';
 import * as engine from '../engine/strudel';
 import * as player from '../engine/player';
 
 export default function Transport() {
-  const { song, transport, codeOpen, sargam, mode, countIn, metronome, setBpm, setTonic, setScale, toggleCode, resetSong, setUi, setMode } = useStore();
-  const [editingScale, setEditingScale] = useState(false);
+  const { song, transport, panel, setPanel, sargam, mode, countIn, metronome, setBpm, setTonic, setScale, toggleCode, resetSong, setUi, setMode } = useStore();
   const [more, setMore] = useState(false);
+  const [confirmReset, setConfirmReset] = useState(false);
   const barRef = useRef<HTMLElement>(null);
   const dotsRef = useRef<HTMLSpanElement>(null);
 
@@ -57,7 +56,7 @@ export default function Transport() {
       <select aria-label="Key" value={song.key.tonic} onChange={(e) => setTonic(e.target.value)}>
         {TONICS.map((t) => <option key={t}>{t}</option>)}
       </select>
-      <select aria-label="Scale" value={song.key.scaleId} onChange={(e) => (e.target.value === '__new' ? setEditingScale(true) : setScale(e.target.value))}>
+      <select aria-label="Scale" value={song.key.scaleId} onChange={(e) => (e.target.value === '__new' ? setPanel('scale') : setScale(e.target.value))}>
         <optgroup label="Western">{group('Western')}</optgroup>
         <optgroup label="Ragas">{group('Ragas')}</optgroup>
         {song.customScales.length > 0 && <optgroup label="My scales">{group('Custom')}</optgroup>}
@@ -71,17 +70,16 @@ export default function Transport() {
       <button className={`btn sm${metronome ? ' on' : ''}`} aria-pressed={metronome} onClick={() => setUi({ metronome: !metronome })}>Click</button>
       <span className="spacer" />
       <div className="menuwrap">
-        <button className="btn sm" aria-expanded={more} onClick={() => setMore(!more)}>More ⋯</button>
+        <button className="btn sm" aria-expanded={more} onClick={() => { setMore(!more); setConfirmReset(false); }}>More ⋯</button>
         {more && (
           <div className="menu right" role="menu">
             <button role="menuitemcheckbox" aria-checked={sargam} onClick={() => { setUi({ sargam: !sargam }); setMore(false); }}>{sargam ? '✓ ' : ''}Sa Re Ga labels</button>
-            <button role="menuitem" onClick={() => { setMore(false); if (confirm('Replace your song with the demo song? Your current clips will be lost.')) resetSong(); }}>Reset to the demo song</button>
+            <button role="menuitem" onClick={() => { if (confirmReset) { resetSong(); setMore(false); setConfirmReset(false); } else setConfirmReset(true); }}>{confirmReset ? 'Tap again: your clips will be replaced' : 'Reset to the demo song'}</button>
             <a role="menuitem" className="menulink" href="#lab" onClick={() => setMore(false)}>Phase 0 tests</a>
           </div>
         )}
       </div>
-      <button className={`btn${codeOpen ? ' on' : ''}`} aria-pressed={codeOpen} onClick={toggleCode}>Code</button>
-      {editingScale && <ScaleEditor onClose={() => setEditingScale(false)} />}
+      <button className={`btn${panel === 'code' ? ' on' : ''}`} aria-pressed={panel === 'code'} onClick={toggleCode}>Code</button>
     </header>
   );
 }

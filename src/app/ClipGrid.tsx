@@ -95,7 +95,7 @@ function TrackRow({ track: t, audible, queued, songMode, selectedSlot, onSlot, o
       <div className="thd" onClick={(e) => { if (!(e.target as HTMLElement).closest('input,button')) onSelect(); }}>
         <span className="c" />
         <span className="n">
-          <strong>{t.name}</strong>
+          <strong>{t.name}{t.playCode && <span className="custom"> · custom line</span>}</strong>
           <input className="vol" type="range" min={0} max={1.5} step={0.01} value={t.fx.gain} aria-label={`${t.name} volume`} onChange={(e) => onGain(+e.target.value)} />
         </span>
         <span className="ms">
@@ -116,6 +116,7 @@ function TrackRow({ track: t, audible, queued, songMode, selectedSlot, onSlot, o
                   <span className="cn">{clip.name}<span>{clip.bars} bar{clip.bars > 1 ? 's' : ''}{active && queued ? ' · next bar' : ''}</span></span>
                   <Thumb clip={clip} />
                   {order.length > 0 && <span className="order" aria-label={`Plays ${order.join(', ')} in the chain`}>{order.join(' ')}</span>}
+                  {clip.code && <span className="badge" title="Hand-written code">code</span>}
                   <span className="prog" />
                 </>
               ) : '+'}

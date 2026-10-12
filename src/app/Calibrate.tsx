@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useStore } from '../state/store';
 import * as engine from '../engine/strudel';
 import * as player from '../engine/player';
+import PanelFrame from './PanelFrame';
 
 const TAPS = 8;
 
@@ -9,8 +10,9 @@ const TAPS = 8;
  * Tap along with the click; the median gap between your taps and the beats becomes this device's record
  * offset. It covers touch-screen delay, Bluetooth headphones and personal timing.
  */
-export default function Calibrate({ onClose }: { onClose(): void }) {
-  const { transport, metronome, recordOffsetMs, setUi, setRecordOffset } = useStore();
+export default function Calibrate() {
+  const { transport, metronome, recordOffsetMs, setUi, setRecordOffset, setPanel } = useStore();
+  const onClose = () => setPanel(null);
   const [gaps, setGaps] = useState<number[]>([]);
   const wasClick = useRef(metronome);
 
@@ -33,10 +35,8 @@ export default function Calibrate({ onClose }: { onClose(): void }) {
   const spread = sorted.length > 1 ? sorted[sorted.length - 1] - sorted[0] : 0;
 
   return (
-    <div className="overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="dialog" role="dialog" aria-modal="true" aria-labelledby="cal-h">
-        <div className="dialog-h"><h2 id="cal-h">Calibrate recording</h2><button className="btn sm" onClick={onClose}>Close</button></div>
-        <div className="dialog-b">
+    <PanelFrame title="Calibrate recording">
+        <div className="pcontent">
           <p className="muted-text">Tap the big button exactly on each click, {TAPS} times. Use the speakers or headphones you will record with. The result is saved on this device.</p>
           <button className="tapbig" disabled={transport !== 'playing'} onPointerDown={(e) => tap(e.timeStamp)}>
             {transport === 'playing' ? `Tap · ${gaps.length} / ${TAPS}` : 'Starting…'}
@@ -52,7 +52,6 @@ export default function Calibrate({ onClose }: { onClose(): void }) {
             <button className="btn" onClick={() => { setRecordOffset(0); onClose(); }}>Reset to 0</button>
           </div>
         </div>
-      </div>
-    </div>
+    </PanelFrame>
   );
 }

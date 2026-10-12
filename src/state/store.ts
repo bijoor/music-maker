@@ -13,6 +13,8 @@ export type TransportState = 'stopped' | 'loading' | 'playing';
 export type EditorView = 'grid' | 'play';
 export type KeyboardLayout = 'piano' | 'pads';
 export type Mode = 'perform' | 'record' | 'edit';
+/** What the bottom area shows instead of the clip editor (no pop-up dialogs). */
+export type Panel = 'code' | 'song' | 'scale' | 'calibrate';
 
 interface Selection {
   trackId: string;
@@ -28,7 +30,8 @@ interface State {
   view: EditorView;
   /** Bar of the selected clip shown in the grid. */
   page: number;
-  codeOpen: boolean;
+  /** Panel shown in the bottom area instead of the clip editor; null = clip editor. */
+  panel: Panel | null;
   /** Show Sa Re Ga labels instead of letter names. */
   sargam: boolean;
   keyboard: KeyboardLayout;
@@ -96,6 +99,12 @@ interface State {
   // UI
   setView(view: EditorView): void;
   setPage(page: number): void;
+  setPanel(panel: Panel | null): void;
+  /** Replace the song with one read back from edited code (one undo step). */
+  applySong(song: Song): void;
+  /** Drop a clip's hand-written code and play its grid notes again. */
+  resetClipCode(trackId: string, slot: number): void;
+  resetPlayCode(trackId: string): void;
   toggleCode(): void;
   setUi(ui: Partial<Pick<State, 'sargam' | 'keyboard' | 'keyboardOctaves' | 'scaleLock' | 'noteLen' | 'chordLen' | 'cursor' | 'quantize' | 'countIn' | 'metronome'>>): void;
   setMode(mode: Mode): void;
@@ -180,7 +189,7 @@ export const useStore = create<State>((set, get) => {
   selected: { trackId: initial.tracks[0]?.id ?? '', slot: initial.tracks[0]?.active[0] ?? null },
   view: 'grid',
   page: 0,
-  codeOpen: false,
+  panel: null,
   sargam: false,
   keyboard: 'piano',
   keyboardOctaves: 2,
@@ -351,7 +360,16 @@ export const useStore = create<State>((set, get) => {
   setUi: (ui) => set(ui),
   setView: (view) => set({ view }),
   setPage: (page) => set({ page }),
-  toggleCode: () => set((s) => ({ codeOpen: !s.codeOpen })),
+  setPanel: (panel) => set({ panel }),
+  applySong: (song) =>
+    edit((s) => {
+      const t = song.tracks.find((x) => x.id === s.selected.trackId) ?? song.tracks[0];
+      const slot = t && s.selected.slot !== null && t.slots[s.selected.slot] ? s.selected.slot : null;
+      return { song, selected: { trackId: t?.id ?? '', slot } };
+    }),
+  resetClipCode: (trackId, slot) => edit(onTrack(trackId, (t) => { const c = t.slots[slot]; if (c) delete c.code; })),
+  resetPlayCode: (trackId) => edit(onTrack(trackId, (t) => { delete t.playCode; })),
+  toggleCode: () => set((s) => ({ panel: s.panel === 'code' ? null : 'code' })),
   setTransport: (transport) => set({ transport }),
   setPending: (trackId, at) =>
     set((s) => {

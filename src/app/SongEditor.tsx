@@ -1,17 +1,16 @@
 import { useStore } from '../state/store';
 import * as player from '../engine/player';
+import PanelFrame from './PanelFrame';
 
 /** The song order: scenes in sequence, each played for a number of bars. The song loops at the end. */
-export default function SongEditor({ onClose }: { onClose(): void }) {
+export default function SongEditor() {
   const { song, songMode, transport, addSongStep, setSongStep, moveSongStep, removeSongStep, setSongMode } = useStore();
   const total = song.arrangement.reduce((a, st) => a + st.bars, 0);
   const seconds = (total * 4 * 60) / song.bpm;
 
   return (
-    <div className="overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="dialog wide" role="dialog" aria-modal="true" aria-labelledby="song-h">
-        <div className="dialog-h"><h2 id="song-h">Song order</h2><button className="btn sm" onClick={onClose}>Close</button></div>
-        <div className="dialog-b">
+    <PanelFrame title="Song order">
+        <div className="pcontent">
           {song.scenes.length === 0 ? (
             <p className="muted-text">Save a scene first: play some clips, then tap <b>+ Save scene</b>.</p>
           ) : (
@@ -47,7 +46,6 @@ export default function SongEditor({ onClose }: { onClose(): void }) {
             </>
           )}
         </div>
-      </div>
-    </div>
+    </PanelFrame>
   );
 }

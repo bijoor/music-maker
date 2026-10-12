@@ -1,10 +1,14 @@
-import { useState } from 'react';
+import { lazy, Suspense, useState } from 'react';
 import { selectedClip, selectedTrack, useStore } from '../state/store';
 import { BANKS } from '../model/kit';
 import { DRUM_PRESETS } from '../model/presets';
 import type { Bars } from '../model/types';
 import DrumGrid from './DrumGrid';
 import Calibrate from './Calibrate';
+import SongEditor from './SongEditor';
+import ScaleEditor from './ScaleEditor';
+// The code editor (CodeMirror) loads only when the code panel is first opened.
+const CodeView = lazy(() => import('./CodeView'));
 import DrumPads from './DrumPads';
 import NoteGrid from './NoteGrid';
 import MelodicPlay from './MelodicPlay';
@@ -19,7 +23,11 @@ export default function ClipEditor() {
   const track = selectedTrack(state);
   const clip = selectedClip(state);
   const [menu, setMenu] = useState(false);
-  const [calibrating, setCalibrating] = useState(false);
+  const [confirmRemove, setConfirmRemove] = useState(false);
+  if (state.panel === 'code') return <Suspense fallback={<section className="card editor empty-editor"><p className="muted-text">Loading the code editor…</p></section>}><CodeView /></Suspense>;
+  if (state.panel === 'song') return <SongEditor />;
+  if (state.panel === 'scale') return <ScaleEditor />;
+  if (state.panel === 'calibrate') return <Calibrate />;
   if (!track) return <section className="card editor empty-editor"><p className="muted-text">Add a track to start.</p></section>;
   const slot = selected.slot;
   const bar = clip ? Math.min(page, clip.bars - 1) : 0;
@@ -68,7 +76,7 @@ export default function ClipEditor() {
               <option value={4}>Snap 1/4</option>
             </select>
             <button className={`btn sm${state.countIn ? ' on' : ''}`} aria-pressed={state.countIn} onClick={() => state.setUi({ countIn: !state.countIn })}>Count-in</button>
-            <button className="btn sm" onClick={() => setCalibrating(true)} title={`Record offset ${state.recordOffsetMs} ms`}>Calibrate</button>
+            <button className="btn sm" onClick={() => state.setPanel('calibrate')} title={`Record offset ${state.recordOffsetMs} ms`}>Calibrate</button>
           </>
         )}
         <button className="btn sm" disabled={!state.past.length} onClick={state.undo} aria-label="Undo">↶<span className="wide-only"> Undo</span></button>
@@ -79,7 +87,7 @@ export default function ClipEditor() {
           <button aria-pressed={view === 'play'} onClick={() => setView('play')}>Play</button>
         </div>
         <div className="menuwrap">
-          <button className="btn sm" aria-expanded={menu} aria-label="Clip and track actions" onClick={() => setMenu(!menu)}>⋯</button>
+          <button className="btn sm" aria-expanded={menu} aria-label="Clip and track actions" onClick={() => { setMenu(!menu); setConfirmRemove(false); }}>⋯</button>
           {menu && (
             <div className="menu right" role="menu">
               {clip && slot !== null && (
@@ -89,14 +97,24 @@ export default function ClipEditor() {
                   <button role="menuitem" onClick={() => { deleteClip(track.id, slot); setMenu(false); }}>Delete clip</button>
                 </>
               )}
-              <button role="menuitem" onClick={() => { setMenu(false); if (confirm(`Remove the ${track.name} track and its clips?`)) removeTrack(track.id); }}>Remove the {track.name} track</button>
+              {track.playCode && <button role="menuitem" onClick={() => { state.resetPlayCode(track.id); setMenu(false); }}>Reset the hand-written play line</button>}
+              <button role="menuitem" onClick={() => { if (confirmRemove) { removeTrack(track.id); setMenu(false); setConfirmRemove(false); } else setConfirmRemove(true); }}>{confirmRemove ? `Tap again to remove ${track.name} and its clips` : `Remove the ${track.name} track`}</button>
             </div>
           )}
         </div>
       </div>
-      {calibrating && <Calibrate onClose={() => setCalibrating(false)} />}
       <div className="ebody">
-        {track.kind === 'melodic' ? (
+        {clip?.code && slot !== null && view === 'grid' ? (
+          <div className="custom-banner">
+            <strong>This clip plays hand-written code</strong>
+            <span className="muted-text">The grid cannot show it, so it is kept exactly as written. Reset to grid plays the grid notes again (your code is dropped).</span>
+            <pre>{clip.code}</pre>
+            <div className="row">
+              <button className="btn sm" onClick={() => state.resetClipCode(track.id, slot)}>Reset to grid</button>
+              <button className="btn sm" onClick={() => state.setPanel('code')}>Open code</button>
+            </div>
+          </div>
+        ) : track.kind === 'melodic' ? (
           view === 'play' ? <MelodicPlay track={track} />
           : clip?.kind === 'melodic' && slot !== null ? <NoteGrid track={track} clip={clip} slot={slot} bar={bar} />
           : <div className="placeholder"><p>Tap <b>+</b> in an empty slot above to make a clip, then tap the grid to add notes.</p></div>

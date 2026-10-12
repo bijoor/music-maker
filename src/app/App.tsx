@@ -5,13 +5,11 @@ import * as engine from '../engine/strudel';
 import Transport from './Transport';
 import ClipGrid from './ClipGrid';
 import ClipEditor from './ClipEditor';
-import CodePanel from './CodePanel';
 
 // Handy for checking timing from the browser console during development.
 if (import.meta.env.DEV) (window as unknown as { engine: typeof engine }).engine = engine;
 
 export default function App() {
-  const codeOpen = useStore((s) => s.codeOpen);
   const message = useStore((s) => s.message);
   const setMessage = useStore((s) => s.setMessage);
   usePendingClear();
@@ -25,7 +23,6 @@ export default function App() {
       <Transport />
       <ClipGrid />
       <ClipEditor />
-      {codeOpen && <CodePanel />}
       {message && <div className="toast" role="status">{message}</div>}
     </div>
   );

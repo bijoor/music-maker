@@ -11,6 +11,8 @@ export interface DrumClip {
   name: string;
   bars: Bars;
   hits: Record<string, number[]>;
+  /** Hand-written Strudel code that the grid cannot show; it plays instead of `hits` until reset. */
+  code?: string;
 }
 
 /** A note or chord starting at `step` (0-based within the clip), held for `len` steps, never crossing a bar line. */
@@ -28,6 +30,8 @@ export interface MelodicClip {
   name: string;
   bars: Bars;
   notes: Note[];
+  /** Hand-written Strudel code that the grid cannot show; it plays instead of `notes` until reset. */
+  code?: string;
 }
 
 export type Clip = DrumClip | MelodicClip;
@@ -61,6 +65,8 @@ export interface Track {
   slots: (Clip | null)[];
   /** Slot indexes played in turn; [] = stopped. */
   active: number[];
+  /** Hand-written play line (what the track plays) that the clip launcher cannot express; used until reset. */
+  playCode?: string;
 }
 
 /** A saved set of active slots, from any tracks. Tracks it does not name keep playing. */

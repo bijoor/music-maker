@@ -188,7 +188,8 @@ function writeMelodicClip(w: Writer, track: Track, clip: MelodicClip) {
 }
 
 function writeClip(w: Writer, track: Track, clip: Clip) {
-  if (clip.kind === 'drums') writeDrumClip(w, track, clip);
+  if (clip.code) w.add(clip.code);
+  else if (clip.kind === 'drums') writeDrumClip(w, track, clip);
   else writeMelodicClip(w, track, clip);
 }
 
@@ -275,15 +276,17 @@ function writeTrack(w: Writer, song: Song, track: Track, label: string, opts: Ge
     if (!clip) return;
     w.add(`const ${clipVar(label, i)} = `);
     writeClip(w, track, clip);
-    w.add(`  // ${clip.name} · ${clip.bars} bar${clip.bars > 1 ? 's' : ''}\n`);
+    w.add(`  // ${clip.name} · ${clip.bars} bar${clip.bars > 1 ? 's' : ''}${clip.code ? ' · custom' : ''}\n`);
   });
-  const plan = opts.songMode && song.arrangement.length ? songPlan(song, track, label) : chainExpr(track, label, track.active);
+  const custom = !opts.songMode && track.playCode;
+  const plan = custom ? { expr: track.playCode!, bars: 1 } : opts.songMode && song.arrangement.length ? songPlan(song, track, label) : chainExpr(track, label, track.active);
   const audible = isAudible(song, track) && plan.expr !== 'silence';
   const shownLabel = `${isAudible(song, track) ? '' : '_'}${label}: `;
   const labelStart = w.text.length;
   w.add(shownLabel);
   w.add(plan.expr);
-  if (plan.expr !== 'silence') writeFx(w, track);
+  // A hand-written play line carries its own effects.
+  if (plan.expr !== 'silence' && !custom) writeFx(w, track);
   w.add(`\n// @end ${track.id}`);
   const end = w.text.length;
   const block = w.text.slice(start, end);
