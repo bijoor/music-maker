@@ -19,7 +19,8 @@ describe('clip editing', () => {
 
   it('toggles hits on and off', () => {
     expect(st().toggleHit('t1', 0, 'cr', 0)).toBe(true);
-    expect(drums().slots[0]!.kind === 'drums' && drums().slots[0]!.hits.cr[0]).toBe(1);
+    const c = drums().slots[0]!;
+    expect(c.kind === 'drums' ? c.hits.cr[0] : -1).toBe(1);
     expect(st().toggleHit('t1', 0, 'cr', 0)).toBe(false);
   });
 
