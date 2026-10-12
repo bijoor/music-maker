@@ -15,10 +15,10 @@ export default function MelodicPlay({ track }: { track: Track }) {
   const tonic = song.key.tonic;
   const chords = scaleChords(scale, tonic, track.octave, sargam);
   const play = (pitches: number[], e: PointerEvent<HTMLElement>, chord = false) => {
-    recorder.press(track.id, pitches, e.pointerId, chord);
+    recorder.press(track.id, pitches, e.pointerId, chord, e.timeStamp);
     const el = e.currentTarget;
     el.classList.add('down');
-    const up = () => { recorder.release(e.pointerId); el.classList.remove('down'); el.removeEventListener('pointerup', up); el.removeEventListener('pointercancel', up); el.removeEventListener('pointerleave', up); };
+    const up = (ev: Event) => { recorder.release(e.pointerId, ev.timeStamp); el.classList.remove('down'); el.removeEventListener('pointerup', up); el.removeEventListener('pointercancel', up); el.removeEventListener('pointerleave', up); };
     el.addEventListener('pointerup', up);
     el.addEventListener('pointercancel', up);
     el.addEventListener('pointerleave', up);

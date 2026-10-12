@@ -31,6 +31,7 @@ const listeners = new Set<Listener>();
 const tracks = new Map<string, Segment[]>();
 let ready: Promise<void> | null = null;
 let r: any = null;
+let loaded = false;
 
 /** A pattern that plays `before` until `cycle`, then `after`. Exact to the sample, independent of query windows. */
 export function switchAt(before: any, after: any, cycle: number): any {
@@ -104,10 +105,14 @@ export function initEngine(): Promise<void> {
         samples(`${SAMPLE_BASE}/Dirt-Samples.json`),
       ]);
       r = repl({ defaultOutput: output, getTime: () => ac.currentTime, transpiler });
+      loaded = true;
     })();
   }
   return ready;
 }
+
+/** True once samples are loaded and sounds can be triggered without waiting. */
+export const isReady = () => loaded;
 
 export const onHap = (fn: Listener) => {
   listeners.add(fn);
@@ -196,12 +201,16 @@ export function edit(track: string, pattern: any, period?: number) {
 const SCHEDULER_LATENCY = 0.1;
 
 /** The bar position you are hearing now: the scheduler's position minus its look-ahead and the output latency. */
-export function heardCycle(): number {
+export function heardCycle(ago = 0): number {
   if (!started()) return 0;
   const ac = getAudioContext() as AudioContext;
-  const delay = SCHEDULER_LATENCY + ((ac as any).outputLatency ?? ac.baseLatency ?? 0);
+  const delay = SCHEDULER_LATENCY + ((ac as any).outputLatency ?? ac.baseLatency ?? 0) + ago;
   return r.scheduler.now() - delay * r.scheduler.cps;
 }
+
+/** Seconds since a DOM event happened (its timeStamp is on the performance.now() clock). */
+export const secondsSince = (eventTimeStamp?: number) =>
+  eventTimeStamp === undefined ? 0 : Math.max(0, Math.min(0.5, (performance.now() - eventTimeStamp) / 1000));
 
 /**
  * Where `track` is at a bar position (default: what you hear now): bars into its current clip or chain modulo

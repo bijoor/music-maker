@@ -108,17 +108,28 @@ export function playhead(trackId: string): { slot: number; step: number } | null
 export function preview(trackId: string, value: Record<string, unknown>) {
   const track = useStore.getState().song.tracks.find((t) => t.id === trackId);
   if (!track) return;
+  const f = track.fx;
+  const go = () => engine.trigger({ ...value, gain: f.gain, pan: f.pan, ...(f.lpf ? { lpf: f.lpf } : {}), ...(f.room ? { room: f.room } : {}) });
+  // Once loaded, sound right away in the tap handler; nothing else may run first.
+  if (engine.isReady()) { go(); return; }
   engine.unlockAudio();
-  engine.initEngine().then(() => {
-    const f = track.fx;
-    engine.trigger({ ...value, gain: f.gain, pan: f.pan, ...(f.lpf ? { lpf: f.lpf } : {}), ...(f.room ? { room: f.room } : {}) });
-  });
+  engine.initEngine().then(go);
 }
 
 // Follow song changes while playing.
+// Note edits (e.g. while recording) are batched so a burst of notes compiles once, keeping taps responsive.
+// Launches, stops and mutes apply at once.
+let pendingEdit: ReturnType<typeof setTimeout> | undefined;
+const launchesChanged = (a: Song, b: Song) =>
+  a.tracks.length !== b.tracks.length ||
+  a.tracks.some((t, i) => t.id !== b.tracks[i].id || t.active.join() !== b.tracks[i].active.join() || t.mute !== b.tracks[i].mute || t.solo !== b.tracks[i].solo);
+
 useStore.subscribe((state, prev) => {
   if (state.metronome !== prev.metronome && state.transport === 'playing') setMetronome(state.metronome);
   if (state.song === prev.song) return;
   if (state.song.bpm !== prev.song.bpm) engine.setBpm(state.song.bpm);
-  if (state.transport === 'playing') sync(state.song);
+  if (state.transport !== 'playing') return;
+  clearTimeout(pendingEdit);
+  if (launchesChanged(state.song, prev.song)) sync(state.song);
+  else pendingEdit = setTimeout(() => sync(useStore.getState().song), 150);
 });

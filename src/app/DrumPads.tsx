@@ -5,9 +5,9 @@ import StepStrip from './StepStrip';
 
 /** Finger-sized pads: large main pads (kick and snare double width), smaller pads for less frequent sounds. */
 export default function DrumPads({ track }: { track: Track }) {
-  const hit = (k: KitVoice, el: HTMLElement) => {
+  const hit = (k: KitVoice, el: HTMLElement, timeStamp: number) => {
     const [s, n] = k.voice.split(':');
-    recorder.drum(track.id, k.voice, { s, ...(n ? { n: +n } : {}), bank: voiceBank(track.bank ?? 'RolandTR909', k.voice) });
+    recorder.drum(track.id, k.voice, { s, ...(n ? { n: +n } : {}), bank: voiceBank(track.bank ?? 'RolandTR909', k.voice) }, timeStamp);
     el.classList.add('down');
     setTimeout(() => el.classList.remove('down'), 150);
   };
@@ -15,7 +15,7 @@ export default function DrumPads({ track }: { track: Track }) {
     <button
       key={k.voice}
       className={`pad${k.voice === 'bd' || k.voice === 'sd' ? ' wide' : ''}${k.main ? '' : ' aux'}`}
-      onPointerDown={(e) => hit(k, e.currentTarget)}
+      onPointerDown={(e) => hit(k, e.currentTarget, e.timeStamp)}
     >
       <strong>{k.name}</strong>
       <code>{k.voice}</code>
