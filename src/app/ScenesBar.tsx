@@ -4,13 +4,16 @@ import * as player from '../engine/player';
 import SongEditor from './SongEditor';
 
 /**
- * Saved scenes and song mode. Tap a scene to launch it (in Edit mode: to rename, update or delete it).
- * Song plays the scenes in the order set in the song editor.
+ * Saved scenes and song mode. + Save scene saves at once with a default name. Tap a scene to launch it; in
+ * Edit mode the tap turns it into a name box, with a menu to replace, add to the song or delete it.
  */
 export default function ScenesBar() {
   const { song, mode, songMode, transport, saveScene, launchScene, updateScene, renameScene, deleteScene, addSongStep, setSongMode } = useStore();
-  const [saving, setSaving] = useState(false);
   const [editing, setEditing] = useState<string | null>(null);
+  const [menuFor, setMenuFor] = useState<string | null>(null);
+  // The scene list scrolls sideways, so the menu is placed on the screen (fixed) under its button.
+  const [menuAt, setMenuAt] = useState({ left: 0, top: 0 });
+  const close = () => { setMenuFor(null); setEditing(null); };
   const [songOpen, setSongOpen] = useState(false);
   const posRef = useRef<HTMLSpanElement>(null);
 
@@ -29,19 +32,45 @@ export default function ScenesBar() {
     return () => cancelAnimationFrame(raf);
   }, []);
 
-  const scene = song.scenes.find((x) => x.id === editing);
-
   return (
     <div className="scenes">
       <span className="lbl">Scenes</span>
       <div className="scene-list">
         {song.scenes.length === 0 && <span className="muted-text">Play some clips, then save them as a scene.</span>}
-        {song.scenes.map((sc) => (
-          <button key={sc.id} className="scene" data-scene={sc.id} onClick={() => (mode === 'edit' ? setEditing(sc.id) : launchScene(sc.id))} title={mode === 'edit' ? 'Edit this scene' : 'Launch at the next bar'}>
-            {sc.name}
-          </button>
-        ))}
-        <button className="btn sm" onClick={() => setSaving(true)}>+ Save scene</button>
+        {song.scenes.map((sc) =>
+          editing === sc.id ? (
+            <span key={sc.id} className="scene-edit">
+              <input
+                autoFocus
+                aria-label="Scene name"
+                defaultValue={sc.name}
+                onFocus={(e) => e.target.select()}
+                onKeyDown={(e) => {
+                  // Enter saves the name, Escape keeps the old one; both finish editing.
+                  if (e.key === 'Enter') { renameScene(sc.id, e.currentTarget.value); close(); }
+                  if (e.key === 'Escape') close();
+                }}
+                onBlur={(e) => { if (editing === sc.id) renameScene(sc.id, e.target.value); if (!menuFor) setEditing(null); }}
+              />
+              <span className="menuwrap">
+                <button className="btn sm" aria-label={`More for ${sc.name}`} aria-expanded={menuFor === sc.id} onMouseDown={(e) => e.preventDefault()} onClick={(e) => { const r = e.currentTarget.getBoundingClientRect(); setMenuAt({ left: Math.min(r.left, innerWidth - 260), top: r.bottom + 4 }); setMenuFor(menuFor === sc.id ? null : sc.id); }}>⋯</button>
+                {menuFor === sc.id && (
+                  <div className="menu fixed" role="menu" style={menuAt}>
+                    <button role="menuitem" onClick={() => { launchScene(sc.id); close(); }}>Launch</button>
+                    <button role="menuitem" onClick={() => { updateScene(sc.id, true); close(); }}>Replace with what is playing now</button>
+                    <button role="menuitem" onClick={() => { addSongStep(sc.id); close(); }}>Add to the song</button>
+                    <button role="menuitem" onClick={() => { deleteScene(sc.id); close(); }}>Delete scene</button>
+                  </div>
+                )}
+              </span>
+            </span>
+          ) : (
+            <button key={sc.id} className="scene" data-scene={sc.id} onClick={() => (mode === 'edit' ? setEditing(sc.id) : launchScene(sc.id))} title={mode === 'edit' ? 'Rename or change this scene' : 'Launch at the next bar'}>
+              {sc.name}
+            </button>
+          ),
+        )}
+        <button className="btn sm" onClick={() => saveScene(`Scene ${nextNumber(song.scenes.map((x) => x.name))}`, true)} title="Save what is playing now; switch to Edit and tap the scene to rename it">+ Save scene</button>
       </div>
       <span className="spacer" />
       <span className="song-pos muted-text" ref={posRef} />
@@ -55,47 +84,14 @@ export default function ScenesBar() {
         {songMode ? '■ Song' : '▶ Song'}
       </button>
       <button className="btn sm" onClick={() => setSongOpen(true)}>Song order{song.arrangement.length ? ` (${song.arrangement.length})` : ''}</button>
-
-      {saving && <SaveScene onClose={() => setSaving(false)} onSave={(name, silent) => { saveScene(name, silent); setSaving(false); }} defaultName={`Scene ${song.scenes.length + 1}`} />}
-      {scene && (
-        <div className="overlay" onClick={(e) => e.target === e.currentTarget && setEditing(null)}>
-          <div className="dialog" role="dialog" aria-modal="true" aria-labelledby="sc-h">
-            <div className="dialog-h"><h2 id="sc-h">Scene: {scene.name}</h2><button className="btn sm" onClick={() => setEditing(null)}>Close</button></div>
-            <div className="dialog-b">
-              <label className="field"><span className="muted-text">Name</span><input defaultValue={scene.name} onBlur={(e) => renameScene(scene.id, e.target.value)} /></label>
-              <p className="muted-text">Plays: {Object.entries(scene.active).map(([tid, act]) => {
-                const t = song.tracks.find((x) => x.id === tid);
-                return t ? `${t.name} ${act.length ? act.map((i) => 'ABCDEFGH'[i]).join(' ') : '(stopped)'}` : null;
-              }).filter(Boolean).join(' · ') || 'nothing'}</p>
-              <div className="row">
-                <button className="btn" onClick={() => { launchScene(scene.id); setEditing(null); }}>Launch</button>
-                <button className="btn" onClick={() => { updateScene(scene.id, true); setEditing(null); }}>Replace with what is playing now</button>
-                <button className="btn" onClick={() => { addSongStep(scene.id); setEditing(null); }}>Add to song</button>
-                <button className="btn" onClick={() => { if (confirm(`Delete the scene ${scene.name}?`)) { deleteScene(scene.id); setEditing(null); } }}>Delete</button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
       {songOpen && <SongEditor onClose={() => setSongOpen(false)} />}
     </div>
   );
 }
 
-function SaveScene({ defaultName, onSave, onClose }: { defaultName: string; onSave(name: string, silent: boolean): void; onClose(): void }) {
-  const [name, setName] = useState(defaultName);
-  const [silent, setSilent] = useState(true);
-  return (
-    <div className="overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="dialog" role="dialog" aria-modal="true" aria-labelledby="ss-h">
-        <div className="dialog-h"><h2 id="ss-h">Save scene</h2><button className="btn sm" onClick={onClose}>Close</button></div>
-        <form className="dialog-b" onSubmit={(e) => { e.preventDefault(); onSave(name, silent); }}>
-          <p className="muted-text">Saves the clips every track is playing now (including chains), to launch together later.</p>
-          <label className="field"><span className="muted-text">Name</span><input autoFocus value={name} onChange={(e) => setName(e.target.value)} /></label>
-          <label className="check"><input type="checkbox" checked={silent} onChange={(e) => setSilent(e.target.checked)} /> Also stop tracks that are silent now when this scene launches</label>
-          <div className="row"><button className="btn on" type="submit">Save</button></div>
-        </form>
-      </div>
-    </div>
-  );
+/** The next free number for a default name: Scene 1, Scene 2, … (skipping numbers already used). */
+function nextNumber(names: string[]): number {
+  let n = names.length + 1;
+  while (names.includes(`Scene ${n}`)) n++;
+  return n;
 }

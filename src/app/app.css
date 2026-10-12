@@ -282,3 +282,6 @@ select.sm { min-height: 30px; padding: 3px 6px; font-size: 13px; }
   .lrows { gap: 5px; padding-block: 5px; }
   .scenes, .lhead { padding-block: 4px; }
 }
+.scene-edit { display: inline-flex; gap: 4px; align-items: center; }
+.scene-edit input { width: 130px; min-height: 30px; padding: 3px 10px; border-radius: 99px; border: 2px solid var(--accent); background: var(--panel); font-weight: 600; font-size: 13px; user-select: text; -webkit-user-select: text; }
+.menu.fixed { position: fixed; z-index: 80; }
