@@ -186,19 +186,23 @@ export function preview(trackId: string, value: Record<string, unknown>, steps =
 }
 
 /**
- * Like preview, but the note can be stopped early with the returned function: it sounds until then (a key held
+ * Like preview, but the note can be stopped early and its pitch can glide: it sounds until stopped (a key held
  * with sustain on) or for `steps` sixteenths at most.
  */
-export function hold(trackId: string, value: Record<string, unknown>, steps?: number): () => void {
+export function hold(trackId: string, value: Record<string, unknown>, steps?: number): engine.HeldNote {
   const track = useStore.getState().song.tracks.find((t) => t.id === trackId);
-  if (!track) return () => {};
+  if (!track) return { stop() {}, glide() {} };
   const v = { ...value, ...fxValues(track) };
   const max = () => (steps ? steps / 16 / engine.getCps() : 30);
   if (engine.isReady()) return engine.hold(v, max());
-  let release: (() => void) | null = null, up = false;
+  // First sound: the engine is still starting; pass on what happens meanwhile.
+  let note: engine.HeldNote | null = null, stopped = false, semis = 0;
   engine.unlockAudio();
-  engine.initEngine().then(() => { release = engine.hold(v, max()); if (up) release(); warm(); });
-  return () => { up = true; release?.(); };
+  engine.initEngine().then(() => { note = engine.hold(v, max()); if (semis) note.glide(semis); if (stopped) note.stop(); warm(); });
+  return {
+    stop() { stopped = true; note?.stop(); },
+    glide(s) { semis = s; note?.glide(s); },
+  };
 }
 
 // Note edits (e.g. while recording) are batched so a burst of notes compiles once, keeping taps responsive.

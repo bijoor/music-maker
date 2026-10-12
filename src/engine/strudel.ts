@@ -298,7 +298,8 @@ export function trigger(value: Record<string, unknown>, duration = 0.25) {
 
 // Held notes: a sound's trigger is wrapped so the voice it starts can be faded out when the key is released
 // (superdough itself only plays notes of a fixed length).
-type Voice = { node?: { gain?: AudioParam }; stop?: (t: number) => void; nodes?: { source?: AudioScheduledSourceNode[] } };
+type Voice = { node?: { gain?: AudioParam }; stop?: (t: number) => void; nodes?: { source?: AudioScheduledSourceNode | AudioScheduledSourceNode[] } };
+const sources = (v: Voice) => [v.nodes?.source ?? []].flat();
 const holders = new Map<string, (v: Voice) => void>();
 const wrapped = new Set<string>();
 let holdId = 0;
@@ -330,23 +331,53 @@ function releaseVoice(v: Voice, fade = 0.12) {
     g.linearRampToValueAtTime(0, end);
   }
   try { v.stop?.(end + 0.01); } catch { /* already stopped */ }
-  v.nodes?.source?.forEach((src) => { try { src.stop(end + 0.01); } catch { /* already stopped */ } });
+  sources(v).forEach((src) => { try { src.stop(end + 0.01); } catch { /* already stopped */ } });
 }
 
 /**
- * Play a sound until the returned function is called (a held key), up to `max` seconds. Samples without a loop
- * still end where the recording ends.
+ * Move a voice's pitch to `cents` from where it started, smoothly (a finger sliding along the keys). Works for
+ * oscillators and recorded samples, whose `detune` is the pitch; other sources (e.g. supersaw) keep their pitch.
  */
-export function hold(value: Record<string, unknown>, max = 30): () => void {
+function detuneVoice(v: Voice, cents: number) {
+  const now = getAudioContext().currentTime;
+  for (const src of sources(v)) {
+    if (!(src instanceof OscillatorNode || src instanceof AudioBufferSourceNode)) continue;
+    src.detune.cancelScheduledValues(now);
+    src.detune.setTargetAtTime(cents, now, 0.012);
+  }
+}
+
+export interface HeldNote {
+  /** Let go: fade out and stop. */
+  stop(): void;
+  /** Slide the pitch to `semitones` away from the note's own pitch (fractional for a smooth glide). */
+  glide(semitones: number): void;
+}
+
+/**
+ * Play a sound until stopped (a held key), up to `max` seconds; its pitch can glide while it sounds. Samples
+ * without a loop still end where the recording ends.
+ */
+export function hold(value: Record<string, unknown>, max = 30): HeldNote {
   wrapSound(String(value.s ?? 'triangle'));
   const id = String(++holdId);
-  let voice: Voice | null = null, released = false;
-  holders.set(id, (v) => { voice = v; if (released) { releaseVoice(v); holders.delete(id); } });
+  let voice: Voice | null = null, released = false, cents = 0;
+  holders.set(id, (v) => {
+    voice = v;
+    if (cents) detuneVoice(v, cents);
+    if (released) { releaseVoice(v); holders.delete(id); }
+  });
   void trigger({ ...value, holdId: id }, max);
-  return () => {
-    if (released) return;
-    released = true;
-    if (voice) { releaseVoice(voice); holders.delete(id); } else setTimeout(() => holders.delete(id), 5000); // still loading
+  return {
+    stop() {
+      if (released) return;
+      released = true;
+      if (voice) { releaseVoice(voice); holders.delete(id); } else setTimeout(() => holders.delete(id), 5000); // still loading
+    },
+    glide(semitones) {
+      cents = semitones * 100;
+      if (voice && !released) detuneVoice(voice, cents);
+    },
   };
 }
 

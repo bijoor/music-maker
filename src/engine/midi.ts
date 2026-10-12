@@ -36,7 +36,7 @@ function onMessage(e: MIDIMessageEvent) {
       // In-scale notes play the scale's own pitch (including microtonal offsets); others play as sent.
       const scale = findScale(s.song), tonic = s.song.key.tonic;
       const pitch = inScale(scale, tonic, note) ? scalePitch(scale, tonic, ((note - tonicPc(tonic)) % 12 + 12) % 12, Math.floor((note - tonicPc(tonic)) / 12) - 1) : note;
-      recorder.press(track.id, [pitch], idFor(note), false, e.timeStamp, undefined, midiVelocity(vel));
+      recorder.press(track.id, [pitch], idFor(note), false, e.timeStamp, midiVelocity(vel));
     }
   } else if (kind === 0x80 || (kind === 0x90 && vel === 0)) {
     recorder.release(idFor(note), e.timeStamp);

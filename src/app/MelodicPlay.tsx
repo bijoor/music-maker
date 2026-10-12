@@ -7,6 +7,7 @@ import * as recorder from '../engine/recorder';
 import StepStrip from './StepStrip';
 import { PAD_ROWS, PIANO_HINT } from './keymap';
 import { strikeVelocity } from './strike';
+import { keyLine, pitchAlong } from './glide';
 
 const BLACK = [1, 3, 6, 8, 10];
 
@@ -17,8 +18,8 @@ export default function MelodicPlay({ track }: { track: Track }) {
   const tonic = song.key.tonic;
   const chords = scaleChords(scale, tonic, track.octave, sargam);
   const play = (pitches: number[], e: PointerEvent<HTMLElement>, chord = false) => {
-    recorder.press(track.id, pitches, e.pointerId, chord, e.timeStamp, undefined, strikeVelocity(e.clientY, e.currentTarget));
-    let el = e.currentTarget;
+    const el = e.currentTarget;
+    recorder.press(track.id, pitches, e.pointerId, chord, e.timeStamp, strikeVelocity(e.clientY, el));
     el.classList.add('down');
     const id = e.pointerId;
     if (chord) {
@@ -28,23 +29,24 @@ export default function MelodicPlay({ track }: { track: Track }) {
       el.addEventListener('pointerleave', up);
       return;
     }
-    // Keys: the finger may slide onto other keys while held, gliding into each (a bend from the previous note).
-    // Touch captures the pointer to the first key, so let go of that to see which key is under the finger.
+    // Keys: sliding the held finger sideways glides the pitch, measured from where it struck (not the key's
+    // centre): moving one key's width reaches the next key's pitch. Up and down do nothing once struck.
     if (el.hasPointerCapture?.(id)) el.releasePointerCapture(id);
-    const area = el.closest('.kb, .spads');
+    const line = keyLine(el);
+    const start = line.findIndex((k) => k.el === el);
+    const x0 = e.clientX;
+    let lit = el;
     const move = (ev: globalThis.PointerEvent) => {
-      if (ev.pointerId !== id) return;
-      const over = (document.elementFromPoint(ev.clientX, ev.clientY) as HTMLElement | null)?.closest<HTMLElement>('.wk, .bk, .spad');
-      if (!over || over === el || over.getAttribute('aria-disabled') === 'true' || !area?.contains(over)) return;
-      el.classList.remove('down');
-      el = over;
-      el.classList.add('down');
-      recorder.slide(id, Number(over.dataset.pitch), ev.timeStamp);
+      if (ev.pointerId !== id || start < 0) return;
+      const pos = line[start].x + (ev.clientX - x0);
+      const { pitch, nearest } = pitchAlong(line, pos);
+      recorder.glide(id, pitch, nearest.pitch, ev.timeStamp);
+      if (nearest.el !== lit) { lit.classList.remove('down'); lit = nearest.el; lit.classList.add('down'); }
     };
     const up = (ev: globalThis.PointerEvent) => {
       if (ev.pointerId !== id) return;
       recorder.release(id, ev.timeStamp);
-      el.classList.remove('down');
+      lit.classList.remove('down');
       removeEventListener('pointermove', move);
       removeEventListener('pointerup', up);
       removeEventListener('pointercancel', up);
@@ -141,3 +143,4 @@ export default function MelodicPlay({ track }: { track: Track }) {
     return <div className="kb">{keys}{blacks}</div>;
   }
 }
+

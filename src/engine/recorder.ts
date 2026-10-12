@@ -124,40 +124,40 @@ export function drum(trackId: string, voice: string, sound: Record<string, unkno
 let pedal = false;
 /** Held notes still sounding (sustain on), by pointer: call to let go. */
 const sounding = new Map<number, () => void>();
-/** What each pointer is playing, so sliding to another key can glide from it. */
-const voices = new Map<number, { trackId: string; pitch: number; vel: number; stop: () => void }>();
-/** Seconds a slide between keys takes to reach the new note. */
+/**
+ * What each pointer is playing, so sliding the finger can glide its pitch: `base` is the pitch the note started
+ * on, `landed` the key it is nearest now (what gets recorded).
+ */
+const voices = new Map<number, { trackId: string; base: number; landed: number; vel: number; notes: engine.HeldNote[] }>();
+/** Seconds a recorded slide takes to reach the new note when played back. */
 export const SLIDE_TIME = 0.12;
 /** Hold the sustain pedal (Shift on a computer keyboard) while it is down. */
 export const setPedal = (down: boolean) => { pedal = down; };
 
-/**
- * A key or chord pressed with pointer `pointerId`; `timeStamp` is the pointer event's timestamp. `slideFrom` is
- * the pitch the finger slid from: the note then bends in from it (and is recorded with that bend).
- */
-export function press(trackId: string, pitches: number[], pointerId: number, chord = false, timeStamp?: number, slideFrom?: number, vel = 1) {
+/** A key or chord pressed with pointer `pointerId`, struck at velocity `vel`; `timeStamp` is the pointer event's timestamp. */
+export function press(trackId: string, pitches: number[], pointerId: number, chord = false, timeStamp?: number, vel = 1) {
   const track = trackOf(trackId);
   if (!track) return;
   const st = state();
-  const bend = slideFrom !== undefined && pitches.length === 1 ? Math.round((slideFrom - pitches[0]) * 100) / 100 : 0;
-  const bendInfo = bend ? { bend, time: SLIDE_TIME } : undefined;
-  const value = (p: number) => ({ note: p, s: track.sound ?? 'piano', ...velocityValue(vel), ...(bend ? { penv: -bend, pattack: SLIDE_TIME } : {}) });
   // The preview lasts as long as the note that will be written: chord length for chords in Edit, else the "New notes" length.
-  // With sustain on (button or Shift held), the note sounds for as long as the key is held. Either way it can be
-  // cut short by sliding to another key.
+  // With sustain on (button or Shift held), the note sounds for as long as the key is held.
   const sustained = st.sustain || pedal;
   const previewLen = chord && st.mode === 'edit' ? st.chordLen : st.noteLen;
-  const stops = pitches.map((p) => player.hold(trackId, value(p), sustained ? undefined : previewLen));
-  const stop = () => stops.forEach((f) => f());
-  if (sustained) sounding.set(pointerId, stop);
-  voices.set(pointerId, { trackId, pitch: pitches[0], vel, stop });
+  const notes = pitches.map((p) => player.hold(trackId, { note: p, s: track.sound ?? 'piano', ...velocityValue(vel) }, sustained ? undefined : previewLen));
+  if (sustained) sounding.set(pointerId, () => notes.forEach((n) => n.stop()));
+  voices.set(pointerId, { trackId, base: pitches[0], landed: pitches[0], vel, notes });
+  recordPress(track, pitches, pointerId, chord, timeStamp, vel);
+}
+
+/** Write a pressed key or chord into the selected clip (Edit: at the cursor; Record: at the step it was heard). */
+function recordPress(track: Track, pitches: number[], pointerId: number, chord: boolean, timeStamp: number | undefined, vel: number, bend?: { bend: number; time: number }) {
   const s = state();
   if (s.mode === 'perform') return;
   const slot = needClip(track);
   if (slot === null) return;
   if (s.mode === 'edit') {
     const len = chord ? s.chordLen : s.noteLen;
-    s.recordNote(trackId, slot, s.cursor % (track.slots[slot]!.bars * STEPS_PER_BAR), pitches, len, `edit:${editGroup++}`, bendInfo, vel);
+    s.recordNote(track.id, slot, s.cursor % (track.slots[slot]!.bars * STEPS_PER_BAR), pitches, len, `edit:${editGroup++}`, bend, vel);
     advance(track, slot, len);
     return;
   }
@@ -165,15 +165,12 @@ export function press(trackId: string, pitches: number[], pointerId: number, cho
   const at = recordStep(track, slot, timeStamp);
   if (!at) return;
   // A quick tap writes the "New notes" length (as previewed); holding longer extends it on release.
-  s.recordNote(trackId, slot, at.step, pitches, Math.max(s.quantize, s.noteLen), at.group, bendInfo, vel);
-  held.set(pointerId, { trackId, slot, step: at.step, pitches, startCycle: at.cycle, group: at.group, bend: bendInfo, vel });
+  s.recordNote(track.id, slot, at.step, pitches, Math.max(s.quantize, s.noteLen), at.group, bend, vel);
+  held.set(pointerId, { trackId: track.id, slot, step: at.step, pitches, startCycle: at.cycle, group: at.group, bend, vel });
 }
 
-/** The key or chord was released: stop a sustained note, and set the recorded note's length to how long it was held. */
-export function release(pointerId: number, timeStamp?: number) {
-  sounding.get(pointerId)?.();
-  sounding.delete(pointerId);
-  voices.delete(pointerId);
+/** Set a recorded note's length to how long it was held (Record mode). */
+function finishHeld(pointerId: number, timeStamp?: number) {
   const h = held.get(pointerId);
   if (!h) return;
   held.delete(pointerId);
@@ -183,14 +180,28 @@ export function release(pointerId: number, timeStamp?: number) {
   if (len > Math.max(q, noteLen)) state().recordNote(h.trackId, h.slot, h.step, h.pitches, len, h.group, h.bend, h.vel);
 }
 
+/** The key or chord was released: stop a sustained note, and set the recorded note's length to how long it was held. */
+export function release(pointerId: number, timeStamp?: number) {
+  sounding.get(pointerId)?.();
+  sounding.delete(pointerId);
+  voices.delete(pointerId);
+  finishHeld(pointerId, timeStamp);
+}
+
 /**
- * The finger holding a key slid onto another key: the old note stops and the new one bends in from its pitch,
- * like a meend. In Record and Edit the new note is written with that bend.
+ * The finger holding a key moved sideways: the note's pitch follows it smoothly to `pitch` (fractional between
+ * keys), like a string bend. `landed` is the key nearest the finger: when that changes, Record and Edit write the
+ * new key's note, bending in from the previous one, so the grid keeps an outline of the slide.
  */
-export function slide(pointerId: number, pitch: number, timeStamp?: number) {
+export function glide(pointerId: number, pitch: number, landed: number, timeStamp?: number) {
   const v = voices.get(pointerId);
-  if (!v || Math.abs(v.pitch - pitch) < 0.001) return;
-  v.stop();
-  release(pointerId, timeStamp);
-  press(v.trackId, [pitch], pointerId, false, timeStamp, v.pitch, v.vel);
+  if (!v) return;
+  v.notes.forEach((n) => n.glide(pitch - v.base));
+  if (Math.abs(landed - v.landed) < 0.001) return;
+  const from = v.landed;
+  v.landed = landed;
+  const track = trackOf(v.trackId);
+  if (!track) return;
+  finishHeld(pointerId, timeStamp);
+  recordPress(track, [landed], pointerId, false, timeStamp, v.vel, { bend: Math.round((from - landed) * 100) / 100, time: SLIDE_TIME });
 }
