@@ -6,11 +6,11 @@ import * as recorder from '../engine/recorder';
 import * as player from '../engine/player';
 import { CHORD_KEYS, PAD_ROWS, PIANO_KEYS, drumKey } from './keymap';
 
-/** Keys that are not instrument keys: Space play/stop, Cmd/Ctrl+Z undo, Shift+Cmd/Ctrl+Z redo, Escape closes a panel. */
+/** Keys that are not instrument keys: Enter play/stop, Cmd/Ctrl+Z undo, Shift+Cmd/Ctrl+Z redo, Escape closes a panel. */
 function command(e: KeyboardEvent): boolean {
   const s = useStore.getState();
   const mod = e.metaKey || e.ctrlKey;
-  if (e.key === ' ' && !mod) { if (s.transport === 'playing') player.stop(); else player.play({ countIn: s.mode === 'record' && s.countIn }); return true; }
+  if (e.key === 'Enter' && !mod) { if (s.transport === 'playing') player.stop(); else player.play({ countIn: s.mode === 'record' && s.countIn }); return true; }
   if (mod && e.key.toLowerCase() === 'z') { if (e.shiftKey) s.redo(); else s.undo(); return true; }
   if (e.key === 'Escape' && s.panel) { s.setPanel(null); return true; }
   return false;
@@ -100,6 +100,7 @@ export function useKeyboard() {
       const key = keyOf(e);
       const h = held.get(key);
       if (!h) return;
+      e.preventDefault(); // e.g. Space: do not also click a focused button
       held.delete(key);
       flash(h.selector, false);
       recorder.release(h.id, e.timeStamp);

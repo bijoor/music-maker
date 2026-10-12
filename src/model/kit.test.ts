@@ -65,9 +65,11 @@ describe('Indian kits', () => {
   });
 
   it('lays keys out like the pads', () => {
-    // The standard kit keeps its keys.
-    expect(['1', '4', 'q', 'r', 'a', 's', 'd', 'f', 't', 'n'].map((k) => drumKey('RolandTR909', k))).toEqual(['cr', 'hh', 'ht', 'rim', 'bd', 'bd', 'sd', 'sd', 'cp', 'sd:1']);
-    expect(drumHint('RolandTR909', 'bd')).toBe('A S');
+    // The drum kit: Space kicks, toms on F G H, small percussion on R T Y U.
+    expect([' ', 'b', 'c', 's', 'd', 'm', 'l', 'f', 'g', 'h', 'p', 'q', 'r', 't', 'y', 'u'].map((k) => drumKey('RolandTR909', k)))
+      .toEqual(['bd', 'bd:1', 'sd', 'sd:1', 'rim', 'hh', 'oh', 'ht', 'mt', 'lt', 'cr', 'rd', 'cp', 'cb', 'sh', 'tb']);
+    expect(drumHint('RolandTR909', 'bd')).toBe('Space');
+    expect(drumHint('RolandTR909', 'oh')).toBe('L');
     // Indian kits: left hand from F outwards, right hand from J, both hands in the middle.
     expect(['f', 'd', 'r', 'j', 'k', 'o', 'g', 'h'].map((k) => drumKey('Tabla', k))).toEqual(['tabla_ge', 'tabla_ghe', 'tabla_kat', 'tabla_na', 'tabla_ta', 'tabla_tak', 'tabla_dha', 'tabla_dhin']);
     expect(drumHint('Tabla', 'tabla_ge')).toBe('F');

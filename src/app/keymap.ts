@@ -1,39 +1,41 @@
 // Computer keyboard as an instrument (for devices without a touch screen).
 //
-// Drums mirror the pad layout:      Keys (piano layout, "musical typing"):
-//   1 2 3 4   crash ride ohat hat      W E   T Y U   O P      black keys
-//   Q W E R   toms ×3, rim            A S D F G H J K L ;     white keys from C
-//   A S = kick   D F = snare          Z / X octave down / up, 1–9 chords, hold Shift to sustain
-//   T Y G H B N  the smaller pads     Scale pads: Z X C V … the scale from Sa, A S D F … the octave above
-//                                     (one row: A S D F …), 1–9 chords above; − / = octave down / up
+// Drums: Space kick, B kick 2, C snare, S snare 2, D rim, M hat, L open hat, F G H toms, P crash, Q ride,
+//   R T Y U clap, cowbell, shaker, tambourine.
+// Keys (piano layout, "musical typing"): W E  T Y U  O P black keys over A S D F G H J K L ; white keys from C;
+//   Z / X octave down / up.
+// Scale pads: Z X C V … the scale from Sa, A S D F … the octave above (one row: A S D F …); − / = octave down / up.
+// Melodic tracks: 1–9 chords, hold Shift to sustain. Everywhere: Enter plays and stops the song.
 // Mridangam and tabla: left-hand strokes on F D S A / R E W Q / V C X Z, right-hand strokes on J K L ; / U I O P /
 // M , . /, strokes for both hands on G H T Y B N.
 
 import { kitVoices, type Hand } from '../model/kit';
 
-const MAIN_ROWS = ['1234', 'qwer', 'asdf'];
-const AUX_KEYS = 'tyghbn';
+/**
+ * The drum kit's keys, spread like a drummer's limbs: Space kicks, the snares and hats under the fingers, toms on
+ * F G H, cymbals at the edges, the small percussion on the row above.
+ */
+const KIT_KEYS: Record<string, string> = {
+  ' ': 'bd', b: 'bd:1', c: 'sd', s: 'sd:1', d: 'rim', m: 'hh', l: 'oh',
+  f: 'ht', g: 'mt', h: 'lt', p: 'cr', q: 'rd', r: 'cp', t: 'cb', y: 'sh', u: 'tb',
+};
 // Indian kits: each hand plays its own side of the keyboard, from the home row outwards (index finger first).
 const HAND_KEYS: Record<Hand, string> = { left: 'fdsarewqvcxz', both: 'ghtybn', right: 'jkl;uiopm,./' };
 
-/**
- * Keys for a kit's pads, laid out like the pads: main pads take the 4×3 block 1–4 / Q–R / A–F in order (a wide
- * pad takes two or four keys), smaller pads take T Y G H B N. Returns key → voice and voice → hint.
- */
+/** Keys for a kit's pads: the drum kit's fixed keys, or each hand's side for the Indian kits. Returns key → voice and voice → hint. */
 function layout(bank?: string) {
   const keys: Record<string, string> = {}, hints: Record<string, string> = {};
-  const cells = MAIN_ROWS.join('').split('');
-  let c = 0, a = 0;
   const used: Record<Hand, number> = { left: 0, both: 0, right: 0 };
+  const label = (key: string) => (key === ' ' ? 'Space' : key.toUpperCase());
   for (const k of kitVoices(bank)) {
     if (k.hand) {
       const key = HAND_KEYS[k.hand][used[k.hand]++];
-      if (key) { keys[key] = k.voice; hints[k.voice] = key.toUpperCase(); }
+      if (key) { keys[key] = k.voice; hints[k.voice] = label(key); }
       continue;
     }
-    const mine = k.main ? cells.slice(c, (c += k.span ?? 1)) : AUX_KEYS[a++] ? [AUX_KEYS[a - 1]] : [];
+    const mine = Object.keys(KIT_KEYS).filter((key) => KIT_KEYS[key] === k.voice);
     mine.forEach((key) => (keys[key] = k.voice));
-    if (mine.length) hints[k.voice] = (mine.length > 2 ? `${mine[0]}–${mine[mine.length - 1]}` : mine.join(' ')).toUpperCase();
+    if (mine.length) hints[k.voice] = mine.map(label).join(' ');
   }
   return { keys, hints };
 }
