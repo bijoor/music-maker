@@ -9,13 +9,21 @@ import CodePanel from './CodePanel';
 
 export default function App() {
   const codeOpen = useStore((s) => s.codeOpen);
+  const message = useStore((s) => s.message);
+  const setMessage = useStore((s) => s.setMessage);
   usePendingClear();
+  useEffect(() => {
+    if (!message) return;
+    const t = setTimeout(() => setMessage(null), 2200);
+    return () => clearTimeout(t);
+  }, [message, setMessage]);
   return (
     <div className="app">
       <Transport />
       <ClipGrid />
       <ClipEditor />
       {codeOpen && <CodePanel />}
+      {message && <div className="toast" role="status">{message}</div>}
     </div>
   );
 }

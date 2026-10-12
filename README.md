@@ -2,7 +2,7 @@
 
 A loop-based music maker for iPad that writes [Strudel](https://strudel.cc) code as you play. Build short clips with drum pads, a keyboard and step grids, launch them on the bar line, and read or edit the generated code when you want to.
 
-Status: **Phase 3** — clip grid and drum editor (Phase 2), plus melodic clips: a note grid whose rows are the notes of the chosen scale or raga, chord placement, a piano keyboard or scale pads (1 or 2 octaves, scale lock), chord pads, sitar/shehnai/flute and other sounds, a drone track, Sa Re Ga labels, and a custom scale editor with per-note cents. The song autosaves in the browser. The Phase 0 test page is at `#lab`.
+Status: **Phase 4 (MVP)** — clip grid, drum and melodic clip editors, scales and ragas, and three modes: **Perform** (pads and keys only sound), **Record** (presses snap to the nearest step of the selected clip as it loops; held keys set note length; count-in, snap 1/16–1/4) and **Edit** (tapping a clip selects it without playing; pads and keys place notes at a chosen step). Undo/redo for clip content, a click track, and autosave in the browser. The Phase 0 test page is in the More menu.
 
 ## Run it
 

@@ -17,8 +17,12 @@ interface Props {
 /** One row per drum sound, 16 steps per bar. Tap a cell to add or remove a hit. */
 export default function DrumGrid({ track, clip, slot, bar }: Props) {
   const toggleHit = useStore((s) => s.toggleHit);
+  const mode = useStore((s) => s.mode);
+  const cursor = useStore((s) => s.cursor);
+  const setUi = useStore((s) => s.setUi);
   const ref = useRef<HTMLDivElement>(null);
   const off = bar * STEPS_PER_BAR;
+  const cur = mode === 'edit' && cursor >= off && cursor < off + STEPS_PER_BAR ? cursor - off : -1;
 
   // Playhead column and per-hit flashes, without re-rendering.
   useEffect(() => {
@@ -66,7 +70,11 @@ export default function DrumGrid({ track, clip, slot, bar }: Props) {
   return (
     <div className="dgrid" ref={ref}>
       <div />
-      {Array.from({ length: STEPS_PER_BAR }, (_, s) => <div key={s} className={`colhead${s % 4 === 0 ? ' b' : ''}`}>{s % 4 === 0 ? s / 4 + 1 : '·'}</div>)}
+      {Array.from({ length: STEPS_PER_BAR }, (_, s) => (
+        <button key={s} className={`colhead${s % 4 === 0 ? ' b' : ''}${s === cur ? ' sel' : ''}`} aria-label={`Choose step ${s + 1}`} onClick={() => setUi({ cursor: off + s })}>
+          {s % 4 === 0 ? s / 4 + 1 : '·'}
+        </button>
+      ))}
       {KIT.map((k) => (
         <Row key={k.voice} name={k.name} aux={!k.main}>
           {Array.from({ length: STEPS_PER_BAR }, (_, s) => {
@@ -75,7 +83,7 @@ export default function DrumGrid({ track, clip, slot, bar }: Props) {
             return (
               <button
                 key={s}
-                className={`cell${s % 4 === 0 ? ' beat' : ''}${on ? ' on' : ''}`}
+                className={`cell${s % 4 === 0 ? ' beat' : ''}${on ? ' on' : ''}${s === cur ? ' cur' : ''}`}
                 data-col={s}
                 data-cell={`${k.voice}:${step}`}
                 aria-label={`${k.name}, step ${s + 1}${on ? ', on' : ''}`}

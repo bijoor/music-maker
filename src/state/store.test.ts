@@ -61,3 +61,37 @@ describe('clip editing', () => {
     expect(st().song.tracks.length).toBe(4);
   });
 });
+
+describe('recording and undo', () => {
+  it('groups one recording pass into a single undo step', () => {
+    st().recordHit('t1', 0, 'cr', 0, 'rec:c1:0');
+    st().recordHit('t1', 0, 'cr', 8, 'rec:c1:0');
+    st().recordHit('t1', 0, 'oh', 4, 'rec:c1:1');
+    const hits = () => { const c = drums().slots[0]!; return c.kind === 'drums' ? [c.hits.cr[0], c.hits.cr[8], c.hits.oh[4]] : []; };
+    expect(hits()).toEqual([1, 1, 1]);
+    st().undo();
+    expect(hits()).toEqual([1, 1, 0]);
+    st().undo();
+    expect(hits()).toEqual([0, 0, 0]);
+    st().redo();
+    expect(hits()).toEqual([1, 1, 0]);
+  });
+
+  it('extends a held note when it is recorded again with a longer length', () => {
+    st().recordNote('t4', 0, 6, [60], 1, 'rec:c8:0');
+    st().recordNote('t4', 0, 6, [60], 4, 'rec:c8:0');
+    const lead = st().song.tracks[3].slots[0]!;
+    // Holding over the next note (step 8) replaces it, as overdubbing a held note should.
+    expect(lead.kind === 'melodic' && lead.notes.find((n) => n.step === 6)).toMatchObject({ len: 4, pitches: [60] });
+    expect(lead.kind === 'melodic' && lead.notes.some((n) => n.step === 8)).toBe(false);
+  });
+
+  it('does not undo launches or mute', () => {
+    st().toggleHit('t1', 0, 'cr', 0);
+    st().tapSlot('t1', 1);
+    st().toggleMute('t2');
+    st().undo();
+    expect(drums().active).toEqual([1]);
+    expect(st().song.tracks[1].mute).toBe(true);
+  });
+});

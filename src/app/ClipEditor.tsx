@@ -17,7 +17,7 @@ export default function ClipEditor() {
   const { view, setView, page, setPage, selected, setClipBars, setBank, setSound, applyPreset, duplicateClip, clearClip, deleteClip, removeTrack } = state;
   const track = selectedTrack(state);
   const clip = selectedClip(state);
-  const [menu, setMenu] = useState<'clip' | 'track' | null>(null);
+  const [menu, setMenu] = useState(false);
   if (!track) return <section className="card editor empty-editor"><p className="muted-text">Add a track to start.</p></section>;
   const slot = selected.slot;
   const bar = clip ? Math.min(page, clip.bars - 1) : 0;
@@ -58,24 +58,35 @@ export default function ClipEditor() {
             {Object.keys(DRUM_PRESETS).map((n) => <option key={n}>{n}</option>)}
           </select>
         )}
+        {state.mode === 'record' && (
+          <>
+            <select aria-label="Snap recorded notes to" value={state.quantize} onChange={(e) => state.setUi({ quantize: +e.target.value })}>
+              <option value={1}>Snap 1/16</option>
+              <option value={2}>Snap 1/8</option>
+              <option value={4}>Snap 1/4</option>
+            </select>
+            <button className={`btn sm${state.countIn ? ' on' : ''}`} aria-pressed={state.countIn} onClick={() => state.setUi({ countIn: !state.countIn })}>Count-in</button>
+          </>
+        )}
+        <button className="btn sm" disabled={!state.past.length} onClick={state.undo} aria-label="Undo">↶<span className="wide-only"> Undo</span></button>
+        <button className="btn sm" disabled={!state.future.length} onClick={state.redo} aria-label="Redo">↷</button>
         <span className="spacer" />
         <div className="seg" role="group" aria-label="View">
           <button aria-pressed={view === 'grid'} onClick={() => setView('grid')}>Grid</button>
           <button aria-pressed={view === 'play'} onClick={() => setView('play')}>Play</button>
         </div>
         <div className="menuwrap">
-          {clip && slot !== null && <button className="btn sm" aria-expanded={menu === 'clip'} onClick={() => setMenu(menu === 'clip' ? null : 'clip')}>Clip ⋯</button>}
-          <button className="btn sm" aria-expanded={menu === 'track'} onClick={() => setMenu(menu === 'track' ? null : 'track')}>Track ⋯</button>
-          {menu === 'clip' && clip && slot !== null && (
+          <button className="btn sm" aria-expanded={menu} aria-label="Clip and track actions" onClick={() => setMenu(!menu)}>⋯</button>
+          {menu && (
             <div className="menu right" role="menu">
-              <button role="menuitem" onClick={() => { duplicateClip(track.id, slot); setMenu(null); }}>Duplicate to a free slot</button>
-              <button role="menuitem" onClick={() => { clearClip(track.id, slot); setMenu(null); }}>Clear notes</button>
-              <button role="menuitem" onClick={() => { deleteClip(track.id, slot); setMenu(null); }}>Delete clip</button>
-            </div>
-          )}
-          {menu === 'track' && (
-            <div className="menu right" role="menu">
-              <button role="menuitem" onClick={() => { if (confirm(`Remove the ${track.name} track and its clips?`)) removeTrack(track.id); setMenu(null); }}>Remove track</button>
+              {clip && slot !== null && (
+                <>
+                  <button role="menuitem" onClick={() => { duplicateClip(track.id, slot); setMenu(false); }}>Duplicate clip to a free slot</button>
+                  <button role="menuitem" onClick={() => { clearClip(track.id, slot); setMenu(false); }}>Clear the clip's notes</button>
+                  <button role="menuitem" onClick={() => { deleteClip(track.id, slot); setMenu(false); }}>Delete clip</button>
+                </>
+              )}
+              <button role="menuitem" onClick={() => { setMenu(false); if (confirm(`Remove the ${track.name} track and its clips?`)) removeTrack(track.id); }}>Remove the {track.name} track</button>
             </div>
           )}
         </div>

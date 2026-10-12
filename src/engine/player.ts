@@ -23,7 +23,10 @@ async function compileCached(code: string) {
   return compiled.get(code);
 }
 
-async function apply(song: Song) {
+// Clicks for the count-in and the metronome, on their own engine tracks (not part of the song).
+const CLICK = 's("rim*4").bank("RolandTR909").gain("[.9 .45 .45 .45]")';
+
+async function apply(song: Song, notBefore = 0) {
   const g = generate(song);
   latest = g;
   const { setPending } = useStore.getState();
@@ -35,7 +38,7 @@ async function apply(song: Song) {
     if (prev && prev.code === code && prev.active === active) continue;
     const pattern = code ? await compileCached(code) : engine.silence;
     if (!prev || prev.active !== active) {
-      const at = engine.launch(tc.trackId, pattern, { period: tc.period });
+      const at = engine.launch(tc.trackId, pattern, { period: tc.period, notBefore });
       if (engine.isStarted() && at > engine.cycleNow()) setPending(tc.trackId, at);
     } else {
       engine.edit(tc.trackId, pattern, tc.period);
@@ -45,20 +48,34 @@ async function apply(song: Song) {
 }
 
 /** Queue a sync so changes apply in order even though compiling is asynchronous. */
-export function sync(song: Song) {
-  queue = queue.then(() => apply(song)).catch((err) => console.error('[player] sync failed', err));
+export function sync(song: Song, notBefore = 0) {
+  queue = queue.then(() => apply(song, notBefore)).catch((err) => console.error('[player] sync failed', err));
   return queue;
 }
 
-export async function play() {
+/** Start playback; with a count-in, one bar of clicks plays first and the song starts on the next bar. */
+export async function play(opts: { countIn?: boolean } = {}) {
   const store = useStore.getState();
+  if (store.transport !== 'stopped') return;
   engine.unlockAudio();
   store.setTransport('loading');
   await engine.initEngine();
   engine.setBpm(useStore.getState().song.bpm);
   playing.clear();
-  await sync(useStore.getState().song);
+  let start = 0;
+  if (opts.countIn) {
+    engine.launch('__count', await compileCached(CLICK));
+    engine.launch('__count', engine.silence, { notBefore: 1 });
+    start = 1;
+  }
+  await sync(useStore.getState().song, start);
   useStore.getState().setTransport('playing');
+  await setMetronome(useStore.getState().metronome);
+}
+
+async function setMetronome(on: boolean) {
+  if (!engine.isStarted()) return;
+  engine.launch('__metro', on ? await compileCached(CLICK) : engine.silence);
 }
 
 export function stop() {
@@ -100,6 +117,7 @@ export function preview(trackId: string, value: Record<string, unknown>) {
 
 // Follow song changes while playing.
 useStore.subscribe((state, prev) => {
+  if (state.metronome !== prev.metronome && state.transport === 'playing') setMetronome(state.metronome);
   if (state.song === prev.song) return;
   if (state.song.bpm !== prev.song.bpm) engine.setBpm(state.song.bpm);
   if (state.transport === 'playing') sync(state.song);

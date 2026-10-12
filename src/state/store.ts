@@ -12,6 +12,7 @@ import { loadSong, saveSong } from './persist';
 export type TransportState = 'stopped' | 'loading' | 'playing';
 export type EditorView = 'grid' | 'play';
 export type KeyboardLayout = 'piano' | 'pads';
+export type Mode = 'perform' | 'record' | 'edit';
 
 interface Selection {
   trackId: string;
@@ -36,8 +37,20 @@ interface State {
   /** Length in steps of notes added in the grid, and of chords placed there. */
   noteLen: number;
   chordLen: number;
-  /** Step (within the clip) chosen in the grid for placing a chord. */
+  /** Step (within the clip) where Edit mode places the next note, and where chords go in the grid. */
   cursor: number;
+  mode: Mode;
+  /** Recording snaps to this many steps (1 = 1/16, 2 = 1/8, 4 = 1/4). */
+  quantize: number;
+  countIn: boolean;
+  metronome: boolean;
+  /** Undo history of the song's content (launches, mute and volume are not undone). */
+  past: Song[];
+  future: Song[];
+  /** Consecutive edits with the same group (e.g. one recording pass) undo together. */
+  historyGroup: string | null;
+  /** A short message shown briefly (e.g. "Count-in…"). */
+  message: string | null;
 
   // Song settings
   setBpm(bpm: number): void;
@@ -78,7 +91,14 @@ interface State {
   setView(view: EditorView): void;
   setPage(page: number): void;
   toggleCode(): void;
-  setUi(ui: Partial<Pick<State, 'sargam' | 'keyboard' | 'keyboardOctaves' | 'scaleLock' | 'noteLen' | 'chordLen' | 'cursor'>>): void;
+  setUi(ui: Partial<Pick<State, 'sargam' | 'keyboard' | 'keyboardOctaves' | 'scaleLock' | 'noteLen' | 'chordLen' | 'cursor' | 'quantize' | 'countIn' | 'metronome'>>): void;
+  setMode(mode: Mode): void;
+  /** Recording: add a drum hit or a note (held notes are written again with a longer length on release). */
+  recordHit(trackId: string, slot: number, voice: string, step: number, group: string): void;
+  recordNote(trackId: string, slot: number, step: number, pitches: number[], len: number, group: string): void;
+  undo(): void;
+  redo(): void;
+  setMessage(message: string | null): void;
   setTransport(t: TransportState): void;
   setPending(trackId: string, at: number | null): void;
 }
@@ -102,7 +122,31 @@ const newClip = (t: Track, bars: Bars): Clip => {
 
 const initial = loadSong() ?? demoSong();
 
-export const useStore = create<State>((set, get) => ({
+/** Keep what is playing and the mix as they are now when undoing content: undo should not launch or mute anything. */
+function keepLive(target: Song, current: Song): Song {
+  return produce(target, (song) => {
+    for (const t of song.tracks) {
+      const now = current.tracks.find((c) => c.id === t.id);
+      if (!now) { t.active = []; continue; }
+      t.active = now.active.filter((i) => t.slots[i]);
+      t.mute = now.mute;
+      t.solo = now.solo;
+      t.fx.gain = now.fx.gain;
+    }
+  });
+}
+
+export const useStore = create<State>((set, get) => {
+  /** Apply a content change and record the previous song for undo. */
+  const edit = (recipe: (s: State) => Partial<State>, group?: string) =>
+    set((s) => {
+      const out = recipe(s);
+      if (!out.song || out.song === s.song) return out;
+      const merge = !!group && group === s.historyGroup;
+      return { ...out, past: merge ? s.past : [...s.past.slice(-49), s.song], future: [], historyGroup: group ?? null };
+    });
+
+  return {
   song: initial,
   transport: 'stopped',
   pendingAt: {},
@@ -117,6 +161,14 @@ export const useStore = create<State>((set, get) => ({
   noteLen: 2,
   chordLen: 8,
   cursor: 0,
+  mode: 'perform',
+  quantize: 1,
+  countIn: true,
+  metronome: false,
+  past: [],
+  future: [],
+  historyGroup: null,
+  message: null,
 
   setBpm: (bpm) => set((s) => ({ song: { ...s.song, bpm: Math.min(200, Math.max(60, Math.round(bpm))) } })),
   setTonic: (tonic) => set((s) => ({ song: { ...s.song, key: { ...s.song.key, tonic } } })),
@@ -128,13 +180,13 @@ export const useStore = create<State>((set, get) => ({
     }),
   resetSong: () => {
     const song = demoSong();
-    set({ song, selected: { trackId: song.tracks[0].id, slot: 0 }, page: 0 });
+    set({ song, selected: { trackId: song.tracks[0].id, slot: 0 }, page: 0, past: [], future: [], historyGroup: null });
   },
 
   addTrack: (i) => {
     const p = INSTRUMENTS[i];
     const id = newId('t');
-    set((s) => ({
+    edit((s) => ({
       song: produce(s.song, (song) => {
         const t = makeTrack({ id, name: p.name, kind: p.kind, color: p.color, bank: p.bank, sound: p.sound, octave: p.octave, poly: p.poly, fx: defaultFx() });
         if (p.drone) {
@@ -150,7 +202,7 @@ export const useStore = create<State>((set, get) => ({
     }));
   },
   removeTrack: (trackId) =>
-    set((s) => {
+    edit((s) => {
       const song = produce(s.song, (d) => { d.tracks = d.tracks.filter((t) => t.id !== trackId); });
       const selected = s.selected.trackId === trackId ? { trackId: song.tracks[0]?.id ?? '', slot: null } : s.selected;
       return { song, selected };
@@ -176,11 +228,11 @@ export const useStore = create<State>((set, get) => ({
 
   select: (trackId, slot) => set((s) => (s.selected.trackId === trackId && s.selected.slot === slot ? {} : { selected: { trackId, slot }, page: 0 })),
   createClip: (trackId, slot, bars) => {
-    set(onTrack(trackId, (t) => { t.slots[slot] = newClip(t, bars); }));
+    edit(onTrack(trackId, (t) => { t.slots[slot] = newClip(t, bars); }));
     get().select(trackId, slot);
   },
   deleteClip: (trackId, slot) =>
-    set(onTrack(trackId, (t) => {
+    edit(onTrack(trackId, (t) => {
       t.slots[slot] = null;
       t.active = t.active.filter((i) => i !== slot);
     })),
@@ -189,7 +241,7 @@ export const useStore = create<State>((set, get) => ({
     const free = t ? t.slots.findIndex((c) => !c) : -1;
     const target = free >= 0 ? free : t && t.slots.length < MAX_SLOTS ? t.slots.length : -1;
     if (!t || target < 0 || !t.slots[slot]) return null;
-    set(onTrack(trackId, (d) => {
+    edit(onTrack(trackId, (d) => {
       const src = d.slots[slot]!;
       const copy = JSON.parse(JSON.stringify(src)) as Clip;
       copy.id = newId('c');
@@ -200,13 +252,13 @@ export const useStore = create<State>((set, get) => ({
     return target;
   },
   clearClip: (trackId, slot) =>
-    set(onTrack(trackId, (t) => {
+    edit(onTrack(trackId, (t) => {
       const c = t.slots[slot];
       if (c?.kind === 'drums') c.hits = emptyHits(c.bars);
       else if (c) c.notes = [];
     })),
   setClipBars: (trackId, slot, bars) =>
-    set(onTrack(trackId, (t) => {
+    edit(onTrack(trackId, (t) => {
       const c = t.slots[slot];
       if (!c || c.bars === bars) return;
       const n = bars * STEPS_PER_BAR, old = c.bars * STEPS_PER_BAR;
@@ -223,7 +275,7 @@ export const useStore = create<State>((set, get) => ({
     })),
   toggleHit: (trackId, slot, voice, step) => {
     let on = false;
-    set(onTrack(trackId, (t) => {
+    edit(onTrack(trackId, (t) => {
       const c = t.slots[slot];
       if (c?.kind !== 'drums') return;
       if (!c.hits[voice]) c.hits[voice] = Array(c.bars * STEPS_PER_BAR).fill(0);
@@ -233,7 +285,7 @@ export const useStore = create<State>((set, get) => ({
     return on;
   },
   applyPreset: (trackId, slot, preset, bar) =>
-    set(onTrack(trackId, (t) => {
+    edit(onTrack(trackId, (t) => {
       const c = t.slots[slot];
       const p = DRUM_PRESETS[preset];
       if (c?.kind !== 'drums' || !p) return;
@@ -248,7 +300,7 @@ export const useStore = create<State>((set, get) => ({
   toggleNote: (trackId, slot, step, pitch) => {
     let on = false;
     const len = get().noteLen;
-    set(onTrack(trackId, (t) => {
+    edit(onTrack(trackId, (t) => {
       const c = t.slots[slot];
       if (c?.kind === 'melodic') on = toggleNoteIn(c, step, pitch, len, t.poly);
     }));
@@ -256,7 +308,7 @@ export const useStore = create<State>((set, get) => ({
   },
   placeChord: (trackId, slot, step, pitches) => {
     const len = get().chordLen;
-    set(onTrack(trackId, (t) => {
+    edit(onTrack(trackId, (t) => {
       const c = t.slots[slot];
       if (c?.kind === 'melodic') writeNote(c, step, pitches, len);
     }));
@@ -274,7 +326,35 @@ export const useStore = create<State>((set, get) => ({
       else pendingAt[trackId] = at;
       return { pendingAt };
     }),
-}));
+
+  setMode: (mode) => set({ mode }),
+  setMessage: (message) => set({ message }),
+  recordHit: (trackId, slot, voice, step, group) =>
+    edit(onTrack(trackId, (t) => {
+      const c = t.slots[slot];
+      if (c?.kind !== 'drums') return;
+      if (!c.hits[voice]) c.hits[voice] = Array(c.bars * STEPS_PER_BAR).fill(0);
+      c.hits[voice][step] = 1;
+    }), group),
+  recordNote: (trackId, slot, step, pitches, len, group) =>
+    edit(onTrack(trackId, (t) => {
+      const c = t.slots[slot];
+      if (c?.kind === 'melodic') writeNote(c, step, pitches, len, t.poly);
+    }), group),
+  undo: () =>
+    set((s) => {
+      const prev = s.past[s.past.length - 1];
+      if (!prev) return {};
+      return { song: keepLive(prev, s.song), past: s.past.slice(0, -1), future: [s.song, ...s.future].slice(0, 50), historyGroup: null };
+    }),
+  redo: () =>
+    set((s) => {
+      const next = s.future[0];
+      if (!next) return {};
+      return { song: keepLive(next, s.song), past: [...s.past, s.song].slice(-50), future: s.future.slice(1), historyGroup: null };
+    }),
+  };
+});
 
 // Autosave the song (debounced).
 let saveTimer: ReturnType<typeof setTimeout> | undefined;

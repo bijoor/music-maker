@@ -6,8 +6,9 @@ import * as engine from '../engine/strudel';
 import * as player from '../engine/player';
 
 export default function Transport() {
-  const { song, transport, codeOpen, sargam, setBpm, setTonic, setScale, toggleCode, resetSong, setUi } = useStore();
+  const { song, transport, codeOpen, sargam, mode, countIn, metronome, setBpm, setTonic, setScale, toggleCode, resetSong, setUi, setMode } = useStore();
   const [editingScale, setEditingScale] = useState(false);
+  const [more, setMore] = useState(false);
   const barRef = useRef<HTMLElement>(null);
   const dotsRef = useRef<HTMLSpanElement>(null);
 
@@ -39,7 +40,7 @@ export default function Transport() {
         className={`btn play${transport === 'playing' ? ' stop' : ''}`}
         disabled={transport === 'loading'}
         aria-label={transport === 'playing' ? 'Stop' : 'Play'}
-        onClick={() => (transport === 'playing' ? player.stop() : player.play())}
+        onClick={() => (transport === 'playing' ? player.stop() : player.play({ countIn: mode === 'record' && countIn }))}
       >
         {transport === 'playing' ? '■' : transport === 'loading' ? '…' : '▶'}
       </button>
@@ -62,10 +63,23 @@ export default function Transport() {
         {song.customScales.length > 0 && <optgroup label="My scales">{group('Custom')}</optgroup>}
         <option value="__new">New custom scale…</option>
       </select>
-      <button className={`btn sm${sargam ? ' on' : ''}`} aria-pressed={sargam} onClick={() => setUi({ sargam: !sargam })}>Sa Re Ga</button>
+      <div className="seg modes" role="group" aria-label="Mode">
+        <button aria-pressed={mode === 'perform'} onClick={() => setMode('perform')}>Perform</button>
+        <button className="rec" aria-pressed={mode === 'record'} onClick={() => setMode('record')}><span className="dot" />Record</button>
+        <button aria-pressed={mode === 'edit'} onClick={() => setMode('edit')}>Edit</button>
+      </div>
+      <button className={`btn sm${metronome ? ' on' : ''}`} aria-pressed={metronome} onClick={() => setUi({ metronome: !metronome })}>Click</button>
       <span className="spacer" />
-      <button className="btn sm" onClick={() => { if (confirm('Replace your song with the demo song? Your current clips will be lost.')) resetSong(); }}>Reset demo</button>
-      <a className="btn sm" href="#lab">Tests</a>
+      <div className="menuwrap">
+        <button className="btn sm" aria-expanded={more} onClick={() => setMore(!more)}>More ⋯</button>
+        {more && (
+          <div className="menu right" role="menu">
+            <button role="menuitemcheckbox" aria-checked={sargam} onClick={() => { setUi({ sargam: !sargam }); setMore(false); }}>{sargam ? '✓ ' : ''}Sa Re Ga labels</button>
+            <button role="menuitem" onClick={() => { setMore(false); if (confirm('Replace your song with the demo song? Your current clips will be lost.')) resetSong(); }}>Reset to the demo song</button>
+            <a role="menuitem" className="menulink" href="#lab" onClick={() => setMore(false)}>Phase 0 tests</a>
+          </div>
+        )}
+      </div>
       <button className={`btn${codeOpen ? ' on' : ''}`} aria-pressed={codeOpen} onClick={toggleCode}>Code</button>
       {editingScale && <ScaleEditor onClose={() => setEditingScale(false)} />}
     </header>

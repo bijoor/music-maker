@@ -157,14 +157,15 @@ export type LaunchOptions = {
   offset?: number;
   /** false: do not line the clip up (for comparison tests). */
   shift?: boolean;
+  /** Never start before this bar (e.g. after a count-in). */
+  notBefore?: number;
 };
 
 /** Start `pattern` on `track` at the next bar line. Returns the cycle (bar) it starts on. */
 export function launch(track: string, pattern: any, opts: LaunchOptions = {}): number {
-  const { period = 1, quantum = 1, offset = 0, shift = true } = opts;
-  let at = Math.ceil(horizon());
+  const { period = 1, quantum = 1, offset = 0, shift = true, notBefore = 0 } = opts;
+  let at = started() ? Math.max(Math.ceil(horizon()), notBefore) : notBefore;
   while (((at - offset) % quantum + quantum) % quantum !== 0) at++;
-  if (!started()) at = 0;
   const segs = tracks.get(track) ?? [];
   // A later launch on the same bar replaces an earlier one.
   while (segs.length && segs[segs.length - 1].at >= at) segs.pop();
@@ -191,19 +192,32 @@ export function edit(track: string, pattern: any, period?: number) {
   return s.at;
 }
 
-/** Where `track` is in its current clip or chain: bars since it started, modulo its period. Null if silent. */
-export function position(track: string): { bars: number; period: number } | null {
+/** Scheduler look-ahead (seconds): sounds play this long after the scheduler reaches them. */
+const SCHEDULER_LATENCY = 0.1;
+
+/** The bar position you are hearing now: the scheduler's position minus its look-ahead and the output latency. */
+export function heardCycle(): number {
+  if (!started()) return 0;
+  const ac = getAudioContext() as AudioContext;
+  const delay = SCHEDULER_LATENCY + ((ac as any).outputLatency ?? ac.baseLatency ?? 0);
+  return r.scheduler.now() - delay * r.scheduler.cps;
+}
+
+/**
+ * Where `track` is at a bar position (default: what you hear now): bars into its current clip or chain modulo
+ * its period, and how many times it has looped. Null if silent.
+ */
+export function position(track: string, cycle = heardCycle()): { bars: number; period: number; pass: number } | null {
   if (!started()) return null;
-  const now = r.scheduler.now();
   let cur: Segment | undefined;
-  for (const s of tracks.get(track) ?? []) if (s.at <= now) cur = s;
+  for (const s of tracks.get(track) ?? []) if (s.at <= cycle) cur = s;
   if (!cur || cur.raw === silence) return null;
-  const rel = cur.shift ? now - cur.at : now;
-  return { bars: ((rel % cur.period) + cur.period) % cur.period, period: cur.period };
+  const rel = cur.shift ? cycle - cur.at : cycle;
+  return { bars: ((rel % cur.period) + cur.period) % cur.period, period: cur.period, pass: Math.floor((cycle - cur.at) / cur.period) };
 }
 
 export const nextBar = () => (started() ? Math.ceil(horizon()) : 0);
-export const cycleNow = () => (started() ? r.scheduler.now() : 0);
+export const cycleNow = () => (started() ? heardCycle() : 0);
 export const isStarted = started;
 export const audioTime = () => getAudioContext().currentTime;
 export const setBpm = (bpm: number) => r?.setCps(bpm / 60 / 4);

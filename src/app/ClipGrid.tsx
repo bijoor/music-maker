@@ -11,7 +11,7 @@ const LETTERS = 'ABCDEFGH';
 const LANE: Record<string, number> = { cr: 0, rd: 0, oh: 0, hh: 0, tb: 0, sh: 0, rim: 1, sd: 1, 'sd:1': 1, cp: 1, cb: 1, bd: 2, 'bd:1': 2, lt: 2, mt: 2, ht: 2 };
 
 export default function ClipGrid() {
-  const { song, pendingAt, transport, selected, tapSlot, createClip, select, stopTrack, stopAllTracks, toggleMute, toggleSolo, setGain, addSlot, addTrack } = useStore();
+  const { song, pendingAt, transport, selected, mode, tapSlot, createClip, select, stopTrack, stopAllTracks, toggleMute, toggleSolo, setGain, addSlot, addTrack } = useStore();
   const [newLen, setNewLen] = useState<Bars>(1);
   const [adding, setAdding] = useState(false);
   const rowsRef = useRef<HTMLDivElement>(null);
@@ -39,7 +39,7 @@ export default function ClipGrid() {
         <select id="newlen" className="sm" value={newLen} onChange={(e) => setNewLen(+e.target.value as Bars)}>
           {[1, 2, 4].map((n) => <option key={n} value={n}>{n} bar{n > 1 ? 's' : ''}</option>)}
         </select>
-        <span className="muted-text hint">Tap a clip to play it from the next bar; tap again to stop.</span>
+        <span className="muted-text hint">{mode === 'edit' ? 'Edit: tap a clip to open it without playing it.' : mode === 'record' ? 'Record: tap a clip (or + for a new one), then play pads or keys.' : 'Tap a clip to play it from the next bar; tap again to stop.'}</span>
         <span className="spacer" />
         <button className="btn sm" onClick={stopAllTracks}>Stop all</button>
       </div>
@@ -51,7 +51,12 @@ export default function ClipGrid() {
             audible={isAudible(song, t)}
             queued={playing && pendingAt[t.id] !== undefined}
             selectedSlot={selected.trackId === t.id ? selected.slot : undefined}
-            onSlot={(i, clip) => (clip ? tapSlot(t.id, i) : createClip(t.id, i, newLen))}
+            onSlot={(i, clip) => {
+              // Edit: a tap only selects. Perform: it launches. Record: an empty slot becomes a clip and launches too.
+              if (!clip) { createClip(t.id, i, newLen); if (mode === 'record') tapSlot(t.id, i); }
+              else if (mode === 'edit') select(t.id, i);
+              else tapSlot(t.id, i);
+            }}
             onSelect={() => { const first = t.active[0] ?? t.slots.findIndex(Boolean); select(t.id, first >= 0 ? first : null); }}
             onStop={() => stopTrack(t.id)}
             onMute={() => toggleMute(t.id)}

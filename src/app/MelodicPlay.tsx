@@ -3,7 +3,8 @@ import { useStore } from '../state/store';
 import { findScale, inScale, pitchLabel, scaleChords, scalePitch, tonicPc } from '../model/scales';
 import { pitchToCode } from '../model/notes';
 import type { Track } from '../model/types';
-import * as player from '../engine/player';
+import * as recorder from '../engine/recorder';
+import StepStrip from './StepStrip';
 
 const BLACK = [1, 3, 6, 8, 10];
 
@@ -13,10 +14,14 @@ export default function MelodicPlay({ track }: { track: Track }) {
   const scale = findScale(song);
   const tonic = song.key.tonic;
   const chords = scaleChords(scale, tonic, track.octave, sargam);
-  const play = (pitches: number[], el: HTMLElement) => {
-    pitches.forEach((p) => player.preview(track.id, { note: p, s: track.sound ?? 'piano' }));
+  const play = (pitches: number[], e: PointerEvent<HTMLElement>, chord = false) => {
+    recorder.press(track.id, pitches, e.pointerId, chord);
+    const el = e.currentTarget;
     el.classList.add('down');
-    setTimeout(() => el.classList.remove('down'), 160);
+    const up = () => { recorder.release(e.pointerId); el.classList.remove('down'); el.removeEventListener('pointerup', up); el.removeEventListener('pointercancel', up); el.removeEventListener('pointerleave', up); };
+    el.addEventListener('pointerup', up);
+    el.addEventListener('pointercancel', up);
+    el.addEventListener('pointerleave', up);
   };
 
   return (
@@ -33,9 +38,10 @@ export default function MelodicPlay({ track }: { track: Track }) {
         {keyboard === 'piano' && <button className={`btn sm${scaleLock ? ' on' : ''}`} aria-pressed={scaleLock} onClick={() => setUi({ scaleLock: !scaleLock })}>Scale lock</button>}
         <span className="muted-text">{tonic} {scale.name}</span>
       </div>
+      <StepStrip />
       <div className="chords" style={{ gridTemplateColumns: `repeat(${chords.length}, minmax(0, 1fr))` }}>
         {chords.map((c, i) => (
-          <button key={i} className="chord" onPointerDown={(e) => play(c.pitches, e.currentTarget)}>
+          <button key={i} className="chord" onPointerDown={(e) => play(c.pitches, e, true)}>
             <strong>{c.name}</strong><span>{c.numeral}</span>
           </button>
         ))}
@@ -60,7 +66,7 @@ export default function MelodicPlay({ track }: { track: Track }) {
           {pitches.map((p) => {
             const sa = pitchLabel(p, tonic, true) === 'Sa';
             return (
-              <button key={p} className={`spad${sa ? ' sa' : ''}`} onPointerDown={(e) => play([p], e.currentTarget)}>
+              <button key={p} className={`spad${sa ? ' sa' : ''}`} onPointerDown={(e) => play([p], e)}>
                 <strong>{pitchLabel(p, tonic, sargam, false)}</strong><span>{pitchToCode(p)}</span>
               </button>
             );
@@ -92,7 +98,7 @@ export default function MelodicPlay({ track }: { track: Track }) {
       const props = {
         'aria-label': pitchLabel(m, tonic, false),
         'aria-disabled': off || undefined,
-        onPointerDown: (e: PointerEvent<HTMLButtonElement>) => { if (!off) play([pitch], e.currentTarget); },
+        onPointerDown: (e: PointerEvent<HTMLButtonElement>) => { if (!off) play([pitch], e); },
       };
       const w = 100 / whites;
       if (black) blacks.push(<button key={m} className={`bk${off ? ' off' : ''}${ok ? ' in' : ''}`} style={{ left: `${wi * w - w * 0.32}%`, width: `${w * 0.64}%` }} {...props}><span>{label}</span></button>);
