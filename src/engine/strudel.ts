@@ -71,8 +71,39 @@ function editPattern(pat: any) {
   return pat;
 }
 
+/**
+ * iOS/iPadOS: web audio is muted by Silent mode unless the page declares itself as playback, and the
+ * audio context only starts if it is resumed and makes sound inside the user's tap. Must run synchronously
+ * in the tap handler.
+ */
+export function unlockAudio() {
+  const nav = navigator as Navigator & { audioSession?: { type: string } };
+  if (nav.audioSession) nav.audioSession.type = 'playback';
+  const ac = getAudioContext() as AudioContext;
+  ac.resume();
+  const buf = ac.createBuffer(1, 1, ac.sampleRate);
+  const src = ac.createBufferSource();
+  src.buffer = buf;
+  src.connect(ac.destination);
+  src.start(0);
+}
+
+/** A plain Web Audio beep, independent of Strudel, to tell audio problems apart from engine problems. */
+export function beep() {
+  const ac = getAudioContext() as AudioContext;
+  ac.resume();
+  const o = ac.createOscillator(), g = ac.createGain();
+  o.frequency.value = 660;
+  g.gain.setValueAtTime(0.3, ac.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + 0.4);
+  o.connect(g).connect(ac.destination);
+  o.start();
+  o.stop(ac.currentTime + 0.45);
+}
+
 export function initEngine(): Promise<void> {
   if (!ready) {
+    unlockAudio();
     ready = (async () => {
       const ac = getAudioContext();
       await ac.resume();

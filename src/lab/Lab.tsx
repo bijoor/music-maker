@@ -29,6 +29,7 @@ export default function Lab() {
   const watches = useRef(new Set<Watch>());
   const taps = useRef<{ beats: number[]; offsets: number[] }>({ beats: [], offsets: [] });
   const barRef = useRef<HTMLSpanElement>(null);
+  const audioRef = useRef<HTMLSpanElement>(null);
 
   const say = (line: string) => setLog((l) => [`${new Date().toLocaleTimeString()}  ${line}`, ...l].slice(0, 60));
   const set = (key: string, status: Status, detail: string) => setResults((r) => ({ ...r, [key]: { status, detail } }));
@@ -44,6 +45,7 @@ export default function Lab() {
     let raf = 0;
     const tick = () => {
       const c = engine.cycleNow();
+      if (audioRef.current) { const a = engine.audioInfo(); audioRef.current.textContent = `Audio ${a.state} · ${a.sampleRate} Hz`; }
       if (barRef.current) barRef.current.textContent = engine.isStarted() ? `Bar ${Math.floor(c) + 1} · beat ${Math.floor((c % 1) * 4) + 1}` : 'Stopped';
       raf = requestAnimationFrame(tick);
     };
@@ -66,6 +68,7 @@ export default function Lab() {
   }
 
   async function play(c: string, at?: { cycle: number; period?: number }) {
+    engine.unlockAudio();
     setCode(c);
     await engine.evaluate(c, at);
   }
@@ -199,6 +202,7 @@ export default function Lab() {
       <main className="lab start">
         <h1>Music Maker · Phase 0</h1>
         <p>Checks that Strudel can do what the loop editor needs: switch clips on the bar line, line up multi-bar clips, chain clips, and play pads without delay. Use headphones or speakers.</p>
+        <p className="hint">On iPad: turn the volume up. If you hear nothing, check that Silent mode is off in Control Center.</p>
         <button className="big" onClick={start} disabled={state === 'loading'}>{state === 'loading' ? 'Loading sounds…' : 'Start audio'}</button>
         {state === 'error' && <p className="err">Could not start: {error}</p>}
       </main>
@@ -212,7 +216,9 @@ export default function Lab() {
         <span className="bar" ref={barRef}>Stopped</span>
         <label>BPM <input type="number" min={60} max={200} value={bpm} onChange={(e) => { const v = +e.target.value; setBpm(v); engine.setBpm(v); }} /></label>
         <button onClick={() => { engine.stop(); setCode(''); say('Stopped'); }}>Stop</button>
+        <button onClick={() => { engine.beep(); say('Beep (plain Web Audio, no Strudel)'); }}>Beep</button>
         <button onClick={copyResults}>Copy results</button>
+        <span className="audio" ref={audioRef} />
       </header>
 
       <section className="tests">
