@@ -57,4 +57,4 @@ export const PIANO_HINT: Record<number, string> = Object.fromEntries(Object.entr
 /** Scale pads: lower row from Sa of the track's octave, upper row the octave above. */
 export const PAD_ROWS = { low: 'asdfghjkl;'.split(''), high: 'qwertyuiop'.split('') };
 
-export const CHORD_KEYS = '12345678'.split('');
+export const CHORD_KEYS = '123456789'.split('');

@@ -62,11 +62,14 @@ export interface Chord {
   numeral: string;
 }
 
-/** Triads built on each degree of the scale by stacking every other scale note. */
-export function scaleChords(scale: ScaleDef, tonic: string, octave: number, sargam: boolean): Chord[] {
+/**
+ * Triads built on each degree of the scale by stacking every other scale note. With `upperTonic`, the tonic
+ * chord an octave up follows, so a row of chords lines up with a row of scale pads ending on the upper Sa.
+ */
+export function scaleChords(scale: ScaleDef, tonic: string, octave: number, sargam: boolean, upperTonic = false): Chord[] {
   const d = scale.degrees, n = d.length;
   const roman = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII'];
-  return Array.from({ length: Math.min(n, 8) }, (_, i) => {
+  const chords = Array.from({ length: Math.min(n, 8) }, (_, i) => {
     const pick = (k: number) => scalePitch(scale, tonic, d[(i + k) % n], octave + Math.floor((i + k) / n));
     const pitches = [pick(0), pick(2), pick(4)];
     const a = Math.round(pitches[1] - pitches[0]), b = Math.round(pitches[2] - pitches[0]);
@@ -75,4 +78,10 @@ export function scaleChords(scale: ScaleDef, tonic: string, octave: number, sarg
     // Chord names stay in letters (Cm, Ab); in sargam mode the numeral line shows the swara the chord is built on.
     return { pitches, name: pitchLabel(pitches[0], tonic, false, false) + q, numeral: sargam ? `${numeral} · ${pitchLabel(pitches[0], tonic, true)}` : numeral };
   });
+  if (upperTonic && chords.length === n) {
+    const top = chords[0];
+    const pitches = top.pitches.map((p) => p + 12);
+    chords.push({ ...top, pitches, numeral: sargam ? `${top.numeral.split(' · ')[0]} · ${pitchLabel(pitches[0], tonic, true)}` : top.numeral });
+  }
+  return chords;
 }

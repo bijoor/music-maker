@@ -33,7 +33,7 @@ function resolve(key: string): { voice?: string; pitches?: number[]; chord?: boo
   const scale = findScale(s.song), tonic = s.song.key.tonic;
   const ci = CHORD_KEYS.indexOf(key);
   if (ci >= 0) {
-    const chord = scaleChords(scale, tonic, track.octave, false)[ci];
+    const chord = scaleChords(scale, tonic, track.octave, false, s.keyboard === 'pads')[ci];
     return chord ? { pitches: chord.pitches, chord: true, selector: `[data-chord="${ci}"]` } : null;
   }
   if (s.keyboard === 'pads') {

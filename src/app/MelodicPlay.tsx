@@ -20,7 +20,8 @@ export default function MelodicPlay({ track }: { track: Track }) {
   const { song, sargam, keyboard, keyboardOctaves, scaleLock, sustain, glide, setGlide, setUi, setOctave } = useStore();
   const scale = findScale(song);
   const tonic = song.key.tonic;
-  const chords = scaleChords(scale, tonic, track.octave, sargam);
+  // On scale pads the chords line up with the pads above each other: one per scale note, then the upper Sa.
+  const chords = scaleChords(scale, tonic, track.octave, sargam, keyboard === 'pads');
   const play = (pitches: number[], e: PointerEvent<HTMLElement>, chord = false) => {
     const el = e.currentTarget;
     const vel0 = strikeVelocity(e.clientY, el);
@@ -87,7 +88,7 @@ export default function MelodicPlay({ track }: { track: Track }) {
         <span className="muted-text">{tonic} {scale.name}</span>
       </div>
       <StepStrip />
-      <div className="chords" style={{ gridTemplateColumns: `repeat(${chords.length}, minmax(0, 1fr))` }}>
+      <div className={`chords${keyboard === 'pads' ? ' over-pads' : ''}`} style={{ gridTemplateColumns: `repeat(${chords.length}, minmax(0, 1fr))` }}>
         {chords.map((c, i) => (
           <button key={i} className="chord" data-chord={i} onPointerDown={(e) => play(c.pitches, e, true)}>
             <strong>{c.name}</strong><span>{c.numeral}</span><span className="kbd-hint">{i + 1}</span>
@@ -106,9 +107,11 @@ export default function MelodicPlay({ track }: { track: Track }) {
   );
 
   function scalePads() {
-    const row = (oct: number, top: boolean) => {
+    const row = (oct: number) => {
+      // Every row ends on the Sa above, so the rows' columns line up (the lower row's last pad repeats the upper
+      // row's first, for convenience).
       const pitches = scale.degrees.map((d) => scalePitch(scale, tonic, d, oct));
-      if (top) pitches.push(scalePitch(scale, tonic, 0, oct + 1));
+      pitches.push(scalePitch(scale, tonic, 0, oct + 1));
       const keys = oct === track.octave ? PAD_ROWS.low : PAD_ROWS.high;
       return (
         <div className="padrow">
@@ -125,8 +128,8 @@ export default function MelodicPlay({ track }: { track: Track }) {
     };
     return (
       <div className="spads" style={{ gridTemplateRows: `repeat(${keyboardOctaves}, 1fr)` }}>
-        {keyboardOctaves === 2 && row(track.octave + 1, true)}
-        {row(track.octave, keyboardOctaves === 1)}
+        {keyboardOctaves === 2 && row(track.octave + 1)}
+        {row(track.octave)}
       </div>
     );
   }
