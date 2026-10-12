@@ -119,7 +119,10 @@ export function drum(trackId: string, voice: string, sound: Record<string, unkno
 export function press(trackId: string, pitches: number[], pointerId: number, chord = false, timeStamp?: number) {
   const track = trackOf(trackId);
   if (!track) return;
-  pitches.forEach((p) => player.preview(trackId, { note: p, s: track.sound ?? 'piano' }));
+  const st = state();
+  // The preview lasts as long as the note that will be written: chord length for chords in Edit, else the "New notes" length.
+  const previewLen = chord && st.mode === 'edit' ? st.chordLen : st.noteLen;
+  pitches.forEach((p) => player.preview(trackId, { note: p, s: track.sound ?? 'piano' }, previewLen));
   const s = state();
   if (s.mode === 'perform') return;
   const slot = needClip(track);
@@ -133,7 +136,8 @@ export function press(trackId: string, pitches: number[], pointerId: number, cho
   if (!readyToRecord(track, slot)) return;
   const at = recordStep(track, slot, timeStamp);
   if (!at) return;
-  s.recordNote(trackId, slot, at.step, pitches, s.quantize, at.group);
+  // A quick tap writes the "New notes" length (as previewed); holding longer extends it on release.
+  s.recordNote(trackId, slot, at.step, pitches, Math.max(s.quantize, s.noteLen), at.group);
   held.set(pointerId, { trackId, slot, step: at.step, pitches, startCycle: at.cycle, group: at.group });
 }
 
@@ -142,8 +146,8 @@ export function release(pointerId: number, timeStamp?: number) {
   const h = held.get(pointerId);
   if (!h) return;
   held.delete(pointerId);
-  const q = state().quantize;
+  const { quantize: q, noteLen } = state();
   const steps = (heardAt(timeStamp) - h.startCycle) * STEPS_PER_BAR;
-  const len = Math.max(q, Math.round(steps / q) * q);
-  if (len > q) state().recordNote(h.trackId, h.slot, h.step, h.pitches, len, h.group);
+  const len = Math.round(steps / q) * q;
+  if (len > Math.max(q, noteLen)) state().recordNote(h.trackId, h.slot, h.step, h.pitches, len, h.group);
 }

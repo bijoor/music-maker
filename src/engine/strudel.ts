@@ -264,7 +264,8 @@ export function stop() {
 /** Play a sound immediately, bypassing the pattern scheduler (pads and keys). */
 export function trigger(value: Record<string, unknown>, duration = 0.25) {
   const ac = getAudioContext();
-  return superdough(value, ac.currentTime + 0.005, duration);
+  // Pass the tempo too: tempo-synced effects such as delay then match the pattern.
+  return superdough(value, ac.currentTime + 0.005, duration, r?.scheduler.cps ?? 0.5);
 }
 
 export function audioInfo() {

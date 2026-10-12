@@ -197,13 +197,20 @@ export function sections(track: Track): { slot: number; bars: number }[] {
   return out;
 }
 
-function writeFx(w: Writer, track: Track) {
+/** The effect controls a track's line applies, in code order (also used so previews sound identical). */
+export function fxControls(track: Track): [string, number][] {
   const f = track.fx;
-  if (f.lpf !== undefined && f.lpf < 20000) w.add(`.lpf(${Math.round(f.lpf)})`);
-  if (f.room) w.add(`.room(${num(f.room)})`);
-  if (f.delay) w.add(`.delay(${num(f.delay)})`);
-  if (Math.abs(f.pan - 0.5) > 0.001) w.add(`.pan(${num(f.pan)})`);
-  if (Math.abs(f.gain - 1) > 0.001) w.add(`.gain(${num(f.gain)})`);
+  const out: [string, number][] = [];
+  if (f.lpf !== undefined && f.lpf < 20000) out.push(['lpf', Math.round(f.lpf)]);
+  if (f.room) out.push(['room', f.room]);
+  if (f.delay) out.push(['delay', f.delay]);
+  if (Math.abs(f.pan - 0.5) > 0.001) out.push(['pan', f.pan]);
+  if (Math.abs(f.gain - 1) > 0.001) out.push(['gain', f.gain]);
+  return out;
+}
+
+function writeFx(w: Writer, track: Track) {
+  for (const [name, value] of fxControls(track)) w.add(`.${name}(${num(value)})`);
 }
 
 export function isAudible(song: Song, track: Track) {

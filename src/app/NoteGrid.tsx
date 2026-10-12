@@ -31,11 +31,11 @@ export default function NoteGrid({ track, clip, slot, bar }: Props) {
 
   useGridFeedback(ref, track.id, clip.id, slot, off);
 
-  const preview = (pitches: number[]) => pitches.forEach((p) => player.preview(track.id, { note: p, s: track.sound ?? 'piano' }));
+  const preview = (pitches: number[], steps: number) => pitches.forEach((p) => player.preview(track.id, { note: p, s: track.sound ?? 'piano' }, steps));
   const tap = (step: number, pitch: number) => {
     const held = noteCovering(clip, step);
     const start = held && held.pitches.some((p) => Math.abs(p - pitch) < 0.001) ? held.step : step;
-    if (toggleNote(track.id, slot, start, pitch)) preview([pitch]);
+    if (toggleNote(track.id, slot, start, pitch)) preview([pitch], noteLen);
     setUi({ cursor: step });
   };
 
@@ -81,7 +81,7 @@ export default function NoteGrid({ track, clip, slot, bar }: Props) {
         </select>
         <div className="chordrow">
           {chords.map((c, i) => (
-            <button key={i} className="chip" onClick={() => { placeChord(track.id, slot, cursor, c.pitches); preview(c.pitches); setUi({ cursor: Math.min(clip.bars * STEPS_PER_BAR - 1, cursor + chordLen) }); }}>
+            <button key={i} className="chip" onClick={() => { placeChord(track.id, slot, cursor, c.pitches); preview(c.pitches, chordLen); setUi({ cursor: Math.min(clip.bars * STEPS_PER_BAR - 1, cursor + chordLen) }); }}>
               <strong>{c.name}</strong><span>{c.numeral}</span>
             </button>
           ))}

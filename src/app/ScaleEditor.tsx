@@ -17,7 +17,7 @@ export default function ScaleEditor({ onClose }: { onClose(): void }) {
     const track = song.tracks.find((t) => t.kind === 'melodic');
     if (!track) return;
     [...degrees, 12].forEach((d, i) =>
-      setTimeout(() => player.preview(track.id, { note: 60 + tonicPc(tonic) + d + (cents[d % 12] ?? 0) / 100, s: 'piano' }), i * 280),
+      setTimeout(() => player.preview(track.id, { note: 60 + tonicPc(tonic) + d + (cents[d % 12] ?? 0) / 100, s: 'piano' }, 2), i * 280),
     );
   };
   const save = () => {

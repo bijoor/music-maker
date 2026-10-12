@@ -1,7 +1,7 @@
 // Keeps the Strudel engine in step with the song: whenever the song changes, each track's generated code is
 // compared with what that track is playing. A change of active clips launches on the next bar; anything else
 // (notes, sound, effects, mute, solo) applies immediately.
-import { generate, sections, type GeneratedSong } from '../codegen/generate';
+import { fxControls, generate, sections, type GeneratedSong } from '../codegen/generate';
 import type { Song } from '../model/types';
 import { useStore } from '../state/store';
 import * as engine from './strudel';
@@ -104,19 +104,21 @@ export function playhead(trackId: string): { slot: number; step: number } | null
   return null;
 }
 
-/** Play a drum or note immediately (pads and keys), with the track's sound and effects. */
-export function preview(trackId: string, value: Record<string, unknown>) {
+/**
+ * Play a drum or note immediately (pads, keys, grid taps) exactly as the clip will play it: the same sound,
+ * the same effect controls as the generated code, and a length of `steps` sixteenth notes at the song's tempo.
+ */
+export function preview(trackId: string, value: Record<string, unknown>, steps = 1) {
   const track = useStore.getState().song.tracks.find((t) => t.id === trackId);
   if (!track) return;
-  const f = track.fx;
-  const go = () => engine.trigger({ ...value, gain: f.gain, pan: f.pan, ...(f.lpf ? { lpf: f.lpf } : {}), ...(f.room ? { room: f.room } : {}) });
+  const controls = Object.fromEntries(fxControls(track));
+  const go = () => engine.trigger({ ...value, ...controls }, steps / 16 / engine.getCps());
   // Once loaded, sound right away in the tap handler; nothing else may run first.
   if (engine.isReady()) { go(); return; }
   engine.unlockAudio();
   engine.initEngine().then(go);
 }
 
-// Follow song changes while playing.
 // Note edits (e.g. while recording) are batched so a burst of notes compiles once, keeping taps responsive.
 // Launches, stops and mutes apply at once.
 let pendingEdit: ReturnType<typeof setTimeout> | undefined;
