@@ -71,6 +71,6 @@ describe('Indian kits', () => {
     // Indian kits: left hand from F outwards, right hand from J, both hands in the middle.
     expect(['f', 'd', 'r', 'j', 'k', 'o', 'g', 'h'].map((k) => drumKey('Tabla', k))).toEqual(['tabla_ge', 'tabla_ghe', 'tabla_kat', 'tabla_na', 'tabla_ta', 'tabla_tak', 'tabla_dha', 'tabla_dhin']);
     expect(drumHint('Tabla', 'tabla_ge')).toBe('F');
-    expect(['f', 'a', 'j', 'o', 'g', '1'].map((k) => drumKey('Mridangam', k))).toEqual(['thom', 'ka', 'nam', 'dhi', 'dhum', undefined]);
+    expect(['f', 'a', 'j', 'p', 'g', '1'].map((k) => drumKey('Mridangam', k))).toEqual(['thom', 'ki', 'nam', 'ka', 'dhum', undefined]);
   });
 });
