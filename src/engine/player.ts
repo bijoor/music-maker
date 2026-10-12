@@ -1,7 +1,7 @@
 // Keeps the Strudel engine in step with the song: whenever the song changes, each track's generated code is
 // compared with what that track is playing. A change of active clips launches on the next bar; anything else
 // (notes, sound, effects, mute, solo) applies immediately.
-import { fxControls, generate, sections, type GeneratedSong } from '../codegen/generate';
+import { fxValues, generate, sections, type GeneratedSong } from '../codegen/generate';
 import type { Song } from '../model/types';
 import { useStore } from '../state/store';
 import * as engine from './strudel';
@@ -111,7 +111,7 @@ export function playhead(trackId: string): { slot: number; step: number } | null
 export function preview(trackId: string, value: Record<string, unknown>, steps = 1) {
   const track = useStore.getState().song.tracks.find((t) => t.id === trackId);
   if (!track) return;
-  const controls = Object.fromEntries(fxControls(track));
+  const controls = fxValues(track);
   const go = () => engine.trigger({ ...value, ...controls }, steps / 16 / engine.getCps());
   // Once loaded, sound right away in the tap handler; nothing else may run first.
   if (engine.isReady()) { go(); return; }

@@ -209,6 +209,15 @@ export function fxControls(track: Track): [string, number][] {
   return out;
 }
 
+/**
+ * The same effects as values for playing a sound directly (pads and keys). Strudel stores some controls under
+ * a canonical name: `.lpf()` becomes `cutoff`, and the audio engine only reads the canonical one.
+ */
+export function fxValues(track: Track): Record<string, number> {
+  const canonical: Record<string, string> = { lpf: 'cutoff' };
+  return Object.fromEntries(fxControls(track).map(([k, v]) => [canonical[k] ?? k, v]));
+}
+
 function writeFx(w: Writer, track: Track) {
   for (const [name, value] of fxControls(track)) w.add(`.${name}(${num(value)})`);
 }

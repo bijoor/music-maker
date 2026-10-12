@@ -4,7 +4,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import * as core from '@strudel/core';
 import * as mini from '@strudel/mini';
 import { transpiler } from '@strudel/transpiler';
-import { clipCode, findToken, generate, sections } from './generate';
+import { clipCode, findToken, fxValues, generate, sections } from './generate';
 import { demoSong } from '../model/demo';
 import { drumClip, melodicClip, track } from '../model/build';
 import { STEPS_PER_BAR, type Clip, type Song, type Track } from '../model/types';
@@ -134,6 +134,18 @@ describe('generated code', () => {
     const copy: Track = { ...song.tracks[0], id: 't9' };
     song.tracks.push(copy);
     expect(generate(song).code).toContain('drums2: drums2_A');
+  });
+
+  it('gives previews exactly the effect values the pattern produces', async () => {
+    // Pads and keys play sounds directly; their values must match what Strudel makes of the track's code.
+    const song = demoSong();
+    song.tracks[1].fx = { gain: 0.8, pan: 0.3, lpf: 900, room: 0.2, delay: 0.25 };
+    const tc = generate(song).tracks[1];
+    const hap = onsets(await compile(tc.runnable), 1)[0];
+    const { note, s, ...fx } = hap.value;
+    expect(note).toBeDefined();
+    expect(s).toBe('gm_synth_bass_1');
+    expect(fx).toEqual(fxValues(song.tracks[1]));
   });
 
   it('writes silence for a track with nothing active', () => {
