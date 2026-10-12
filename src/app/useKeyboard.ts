@@ -37,8 +37,9 @@ function resolve(key: string): { voice?: string; pitches?: number[]; chord?: boo
     return chord ? { pitches: chord.pitches, chord: true, selector: `[data-chord="${ci}"]` } : null;
   }
   if (s.keyboard === 'pads') {
-    const low = PAD_ROWS.low.indexOf(key), high = PAD_ROWS.high.indexOf(key);
-    const row = low >= 0 ? { i: low, oct: track.octave } : high >= 0 ? { i: high, oct: track.octave + 1 } : null;
+    // Two rows: Z X C V … the track's octave, A S D F … the one above. One row: A S D F … the track's octave.
+    const low = s.keyboardOctaves === 2 ? PAD_ROWS.low.indexOf(key) : -1, high = PAD_ROWS.high.indexOf(key);
+    const row = low >= 0 ? { i: low, oct: track.octave } : high >= 0 ? { i: high, oct: track.octave + (s.keyboardOctaves === 2 ? 1 : 0) } : null;
     if (!row) return null;
     const n = scale.degrees.length;
     const deg = scale.degrees[row.i % n], oct = row.oct + Math.floor(row.i / n);
@@ -78,7 +79,9 @@ export function useKeyboard() {
       if (e.metaKey || e.ctrlKey || e.repeat) return;
       const key = keyOf(e);
       const s = useStore.getState(), track = selectedTrack(s);
-      if (track?.kind === 'melodic' && (key === 'z' || key === 'x')) { s.setOctave(track.id, track.octave + (key === 'x' ? 1 : -1)); e.preventDefault(); return; }
+      // Octave down / up: Z / X on the piano; − / = on scale pads, whose lower row uses Z and X.
+      const octKeys = s.keyboard === 'pads' ? ['-', '='] : ['z', 'x'];
+      if (track?.kind === 'melodic' && octKeys.includes(key)) { s.setOctave(track.id, track.octave + (key === octKeys[1] ? 1 : -1)); e.preventDefault(); return; }
       if (held.has(key)) return;
       const hit = resolve(key);
       if (!hit || !track) return;

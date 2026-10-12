@@ -1,24 +1,42 @@
+import type { PointerEvent } from 'react';
 import { HAND_NAMES, kitVoices, voiceSound, type Hand, type KitVoice } from '../model/kit';
 import type { Track } from '../model/types';
 import * as recorder from '../engine/recorder';
 import StepStrip from './StepStrip';
 import { drumHint } from './keymap';
-import { strikeVelocity } from './strike';
+import { slideVelocity2D, strikeVelocity2D } from './strike';
 
 /** Finger-sized pads: large main pads (kick and snare double width), smaller pads for less frequent sounds. Indian kits show their strokes. */
 export default function DrumPads({ track }: { track: Track }) {
   const kit = kitVoices(track.bank);
-  const hit = (k: KitVoice, el: HTMLElement, timeStamp: number, clientY: number) => {
-    recorder.drum(track.id, k.voice, voiceSound(track.bank, k.voice), timeStamp, strikeVelocity(clientY, el));
+  // Where the pad is struck sets the velocity (soft top-left, full bottom-right); keeping the finger down and
+  // sliding any way then swells or fades the hit while it rings (right and down louder).
+  const hit = (k: KitVoice, e: PointerEvent<HTMLElement>) => {
+    const el = e.currentTarget, id = e.pointerId, r = el.getBoundingClientRect();
+    const vel0 = strikeVelocity2D(e.clientX, e.clientY, el), x0 = e.clientX, y0 = e.clientY;
+    const sound = recorder.drum(track.id, k.voice, voiceSound(track.bank, k.voice), e.timeStamp, vel0);
     el.classList.add('down');
     setTimeout(() => el.classList.remove('down'), 150);
+    if (el.hasPointerCapture?.(id)) el.releasePointerCapture(id);
+    const move = (ev: globalThis.PointerEvent) => {
+      if (ev.pointerId === id) sound.level(slideVelocity2D(vel0, ev.clientX - x0, ev.clientY - y0, r.width, r.height) / vel0);
+    };
+    const up = (ev: globalThis.PointerEvent) => {
+      if (ev.pointerId !== id) return;
+      removeEventListener('pointermove', move);
+      removeEventListener('pointerup', up);
+      removeEventListener('pointercancel', up);
+    };
+    addEventListener('pointermove', move);
+    addEventListener('pointerup', up);
+    addEventListener('pointercancel', up);
   };
   const pad = (k: KitVoice) => (
     <button
       key={k.voice}
       className={`pad${k.span === 2 ? ' wide' : k.span === 4 ? ' full' : ''}${k.main ? '' : ' aux'}`}
       data-voice={k.voice}
-      onPointerDown={(e) => hit(k, e.currentTarget, e.timeStamp, e.clientY)}
+      onPointerDown={(e) => hit(k, e)}
     >
       <strong>{k.name}</strong>
       <code>{k.voice}</code>

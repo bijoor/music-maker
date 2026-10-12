@@ -355,8 +355,8 @@ function detuneVoice(v: Voice, cents: number, ease = 0.012) {
 }
 
 export interface HeldNote {
-  /** Let go: fade out and stop. */
-  stop(): void;
+  /** Let go: fade out over `fade` seconds (default about a tenth) and stop. */
+  stop(fade?: number): void;
   /**
    * Slide the pitch to `semitones` away from the note's own pitch (fractional for a smooth glide), following the
    * finger closely, or easing over about `ease` seconds (settling onto a key).
@@ -371,7 +371,8 @@ export interface HeldNote {
  * without a loop still end where the recording ends.
  */
 export function hold(value: Record<string, unknown>, max = 30): HeldNote {
-  wrapSound(String(value.s ?? 'triangle'));
+  // Drum machines register their sounds as bank_sound (e.g. RolandTR909_cr).
+  wrapSound(value.bank ? `${value.bank}_${value.s}` : String(value.s ?? 'triangle'));
   const id = String(++holdId);
   let voice: Voice | null = null, released = false, cents = 0, ratio = 1;
   const setLevel = (v: Voice) => {
@@ -381,17 +382,18 @@ export function hold(value: Record<string, unknown>, max = 30): HeldNote {
     g.setTargetAtTime(ratio, now, 0.015);
   };
   holders.set(id, (v) => {
+    holders.delete(id); // a note's voice arrives once
     voice = v;
     if (cents) detuneVoice(v, cents);
     if (ratio !== 1) setLevel(v);
-    if (released) { releaseVoice(v); holders.delete(id); }
+    if (released) releaseVoice(v);
   });
   void trigger({ ...value, holdId: id }, max);
   return {
-    stop() {
+    stop(fade) {
       if (released) return;
       released = true;
-      if (voice) { releaseVoice(voice); holders.delete(id); } else setTimeout(() => holders.delete(id), 5000); // still loading
+      if (voice) releaseVoice(voice, fade); else setTimeout(() => holders.delete(id), 5000); // still loading (or never sounds)
     },
     glide(semitones, ease) {
       cents = semitones * 100;

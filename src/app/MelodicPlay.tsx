@@ -112,7 +112,7 @@ export default function MelodicPlay({ track }: { track: Track }) {
       // row's first, for convenience).
       const pitches = scale.degrees.map((d) => scalePitch(scale, tonic, d, oct));
       pitches.push(scalePitch(scale, tonic, 0, oct + 1));
-      const keys = oct === track.octave ? PAD_ROWS.low : PAD_ROWS.high;
+      const keys = keyboardOctaves === 2 && oct === track.octave ? PAD_ROWS.low : PAD_ROWS.high;
       return (
         <div className="padrow">
           {pitches.map((p, i) => {

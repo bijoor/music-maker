@@ -103,9 +103,18 @@ function needClip(track: Track): number | null {
 /** Sound fields for a velocity: none at full strength, so values stay as the generated code plays them. */
 const velocityValue = (vel: number) => (vel < 1 ? { velocity: vel } : {});
 
-/** A drum pad struck at velocity `vel` (0–1). `timeStamp` is the pointer event's timestamp. */
-export function drum(trackId: string, voice: string, sound: Record<string, unknown>, timeStamp?: number, vel = 1) {
-  player.preview(trackId, { ...sound, ...velocityValue(vel) });
+/**
+ * A drum pad struck at velocity `vel` (0–1). `timeStamp` is the pointer event's timestamp. Returns the sounding
+ * hit, whose volume a finger still on the pad can swell or fade (it rings out on its own either way).
+ */
+export function drum(trackId: string, voice: string, sound: Record<string, unknown>, timeStamp?: number, vel = 1): engine.HeldNote {
+  const hit = player.hold(trackId, { ...sound, ...velocityValue(vel) }, 1);
+  record(trackId, voice, timeStamp, vel);
+  return hit;
+}
+
+/** Write a drum hit into the selected clip (Edit: at the cursor; Record: at the step it was heard). */
+function record(trackId: string, voice: string, timeStamp: number | undefined, vel: number) {
   const track = trackOf(trackId);
   const s = state();
   if (!track || s.mode === 'perform') return;
@@ -123,9 +132,13 @@ export function drum(trackId: string, voice: string, sound: Record<string, unkno
 
 let pedal = false;
 /** Notes sounding while their key is held, by pointer: call to let go. */
-const sounding = new Map<number, () => void>();
-/** Notes whose key was let go while the sustain pedal was down: they ring until it comes up. */
-let pedalled: (() => void)[] = [];
+const sounding = new Map<number, (fade?: number) => void>();
+/**
+ * Notes whose key was let go while the sustain pedal was down: they ring until it comes up, or until another
+ * note is played (then they fade over PEDAL_FADE seconds, so one sustained note hands over to the next).
+ */
+let pedalled: ((fade?: number) => void)[] = [];
+const PEDAL_FADE = 0.25;
 const pedalDown = () => pedal || state().sustain;
 /** Let go of every note the pedal was holding. */
 function liftPedal() {
@@ -156,7 +169,11 @@ export function press(trackId: string, pitches: number[], pointerId: number, cho
   // down (Sustain button or Shift) it keeps ringing after the key is let go, until the pedal comes up.
   const notes = pitches.map((p) => player.hold(trackId, { note: p, s: track.sound ?? 'piano', ...velocityValue(vel) }));
   sounding.get(pointerId)?.();
-  sounding.set(pointerId, () => notes.forEach((n) => n.stop()));
+  sounding.set(pointerId, (fade?: number) => notes.forEach((n) => n.stop(fade)));
+  // A new note takes over from notes still ringing under the pedal (keys still held keep sounding).
+  const ringing = pedalled;
+  pedalled = [];
+  ringing.forEach((stop) => stop(PEDAL_FADE));
   voices.set(pointerId, { trackId, base: pitches[0], landed: pitches[0], struck: vel, vel, notes });
   recordPress(track, pitches, pointerId, chord, timeStamp, vel);
 }
