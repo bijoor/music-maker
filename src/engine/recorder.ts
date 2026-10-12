@@ -213,6 +213,21 @@ export function swell(pointerId: number, vel: number) {
 }
 
 /**
+ * The finger holding a key moved onto another key with Slide off: that key plays (a new note, as when running a
+ * finger along a keyboard) and Record and Edit write it as a plain note. The previous note stops, or rings on
+ * under the sustain pedal.
+ */
+export function step(pointerId: number, pitch: number, timeStamp?: number) {
+  const v = voices.get(pointerId);
+  if (!v || Math.abs(v.landed - pitch) < 0.001) return;
+  const stop = sounding.get(pointerId);
+  sounding.delete(pointerId);
+  if (stop) { if (pedalDown()) pedalled.push(stop); else stop(); }
+  finishHeld(pointerId, timeStamp);
+  press(v.trackId, [pitch], pointerId, false, timeStamp, v.vel);
+}
+
+/**
  * The finger holding a key moved sideways: the note's pitch follows it smoothly to `pitch` (fractional between
  * keys), like a string bend, or with `ease` (seconds) eases there (settling onto a key). `landed` is the key under the finger: when that changes, Record and Edit write the
  * new key's note, bending in from the previous one, so the grid keeps an outline of the slide.

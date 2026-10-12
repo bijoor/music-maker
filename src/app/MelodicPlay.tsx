@@ -17,7 +17,7 @@ const BLACK = [1, 3, 6, 8, 10];
 
 /** Chord pads above a piano keyboard or large scale pads; everything plays immediately. */
 export default function MelodicPlay({ track }: { track: Track }) {
-  const { song, sargam, keyboard, keyboardOctaves, scaleLock, sustain, setUi, setOctave } = useStore();
+  const { song, sargam, keyboard, keyboardOctaves, scaleLock, sustain, glide, setGlide, setUi, setOctave } = useStore();
   const scale = findScale(song);
   const tonic = song.key.tonic;
   const chords = scaleChords(scale, tonic, track.octave, sargam);
@@ -34,7 +34,8 @@ export default function MelodicPlay({ track }: { track: Track }) {
       el.addEventListener('pointerleave', up);
       return;
     }
-    // Keys: sliding the held finger sideways glides the pitch: it starts exactly on the struck key wherever it was
+    // Keys: with Slide off, moving the held finger onto another key plays that key. With Slide on, sliding sideways
+    // glides the pitch: it starts exactly on the struck key wherever it was
     // struck, and moves evenly to each other key's pitch at that key's centre. When the finger stops on a key, the
     // pitch settles onto that key (unless turned off in More). Sliding up or down changes the volume from the
     // velocity it was struck at, on the same scale as striking.
@@ -46,11 +47,14 @@ export default function MelodicPlay({ track }: { track: Track }) {
     const move = (ev: globalThis.PointerEvent) => {
       if (ev.pointerId !== id || !line.length) return;
       const on = keyAt(line, ev.clientX, document.elementFromPoint(ev.clientX, ev.clientY));
+      const { glide, pitchSnap } = useStore.getState();
+      // Slide off: each key reached plays its own note. The new note starts at the volume the finger is at now.
+      if (!glide) recorder.step(id, on.pitch, ev.timeStamp);
       recorder.swell(id, slideVelocity(vel0, ev.clientY - y0, height));
-      recorder.glide(id, pitchAlong(path, ev.clientX), on.pitch, ev.timeStamp);
+      if (glide) recorder.glide(id, pitchAlong(path, ev.clientX), on.pitch, ev.timeStamp);
       if (on.el !== lit) { lit.classList.remove('down'); lit = on.el; lit.classList.add('down'); }
       clearTimeout(settle);
-      if (useStore.getState().pitchSnap) settle = setTimeout(() => recorder.glide(id, on.pitch, on.pitch, undefined, SETTLE_EASE), SETTLE_AFTER_MS);
+      if (glide && pitchSnap) settle = setTimeout(() => recorder.glide(id, on.pitch, on.pitch, undefined, SETTLE_EASE), SETTLE_AFTER_MS);
     };
     const up = (ev: globalThis.PointerEvent) => {
       if (ev.pointerId !== id) return;
@@ -79,6 +83,7 @@ export default function MelodicPlay({ track }: { track: Track }) {
         </div>
         {keyboard === 'piano' && <button className={`btn sm${scaleLock ? ' on' : ''}`} aria-pressed={scaleLock} onClick={() => setUi({ scaleLock: !scaleLock })}>Scale lock</button>}
         <button className={`btn sm${sustain ? ' on' : ''}`} aria-pressed={sustain} title="Pedal: notes keep ringing after you let go, until Sustain is turned off (or hold Shift)" onClick={() => setUi({ sustain: !sustain })}>Sustain</button>
+        <button className={`btn sm${glide ? ' on' : ''}`} aria-pressed={glide} title="Slide a held finger sideways to glide the pitch smoothly between keys" onClick={() => setGlide(!glide)}>Slide</button>
         <span className="muted-text">{tonic} {scale.name}</span>
       </div>
       <StepStrip />
