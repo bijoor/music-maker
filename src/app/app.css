@@ -316,3 +316,10 @@ select.sm { min-height: 30px; padding: 3px 6px; font-size: 13px; }
 .fxs output { font-size: 12px; font-family: var(--mono); text-align: right; }
 .fxs input { grid-column: 1 / -1; width: 100%; accent-color: var(--tc); min-height: 28px; margin: 0; }
 @media (max-width: 900px) { .soundstrip { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+/* Songs */
+.songlist { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.songlist li { display: grid; grid-template-columns: minmax(0, 1fr) auto auto auto; gap: 10px; align-items: center; padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; }
+.songlist li.current { border-color: var(--accent); }
+.songlist .nm { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pill { font-size: 11px; padding: 2px 8px; border-radius: 99px; border: 1px solid var(--line); color: var(--muted); white-space: nowrap; }

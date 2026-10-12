@@ -7,14 +7,14 @@ import { DRUM_PRESETS, INSTRUMENTS } from '../model/presets';
 import { MAX_SLOTS, STEPS_PER_BAR, type Bars, type Clip, type Fx, type ScaleDef, type Song, type Track } from '../model/types';
 import { toggleNote as toggleNoteIn, writeNote } from '../model/clipEdit';
 import { findScale, scalePitch } from '../model/scales';
-import { loadNumber, loadSong, saveNumber, saveSong } from './persist';
+import { deleteSongById, listSongs, loadCurrent, loadNumber, loadSongById, saveNumber, saveSongById } from './persist';
 
 export type TransportState = 'stopped' | 'loading' | 'playing';
 export type EditorView = 'grid' | 'play';
 export type KeyboardLayout = 'piano' | 'pads';
 export type Mode = 'perform' | 'record' | 'edit';
 /** What the bottom area shows instead of the clip editor (no pop-up dialogs). */
-export type Panel = 'code' | 'song' | 'scale' | 'calibrate';
+export type Panel = 'code' | 'song' | 'scale' | 'calibrate' | 'songs';
 
 interface Selection {
   trackId: string;
@@ -23,6 +23,8 @@ interface Selection {
 
 interface State {
   song: Song;
+  /** Which saved song is open (its key in local storage). */
+  songId: string;
   transport: TransportState;
   /** Bar at which each track's latest launch takes effect (for the "queued" look). */
   pendingAt: Record<string, number>;
@@ -68,6 +70,13 @@ interface State {
   setTonic(tonic: string): void;
   setScale(scaleId: string): void;
   resetSong(): void;
+  // Song library (local storage) and files
+  newSong(): void;
+  openSong(id: string): void;
+  duplicateSong(): void;
+  deleteSong(id: string): void;
+  renameSong(name: string): void;
+  importSong(song: Song): void;
   addCustomScale(scale: Omit<ScaleDef, 'id' | 'group'>): void;
 
   // Tracks
@@ -153,7 +162,29 @@ const newClip = (t: Track, bars: Bars): Clip => {
     : { kind: 'melodic', id: newId('c'), name: `Clip ${n}`, bars, notes: [] };
 };
 
-const initial = loadSong() ?? demoSong();
+const stored = loadCurrent(() => newId('song'));
+const initialId = stored?.id ?? newId('song');
+const initial = stored?.song ?? demoSong();
+
+/** A new song: a drum kit, a bass and a piano, all empty. */
+function emptySong(): Song {
+  const n = listSongs().length + 1;
+  return {
+    version: 1, name: `Song ${n}`, bpm: 100, key: { tonic: 'C', scaleId: 'minor' }, customScales: [], scenes: [], arrangement: [],
+    tracks: [
+      makeTrack({ id: newId('t'), name: 'Drums', kind: 'drums', color: '#e8590c', bank: 'RolandTR909' }),
+      makeTrack({ id: newId('t'), name: 'Bass', kind: 'melodic', color: '#2f9e44', sound: 'gm_synth_bass_1', octave: 2 }),
+      makeTrack({ id: newId('t'), name: 'Keys', kind: 'melodic', color: '#1c7ed6', sound: 'piano', octave: 3, poly: true }),
+    ],
+  };
+}
+
+/** Open a song: save it under its id, clear undo and selection, leave song mode. */
+function switchTo(set: (p: Partial<State>) => void, id: string, song: Song) {
+  saveSongById(id, song);
+  const first = song.tracks[0]?.slots.findIndex(Boolean) ?? -1;
+  set({ song, songId: id, songMode: false, selected: { trackId: song.tracks[0]?.id ?? '', slot: first >= 0 ? first : null }, page: 0, past: [], future: [], historyGroup: null, panel: null });
+}
 
 /** What every track is playing now; silent tracks are included as [] (the scene then stops them) if asked. */
 function captureScene(song: Song, includeSilent: boolean): Record<string, number[]> {
@@ -188,6 +219,7 @@ export const useStore = create<State>((set, get) => {
 
   return {
   song: initial,
+  songId: initialId,
   transport: 'stopped',
   pendingAt: {},
   selected: { trackId: initial.tracks[0]?.id ?? '', slot: initial.tracks[0]?.active[0] ?? null },
@@ -222,6 +254,18 @@ export const useStore = create<State>((set, get) => {
       const id = newId('scale');
       return { song: produce(s.song, (song) => { song.customScales.push({ ...scale, id, group: 'Custom' }); song.key.scaleId = id; }) };
     }),
+  newSong: () => switchTo(set, newId('song'), emptySong()),
+  openSong: (id) => { const song = loadSongById(id); if (song) switchTo(set, id, song); },
+  duplicateSong: () => { const s = get(); switchTo(set, newId('song'), { ...structuredClone(s.song), name: `${s.song.name} copy` }); },
+  deleteSong: (id) => {
+    deleteSongById(id);
+    if (get().songId !== id) { set({}); return; }
+    const next = listSongs()[0];
+    const song = next && loadSongById(next.id);
+    if (next && song) switchTo(set, next.id, song); else switchTo(set, newId('song'), demoSong());
+  },
+  renameSong: (name) => set((s) => ({ song: { ...s.song, name: name.trim() || s.song.name } })),
+  importSong: (song) => switchTo(set, newId('song'), song),
   resetSong: () => {
     const song = demoSong();
     set({ song, songMode: false, selected: { trackId: song.tracks[0].id, slot: 0 }, page: 0, past: [], future: [], historyGroup: null });
@@ -493,7 +537,7 @@ let saveTimer: ReturnType<typeof setTimeout> | undefined;
 useStore.subscribe((s, prev) => {
   if (s.song === prev.song) return;
   clearTimeout(saveTimer);
-  saveTimer = setTimeout(() => saveSong(s.song), 400);
+  saveTimer = setTimeout(() => saveSongById(useStore.getState().songId, useStore.getState().song), 400);
 });
 
 export const selectedTrack = (s: State) => findTrack(s.song, s.selected.trackId);

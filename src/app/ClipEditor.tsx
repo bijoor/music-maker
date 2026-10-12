@@ -6,6 +6,7 @@ import type { Bars } from '../model/types';
 import DrumGrid from './DrumGrid';
 import Calibrate from './Calibrate';
 import SoundStrip from './SoundStrip';
+import SongsPanel from './SongsPanel';
 import SongEditor from './SongEditor';
 import ScaleEditor from './ScaleEditor';
 // The code editor (CodeMirror) loads only when the code panel is first opened.
@@ -29,6 +30,7 @@ export default function ClipEditor() {
   if (state.panel === 'song') return <SongEditor />;
   if (state.panel === 'scale') return <ScaleEditor />;
   if (state.panel === 'calibrate') return <Calibrate />;
+  if (state.panel === 'songs') return <SongsPanel />;
   if (!track) return <section className="card editor empty-editor"><p className="muted-text">Add a track to start.</p></section>;
   const slot = selected.slot;
   const bar = clip ? Math.min(page, clip.bars - 1) : 0;
