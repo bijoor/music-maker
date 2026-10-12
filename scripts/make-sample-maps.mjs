@@ -41,7 +41,9 @@ const TABLA = {
 };
 const FREESOUND_USER = { A: 1565498, B: 2385996, C: 693224 };
 mkdirSync('public/samples/tabla', { recursive: true });
-const tabla = {}; // no _base: files resolve next to tabla.json
+// _base points at the live site so older installed versions of the app (which read it) find the files; the app
+// itself passes its own base, so this also works locally.
+const tabla = { _base: 'https://bijoor.github.io/music-maker/samples/' };
 for (const [name, [set, id]] of Object.entries(TABLA)) {
   const res = await fetch(`https://cdn.freesound.org/previews/${Math.floor(id / 1000)}/${id}_${FREESOUND_USER[set]}-hq.mp3`);
   if (!res.ok) throw new Error(`freesound ${id}: ${res.status}`);
