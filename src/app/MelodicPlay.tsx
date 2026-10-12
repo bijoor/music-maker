@@ -17,12 +17,40 @@ export default function MelodicPlay({ track }: { track: Track }) {
   const chords = scaleChords(scale, tonic, track.octave, sargam);
   const play = (pitches: number[], e: PointerEvent<HTMLElement>, chord = false) => {
     recorder.press(track.id, pitches, e.pointerId, chord, e.timeStamp);
-    const el = e.currentTarget;
+    let el = e.currentTarget;
     el.classList.add('down');
-    const up = (ev: Event) => { recorder.release(e.pointerId, ev.timeStamp); el.classList.remove('down'); el.removeEventListener('pointerup', up); el.removeEventListener('pointercancel', up); el.removeEventListener('pointerleave', up); };
-    el.addEventListener('pointerup', up);
-    el.addEventListener('pointercancel', up);
-    el.addEventListener('pointerleave', up);
+    const id = e.pointerId;
+    if (chord) {
+      const up = (ev: Event) => { recorder.release(id, ev.timeStamp); el.classList.remove('down'); el.removeEventListener('pointerup', up); el.removeEventListener('pointercancel', up); el.removeEventListener('pointerleave', up); };
+      el.addEventListener('pointerup', up);
+      el.addEventListener('pointercancel', up);
+      el.addEventListener('pointerleave', up);
+      return;
+    }
+    // Keys: the finger may slide onto other keys while held, gliding into each (a bend from the previous note).
+    // Touch captures the pointer to the first key, so let go of that to see which key is under the finger.
+    if (el.hasPointerCapture?.(id)) el.releasePointerCapture(id);
+    const area = el.closest('.kb, .spads');
+    const move = (ev: globalThis.PointerEvent) => {
+      if (ev.pointerId !== id) return;
+      const over = (document.elementFromPoint(ev.clientX, ev.clientY) as HTMLElement | null)?.closest<HTMLElement>('.wk, .bk, .spad');
+      if (!over || over === el || over.getAttribute('aria-disabled') === 'true' || !area?.contains(over)) return;
+      el.classList.remove('down');
+      el = over;
+      el.classList.add('down');
+      recorder.slide(id, Number(over.dataset.pitch), ev.timeStamp);
+    };
+    const up = (ev: globalThis.PointerEvent) => {
+      if (ev.pointerId !== id) return;
+      recorder.release(id, ev.timeStamp);
+      el.classList.remove('down');
+      removeEventListener('pointermove', move);
+      removeEventListener('pointerup', up);
+      removeEventListener('pointercancel', up);
+    };
+    addEventListener('pointermove', move);
+    addEventListener('pointerup', up);
+    addEventListener('pointercancel', up);
   };
 
   return (

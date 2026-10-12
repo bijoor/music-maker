@@ -130,7 +130,7 @@ interface State {
   setMode(mode: Mode): void;
   /** Recording: add a drum hit or a note (held notes are written again with a longer length on release). */
   recordHit(trackId: string, slot: number, voice: string, step: number, group: string): void;
-  recordNote(trackId: string, slot: number, step: number, pitches: number[], len: number, group: string): void;
+  recordNote(trackId: string, slot: number, step: number, pitches: number[], len: number, group: string, bend?: { bend: number; time: number }): void;
   undo(): void;
   redo(): void;
   setMessage(message: string | null): void;
@@ -526,10 +526,12 @@ export const useStore = create<State>((set, get) => {
       if (!c.hits[voice]) c.hits[voice] = Array(c.bars * STEPS_PER_BAR).fill(0);
       c.hits[voice][step] = 1;
     }), group),
-  recordNote: (trackId, slot, step, pitches, len, group) =>
+  recordNote: (trackId, slot, step, pitches, len, group, bend) =>
     edit(onTrack(trackId, (t) => {
       const c = t.slots[slot];
-      if (c?.kind === 'melodic') writeNote(c, step, pitches, len, t.poly);
+      if (c?.kind !== 'melodic') return;
+      writeNote(c, step, pitches, len, t.poly);
+      if (bend) setBendIn(c, step, bend.bend, bend.time);
     }), group),
   undo: () =>
     set((s) => {

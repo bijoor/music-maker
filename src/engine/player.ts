@@ -185,15 +185,19 @@ export function preview(trackId: string, value: Record<string, unknown>, steps =
   engine.initEngine().then(() => { go(); warm(); });
 }
 
-/** Like preview, but the note sounds until the returned function is called (a key held with sustain on). */
-export function hold(trackId: string, value: Record<string, unknown>): () => void {
+/**
+ * Like preview, but the note can be stopped early with the returned function: it sounds until then (a key held
+ * with sustain on) or for `steps` sixteenths at most.
+ */
+export function hold(trackId: string, value: Record<string, unknown>, steps?: number): () => void {
   const track = useStore.getState().song.tracks.find((t) => t.id === trackId);
   if (!track) return () => {};
   const v = { ...value, ...fxValues(track) };
-  if (engine.isReady()) return engine.hold(v);
+  const max = () => (steps ? steps / 16 / engine.getCps() : 30);
+  if (engine.isReady()) return engine.hold(v, max());
   let release: (() => void) | null = null, up = false;
   engine.unlockAudio();
-  engine.initEngine().then(() => { release = engine.hold(v); if (up) release(); warm(); });
+  engine.initEngine().then(() => { release = engine.hold(v, max()); if (up) release(); warm(); });
   return () => { up = true; release?.(); };
 }
 
