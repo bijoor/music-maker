@@ -122,8 +122,19 @@ export function drum(trackId: string, voice: string, sound: Record<string, unkno
 }
 
 let pedal = false;
-/** Held notes still sounding (sustain on), by pointer: call to let go. */
+/** Notes sounding while their key is held, by pointer: call to let go. */
 const sounding = new Map<number, () => void>();
+/** Notes whose key was let go while the sustain pedal was down: they ring until it comes up. */
+let pedalled: (() => void)[] = [];
+const pedalDown = () => pedal || state().sustain;
+/** Let go of every note the pedal was holding. */
+function liftPedal() {
+  const notes = pedalled;
+  pedalled = [];
+  notes.forEach((stop) => stop());
+}
+// The Sustain button coming off lifts the pedal too.
+useStore.subscribe((s, prev) => { if (prev.sustain && !s.sustain && !pedal) liftPedal(); });
 /**
  * What each pointer is playing, so sliding the finger can glide its pitch: `base` is the pitch the note started
  * on, `landed` the key it is nearest now (what gets recorded).
@@ -132,19 +143,20 @@ const voices = new Map<number, { trackId: string; base: number; landed: number; 
 /** Seconds a recorded slide takes to reach the new note when played back. */
 export const SLIDE_TIME = 0.12;
 /** Hold the sustain pedal (Shift on a computer keyboard) while it is down. */
-export const setPedal = (down: boolean) => { pedal = down; };
+export const setPedal = (down: boolean) => {
+  pedal = down;
+  if (!down && !state().sustain) liftPedal();
+};
 
 /** A key or chord pressed with pointer `pointerId`, struck at velocity `vel`; `timeStamp` is the pointer event's timestamp. */
 export function press(trackId: string, pitches: number[], pointerId: number, chord = false, timeStamp?: number, vel = 1) {
   const track = trackOf(trackId);
   if (!track) return;
-  const st = state();
-  // The preview lasts as long as the note that will be written: chord length for chords in Edit, else the "New notes" length.
-  // With sustain on (button or Shift held), the note sounds for as long as the key is held.
-  const sustained = st.sustain || pedal;
-  const previewLen = chord && st.mode === 'edit' ? st.chordLen : st.noteLen;
-  const notes = pitches.map((p) => player.hold(trackId, { note: p, s: track.sound ?? 'piano', ...velocityValue(vel) }, sustained ? undefined : previewLen));
-  if (sustained) sounding.set(pointerId, () => notes.forEach((n) => n.stop()));
+  // Like a real instrument (and GeoShred), a note sounds for as long as its key is held; with the sustain pedal
+  // down (Sustain button or Shift) it keeps ringing after the key is let go, until the pedal comes up.
+  const notes = pitches.map((p) => player.hold(trackId, { note: p, s: track.sound ?? 'piano', ...velocityValue(vel) }));
+  sounding.get(pointerId)?.();
+  sounding.set(pointerId, () => notes.forEach((n) => n.stop()));
   voices.set(pointerId, { trackId, base: pitches[0], landed: pitches[0], struck: vel, vel, notes });
   recordPress(track, pitches, pointerId, chord, timeStamp, vel);
 }
@@ -180,10 +192,11 @@ function finishHeld(pointerId: number, timeStamp?: number) {
   if (len > Math.max(q, noteLen)) state().recordNote(h.trackId, h.slot, h.step, h.pitches, len, h.group, h.bend, h.vel);
 }
 
-/** The key or chord was released: stop a sustained note, and set the recorded note's length to how long it was held. */
+/** The key or chord was released: stop its notes (or leave them to the pedal), and set the recorded note's length to how long it was held. */
 export function release(pointerId: number, timeStamp?: number) {
-  sounding.get(pointerId)?.();
+  const stop = sounding.get(pointerId);
   sounding.delete(pointerId);
+  if (stop) { if (pedalDown()) pedalled.push(stop); else stop(); }
   voices.delete(pointerId);
   finishHeld(pointerId, timeStamp);
 }

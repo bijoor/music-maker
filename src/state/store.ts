@@ -42,7 +42,7 @@ interface State {
   keyboard: KeyboardLayout;
   keyboardOctaves: 1 | 2;
   scaleLock: boolean;
-  /** Sustain: notes played on the keys sound for as long as they are held (in Record, the written length follows the hold too). */
+  /** Sustain pedal: notes keep ringing after their key is let go, until it is turned off (keys always sound while held). */
   sustain: boolean;
   /**
    * Velocity from where a key or pad is struck (per device): 1 = louder towards the bottom edge, -1 = louder
