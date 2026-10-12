@@ -2,7 +2,9 @@
 // compared with what that track is playing. A change of active clips launches on the next bar; anything else
 // (notes, sound, effects, mute, solo) applies immediately.
 import { fxValues, generate, sections, type GeneratedSong } from '../codegen/generate';
-import type { Song } from '../model/types';
+import type { Song, Track } from '../model/types';
+import { KIT, voiceBank } from '../model/kit';
+import { findScale, scalePitch } from '../model/scales';
 import { useStore } from '../state/store';
 import * as engine from './strudel';
 
@@ -63,6 +65,7 @@ export async function play(opts: { countIn?: boolean } = {}) {
   engine.unlockAudio();
   store.setTransport('loading');
   await engine.initEngine();
+  warm();
   engine.setBpm(useStore.getState().song.bpm);
   playing.clear();
   let start = 0;
@@ -145,6 +148,35 @@ export function playhead(trackId: string): { slot: number; step: number } | null
  * Play a drum or note immediately (pads, keys, grid taps) exactly as the clip will play it: the same sound,
  * the same effect controls as the generated code, and a length of `steps` sixteenth notes at the song's tempo.
  */
+/** The sounds a track can play from its pads or keys (melodic: the keyboard's range, scale pitches included). */
+function trackSounds(song: Song, track: Track): engine.SoundRef[] {
+  if (track.kind === 'drums') {
+    return KIT.map(({ voice }) => {
+      const [s, n] = voice.split(':');
+      return { s, n: n ? +n : 0, bank: voiceBank(track.bank ?? 'RolandTR909', voice) };
+    });
+  }
+  const scale = findScale(song), notes: number[] = [];
+  for (let o = track.octave - 1; o <= track.octave + 2; o++) {
+    for (let i = 0; i < 12; i++) notes.push((o + 1) * 12 + i);
+    for (const d of scale.degrees) notes.push(scalePitch(scale, song.key.tonic, d, o));
+  }
+  return [{ s: track.sound ?? 'piano', notes }];
+}
+
+/** Load every track's sounds ahead of play, so a newly chosen instrument sounds on its first note. */
+export function warm(song = useStore.getState().song) {
+  if (!engine.isReady()) return;
+  song.tracks.forEach((t) => engine.preload(trackSounds(song, t)));
+}
+// Re-warm when a track's instrument, kit or octave (or the scale) changes.
+const soundKey = (song: Song) => JSON.stringify([song.key, song.customScales, song.tracks.map((t) => [t.kind, t.sound, t.bank, t.octave])]);
+let warmedKey = '';
+useStore.subscribe((st) => {
+  const k = soundKey(st.song);
+  if (k !== warmedKey && engine.isReady()) { warmedKey = k; warm(st.song); }
+});
+
 export function preview(trackId: string, value: Record<string, unknown>, steps = 1) {
   const track = useStore.getState().song.tracks.find((t) => t.id === trackId);
   if (!track) return;
@@ -153,7 +185,7 @@ export function preview(trackId: string, value: Record<string, unknown>, steps =
   // Once loaded, sound right away in the tap handler; nothing else may run first.
   if (engine.isReady()) { go(); return; }
   engine.unlockAudio();
-  engine.initEngine().then(go);
+  engine.initEngine().then(() => { go(); warm(); });
 }
 
 // Note edits (e.g. while recording) are batched so a burst of notes compiles once, keeping taps responsive.

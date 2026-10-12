@@ -41,6 +41,8 @@ interface State {
   keyboard: KeyboardLayout;
   keyboardOctaves: 1 | 2;
   scaleLock: boolean;
+  /** Sustain pedal: notes played on the keys ring for a bar (what you hear only; recorded lengths are unchanged). */
+  sustain: boolean;
   /** Length in steps of notes added in the grid, and of chords placed there. */
   noteLen: number;
   chordLen: number;
@@ -121,7 +123,7 @@ interface State {
   resetClipCode(trackId: string, slot: number): void;
   resetPlayCode(trackId: string): void;
   toggleCode(): void;
-  setUi(ui: Partial<Pick<State, 'soundOpen' | 'sargam' | 'keyboard' | 'keyboardOctaves' | 'scaleLock' | 'noteLen' | 'chordLen' | 'cursor' | 'quantize' | 'countIn' | 'metronome'>>): void;
+  setUi(ui: Partial<Pick<State, 'soundOpen' | 'sargam' | 'keyboard' | 'keyboardOctaves' | 'scaleLock' | 'sustain' | 'noteLen' | 'chordLen' | 'cursor' | 'quantize' | 'countIn' | 'metronome'>>): void;
   setMode(mode: Mode): void;
   /** Recording: add a drum hit or a note (held notes are written again with a longer length on release). */
   recordHit(trackId: string, slot: number, voice: string, step: number, group: string): void;
@@ -233,6 +235,7 @@ export const useStore = create<State>((set, get) => {
   keyboard: 'piano',
   keyboardOctaves: 2,
   scaleLock: true,
+  sustain: false,
   noteLen: 2,
   chordLen: 8,
   cursor: 0,

@@ -3,7 +3,7 @@
 // Drums mirror the pad layout:      Keys (piano layout, "musical typing"):
 //   1 2 3 4   crash ride ohat hat      W E   T Y U   O P      black keys
 //   Q W E R   toms ×3, rim            A S D F G H J K L ;     white keys from C
-//   A S = kick   D F = snare          Z / X octave down / up, 1–8 chords
+//   A S = kick   D F = snare          Z / X octave down / up, 1–8 chords, hold Shift to sustain
 //   T Y G H B N  the smaller pads     Scale pads: A S D F … the scale from Sa, Q W E R … the octave above
 
 export const DRUM_KEYS: Record<string, string> = {

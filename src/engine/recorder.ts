@@ -115,13 +115,18 @@ export function drum(trackId: string, voice: string, sound: Record<string, unkno
   if (at) s.recordHit(trackId, slot, voice, at.step, at.group);
 }
 
+let pedal = false;
+/** Hold the sustain pedal (Shift on a computer keyboard) while it is down. */
+export const setPedal = (down: boolean) => { pedal = down; };
+
 /** A key or chord pressed with pointer `pointerId`; `timeStamp` is the pointer event's timestamp. */
 export function press(trackId: string, pitches: number[], pointerId: number, chord = false, timeStamp?: number) {
   const track = trackOf(trackId);
   if (!track) return;
   const st = state();
   // The preview lasts as long as the note that will be written: chord length for chords in Edit, else the "New notes" length.
-  const previewLen = chord && st.mode === 'edit' ? st.chordLen : st.noteLen;
+  // With the sustain pedal down (button or Shift), the note rings for a bar instead.
+  const previewLen = st.sustain || pedal ? 16 : chord && st.mode === 'edit' ? st.chordLen : st.noteLen;
   pitches.forEach((p) => player.preview(trackId, { note: p, s: track.sound ?? 'piano' }, previewLen));
   const s = state();
   if (s.mode === 'perform') return;

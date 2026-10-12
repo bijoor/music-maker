@@ -55,6 +55,14 @@ function resolve(key: string): { voice?: string; pitches?: number[]; chord?: boo
   return { pitches: [pitch], selector: `[data-pitch="${pitch}"]` };
 }
 
+/** The instrument key pressed, by position, so Shift (the sustain pedal) does not turn 1 into ! or ; into :. */
+function keyOf(e: KeyboardEvent): string {
+  if (e.code.startsWith('Key')) return e.code.slice(3).toLowerCase();
+  if (e.code.startsWith('Digit')) return e.code.slice(5);
+  if (e.code === 'Semicolon') return ';';
+  return e.key.toLowerCase();
+}
+
 const held = new Map<string, { id: number; selector: string }>();
 let nextId = 10_000;
 
@@ -65,8 +73,9 @@ export function useKeyboard() {
     const down = (e: KeyboardEvent) => {
       if (typing(e.target) || e.altKey) return;
       if (command(e)) { e.preventDefault(); return; }
+      if (e.key === 'Shift') { recorder.setPedal(true); return; }
       if (e.metaKey || e.ctrlKey || e.repeat) return;
-      const key = e.key.toLowerCase();
+      const key = keyOf(e);
       const s = useStore.getState(), track = selectedTrack(s);
       if (track?.kind === 'melodic' && (key === 'z' || key === 'x')) { s.setOctave(track.id, track.octave + (key === 'x' ? 1 : -1)); e.preventDefault(); return; }
       if (held.has(key)) return;
@@ -84,13 +93,15 @@ export function useKeyboard() {
       }
     };
     const up = (e: KeyboardEvent) => {
-      const h = held.get(e.key.toLowerCase());
+      if (e.key === 'Shift') { recorder.setPedal(false); return; }
+      const key = keyOf(e);
+      const h = held.get(key);
       if (!h) return;
-      held.delete(e.key.toLowerCase());
+      held.delete(key);
       flash(h.selector, false);
       recorder.release(h.id, e.timeStamp);
     };
-    const blur = () => { held.forEach((h) => { flash(h.selector, false); recorder.release(h.id); }); held.clear(); };
+    const blur = () => { recorder.setPedal(false); held.forEach((h) => { flash(h.selector, false); recorder.release(h.id); }); held.clear(); };
     addEventListener('keydown', down);
     addEventListener('keyup', up);
     addEventListener('blur', blur);

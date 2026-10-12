@@ -8,8 +8,8 @@
 import { evalScope, evaluate as evaluateCode, repl, Pattern, TimeSpan, silence, stack } from '@strudel/core';
 import { transpiler } from '@strudel/transpiler';
 import { webaudioOutput } from '@strudel/webaudio';
-import { registerSoundfonts } from '@strudel/soundfonts';
-import { getAudioContext, initAudio, registerSynthSounds, samples, superdough, soundMap } from 'superdough';
+import { getFontBufferSource, registerSoundfonts } from '@strudel/soundfonts';
+import { getAudioContext, getLoadedBuffer, getSampleInfo, initAudio, loadBuffer, registerSynthSounds, samples, superdough, soundMap } from 'superdough';
 
 export type Location = { start: number; end: number };
 export type HapEvent = {
@@ -261,11 +261,52 @@ export function stop() {
   clockMap = null;
 }
 
-/** Play a sound immediately, bypassing the pattern scheduler (pads and keys). */
+/** What superdough registered for a sound: sample files (`samples`) or soundfont presets (`fonts`). */
+function soundData(s: string, bank?: string): { samples?: string[] | Record<string, string[]>; fonts?: string[] } | undefined {
+  return (soundMap.get() as Record<string, any>)[(bank ? `${bank}_${s}` : s).toLowerCase()]?.data;
+}
+
+/** The sample file a value plays, keyed as superdough's buffer cache keys it; null for synths and soundfonts. */
+function sampleUrl(value: Record<string, unknown>): string | null {
+  const samples = soundData(String(value.s ?? ''), value.bank as string | undefined)?.samples;
+  return samples ? String(getSampleInfo(value, samples).url).replace('#', '%23') : null;
+}
+
+/**
+ * Play a sound immediately, bypassing the pattern scheduler (pads and keys). A sample that is not loaded yet
+ * would be dropped by superdough, so it plays as soon as it arrives instead (unless that takes too long).
+ */
 export function trigger(value: Record<string, unknown>, duration = 0.25) {
   const ac = getAudioContext();
   // Pass the tempo too: tempo-synced effects such as delay then match the pattern.
-  return superdough(value, ac.currentTime + 0.005, duration, r?.scheduler.cps ?? 0.5);
+  const play = () => superdough(value, ac.currentTime + 0.005, duration, r?.scheduler.cps ?? 0.5);
+  const url = sampleUrl(value);
+  if (!url || getLoadedBuffer(url)) return play();
+  const asked = performance.now();
+  return loadBuffer(url, ac).then(() => (performance.now() - asked < 1500 ? play() : undefined), () => undefined);
+}
+
+export type SoundRef = { s: string; bank?: string; n?: number; notes?: number[] };
+
+/**
+ * Fetch and decode sounds before they are played, so the first press of a pad or key (and the first bar of a
+ * new instrument) is heard. Sample maps load the file for `n`, or every note of a note-keyed instrument;
+ * soundfonts load the zones for `notes`. Safe to call repeatedly: loads are cached.
+ */
+export function preload(sounds: SoundRef[]) {
+  if (!loaded) return;
+  const ac = getAudioContext();
+  for (const x of sounds) {
+    const data = soundData(x.s, x.bank);
+    if (data?.samples) {
+      const b = data.samples;
+      const urls = Array.isArray(b) ? [b[(((x.n ?? 0) % b.length) + b.length) % b.length]] : Object.values(b).flat();
+      urls.forEach((u) => loadBuffer(u, ac).catch(() => {}));
+    } else if (data?.fonts) {
+      const font = data.fonts[(x.n ?? 0) % data.fonts.length];
+      new Set((x.notes ?? []).map(Math.round)).forEach((note) => getFontBufferSource(font, { note }, ac).catch(() => {}));
+    }
+  }
 }
 
 export function audioInfo() {
