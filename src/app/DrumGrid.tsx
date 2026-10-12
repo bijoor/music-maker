@@ -1,6 +1,6 @@
 import { useEffect, useRef, type ReactNode } from 'react';
 import { useStore } from '../state/store';
-import { KIT, voiceBank } from '../model/kit';
+import { kitVoices, voiceSound } from '../model/kit';
 import { STEPS_PER_BAR, type DrumClip, type Track } from '../model/types';
 import { findToken } from '../codegen/generate';
 import * as engine from '../engine/strudel';
@@ -61,10 +61,7 @@ export default function DrumGrid({ track, clip, slot, bar }: Props) {
 
   const tap = (voice: string, step: number) => {
     const on = toggleHit(track.id, slot, voice, step);
-    if (on) {
-      const [s, n] = voice.split(':');
-      player.preview(track.id, { s, ...(n ? { n: +n } : {}), bank: voiceBank(track.bank ?? 'RolandTR909', voice) });
-    }
+    if (on) player.preview(track.id, voiceSound(track.bank, voice));
   };
 
   return (
@@ -75,7 +72,7 @@ export default function DrumGrid({ track, clip, slot, bar }: Props) {
           {s % 4 === 0 ? s / 4 + 1 : '·'}
         </button>
       ))}
-      {KIT.map((k) => (
+      {kitVoices(track.bank).map((k) => (
         <Row key={k.voice} name={k.name} aux={!k.main}>
           {Array.from({ length: STEPS_PER_BAR }, (_, s) => {
             const step = off + s;

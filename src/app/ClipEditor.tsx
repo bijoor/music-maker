@@ -1,10 +1,11 @@
 import { lazy, Suspense, useState } from 'react';
 import { selectedClip, selectedTrack, useStore } from '../state/store';
-import { BANKS } from '../model/kit';
-import { DRUM_PRESETS } from '../model/presets';
+import { BANKS, INDIAN_KITS } from '../model/kit';
+import { drumPresets } from '../model/presets';
 import type { Bars } from '../model/types';
 import DrumGrid from './DrumGrid';
 import Calibrate from './Calibrate';
+import About from './About';
 import SoundStrip from './SoundStrip';
 import SongsPanel from './SongsPanel';
 import SongEditor from './SongEditor';
@@ -31,6 +32,7 @@ export default function ClipEditor() {
   if (state.panel === 'scale') return <ScaleEditor />;
   if (state.panel === 'calibrate') return <Calibrate />;
   if (state.panel === 'songs') return <SongsPanel />;
+  if (state.panel === 'about') return <About />;
   if (!track) return <section className="card editor empty-editor"><p className="muted-text">Add a track to start.</p></section>;
   const slot = selected.slot;
   const bar = clip ? Math.min(page, clip.bars - 1) : 0;
@@ -53,8 +55,9 @@ export default function ClipEditor() {
           </>
         )}
         {track.kind === 'drums' && (
-          <select aria-label="Drum machine" value={track.bank} onChange={(e) => setBank(track.id, e.target.value)}>
-            {BANKS.map((b) => <option key={b} value={b}>{b.replace('Roland', '')}</option>)}
+          <select aria-label="Drum kit" value={track.bank} onChange={(e) => setBank(track.id, e.target.value)}>
+            <optgroup label="Drum machines">{BANKS.map((b) => <option key={b} value={b}>{b.replace('Roland', '')}</option>)}</optgroup>
+            <optgroup label="Indian">{Object.keys(INDIAN_KITS).map((b) => <option key={b} value={b}>{b}</option>)}</optgroup>
           </select>
         )}
         {track.kind === 'melodic' && (
@@ -68,7 +71,7 @@ export default function ClipEditor() {
         {track.kind === 'drums' && clip && slot !== null && view === 'grid' && (
           <select aria-label="Load a preset into this bar" value="" onChange={(e) => e.target.value && applyPreset(track.id, slot, e.target.value, bar)}>
             <option value="">Preset…</option>
-            {Object.keys(DRUM_PRESETS).map((n) => <option key={n}>{n}</option>)}
+            {Object.keys(drumPresets(track.bank)).map((n) => <option key={n}>{n}</option>)}
           </select>
         )}
         {state.mode === 'record' && (

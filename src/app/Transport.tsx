@@ -90,6 +90,7 @@ export default function Transport() {
             <button role="menuitem" onClick={() => { connect(); setMore(false); }}>{midi.state === 'connected' ? `MIDI: ${midi.devices.join(', ')}` : midi.state === 'waiting' ? 'MIDI on (no device yet)' : 'Connect a MIDI keyboard or pads'}</button>
             <button role="menuitemcheckbox" aria-checked={sargam} onClick={() => { setUi({ sargam: !sargam }); setMore(false); }}>{sargam ? '✓ ' : ''}Sa Re Ga labels</button>
             <button role="menuitem" onClick={() => { if (confirmReset) { resetSong(); setMore(false); setConfirmReset(false); } else setConfirmReset(true); }}>{confirmReset ? 'Tap again: your clips will be replaced' : 'Reset to the demo song'}</button>
+            <button role="menuitem" onClick={() => { setPanel('about'); setMore(false); }}>About and sound credits</button>
             <a role="menuitem" className="menulink" href="#lab" onClick={() => setMore(false)}>Phase 0 tests</a>
           </div>
         )}

@@ -3,7 +3,8 @@ import { create } from 'zustand';
 import { produce } from 'immer';
 import { demoSong } from '../model/demo';
 import { emptyHits, newId, track as makeTrack, defaultFx } from '../model/build';
-import { DRUM_PRESETS, INSTRUMENTS } from '../model/presets';
+import { drumPresets, INSTRUMENTS } from '../model/presets';
+import { kitHas } from '../model/kit';
 import { MAX_SLOTS, STEPS_PER_BAR, type Bars, type Clip, type Fx, type ScaleDef, type Song, type Track } from '../model/types';
 import { toggleNote as toggleNoteIn, writeNote } from '../model/clipEdit';
 import { findScale, scalePitch } from '../model/scales';
@@ -14,7 +15,7 @@ export type EditorView = 'grid' | 'play';
 export type KeyboardLayout = 'piano' | 'pads';
 export type Mode = 'perform' | 'record' | 'edit';
 /** What the bottom area shows instead of the clip editor (no pop-up dialogs). */
-export type Panel = 'code' | 'song' | 'scale' | 'calibrate' | 'songs';
+export type Panel = 'code' | 'song' | 'scale' | 'calibrate' | 'songs' | 'about';
 
 interface Selection {
   trackId: string;
@@ -392,10 +393,10 @@ export const useStore = create<State>((set, get) => {
   applyPreset: (trackId, slot, preset, bar) =>
     edit(onTrack(trackId, (t) => {
       const c = t.slots[slot];
-      const p = DRUM_PRESETS[preset];
+      const p = drumPresets(t.bank)[preset];
       if (c?.kind !== 'drums' || !p) return;
       const off = bar * STEPS_PER_BAR;
-      for (const v in c.hits) for (let i = 0; i < STEPS_PER_BAR; i++) c.hits[v][off + i] = 0;
+      for (const v in c.hits) if (kitHas(t.bank, v)) for (let i = 0; i < STEPS_PER_BAR; i++) c.hits[v][off + i] = 0;
       for (const v in p) {
         if (!c.hits[v]) c.hits[v] = Array(c.bars * STEPS_PER_BAR).fill(0);
         p[v].forEach((i) => (c.hits[v][off + i] = 1));

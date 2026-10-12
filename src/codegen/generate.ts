@@ -3,7 +3,7 @@
 // Each track becomes a fenced block: one `const` per clip and a labelled line that plays the active clips.
 // Every note or hit token is recorded with its character range, so played events (which carry the range of
 // the token that produced them) can be mapped back to a clip and step for highlighting.
-import { voiceBank, voiceOrder } from '../model/kit';
+import { isIndianKit, kitHas, kitVoices, voiceBank, voiceOrder } from '../model/kit';
 import { pitchToCode } from '../model/notes';
 import { findScale } from '../model/scales';
 import { STEPS_PER_BAR, type Clip, type DrumClip, type MelodicClip, type Song, type Track } from '../model/types';
@@ -139,9 +139,11 @@ function writeBars(w: Writer, bars: number, writeBar: (bar: number) => void) {
 
 function writeDrumClip(w: Writer, track: Track, clip: DrumClip) {
   const bank = track.bank ?? 'RolandTR909';
-  const used = Object.keys(clip.hits).filter((v) => clip.hits[v].some((x) => x > 0)).sort((a, b) => voiceOrder(a) - voiceOrder(b));
+  // Hits of another kit (kept from before the track changed kit) are not played.
+  const order = isIndianKit(bank) ? (v: string) => kitVoices(bank).findIndex((k) => k.voice === v) : voiceOrder;
+  const used = Object.keys(clip.hits).filter((v) => kitHas(bank, v) && clip.hits[v].some((x) => x > 0)).sort((a, b) => order(a) - order(b));
   if (!used.length) { w.add('silence'); return; }
-  // Voices the machine lacks are borrowed from another machine, as a separate layer.
+  // Voices the machine lacks are borrowed from another machine, as a separate layer. Indian kits have no machine.
   const groups = new Map<string, string[]>();
   for (const v of used) {
     const b = voiceBank(bank, v);
@@ -153,7 +155,7 @@ function writeDrumClip(w: Writer, track: Track, clip: DrumClip) {
     if (i) w.add(', ');
     w.add('s("');
     writeBars(w, clip.bars, (bar) => writeDrumBar(w, clip, voices, bar));
-    w.add(`").bank("${b}")`);
+    w.add(b ? `").bank("${b}")` : '")');
   });
   if (many) w.add(')');
 }

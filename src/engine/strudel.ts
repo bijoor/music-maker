@@ -107,7 +107,12 @@ export function initEngine(): Promise<void> {
         samples(`${SAMPLE_BASE}/tidal-drum-machines.json`),
         samples(`${SAMPLE_BASE}/piano.json`),
         samples(`${SAMPLE_BASE}/Dirt-Samples.json`),
-      ]);
+        samples(`${SAMPLE_BASE}/vcsl.json`),
+        samples(`${SAMPLE_BASE}/mridangam.json`),
+        // Our own maps (scripts/make-sample-maps.mjs): tonejs-instruments and tabla strokes.
+        samples(`${import.meta.env.BASE_URL}samples/tonejs.json`),
+        samples(`${import.meta.env.BASE_URL}samples/tabla.json`),
+      ].map((p) => p.catch((e: unknown) => console.warn('[engine] sample map not loaded', e))));
       r = repl({ defaultOutput: output, getTime: () => ac.currentTime, transpiler });
       loaded = true;
     })();
@@ -290,21 +295,21 @@ export type SoundRef = { s: string; bank?: string; n?: number; notes?: number[] 
 
 /**
  * Fetch and decode sounds before they are played, so the first press of a pad or key (and the first bar of a
- * new instrument) is heard. Sample maps load the file for `n`, or every note of a note-keyed instrument;
- * soundfonts load the zones for `notes`. Safe to call repeatedly: loads are cached.
+ * new instrument) is heard: for sample maps, the file each of `notes` (or just `n`) plays; for soundfonts, the
+ * zones for `notes`. Safe to call repeatedly: loads are cached.
  */
 export function preload(sounds: SoundRef[]) {
   if (!loaded) return;
   const ac = getAudioContext();
   for (const x of sounds) {
     const data = soundData(x.s, x.bank);
+    const notes = x.notes?.length ? [...new Set(x.notes.map(Math.round))] : [undefined];
     if (data?.samples) {
-      const b = data.samples;
-      const urls = Array.isArray(b) ? [b[(((x.n ?? 0) % b.length) + b.length) % b.length]] : Object.values(b).flat();
-      urls.forEach((u) => loadBuffer(u, ac).catch(() => {}));
+      new Set(notes.map((note) => String(getSampleInfo({ s: x.s, n: x.n ?? 0, note }, data.samples).url)))
+        .forEach((u) => loadBuffer(u, ac).catch(() => {}));
     } else if (data?.fonts) {
       const font = data.fonts[(x.n ?? 0) % data.fonts.length];
-      new Set((x.notes ?? []).map(Math.round)).forEach((note) => getFontBufferSource(font, { note }, ac).catch(() => {}));
+      notes.forEach((note) => note !== undefined && getFontBufferSource(font, { note }, ac).catch(() => {}));
     }
   }
 }

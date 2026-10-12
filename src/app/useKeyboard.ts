@@ -1,10 +1,10 @@
 import { useEffect } from 'react';
 import { selectedTrack, useStore } from '../state/store';
-import { voiceBank } from '../model/kit';
+import { voiceSound } from '../model/kit';
 import { findScale, inScale, scaleChords, scalePitch, tonicPc } from '../model/scales';
 import * as recorder from '../engine/recorder';
 import * as player from '../engine/player';
-import { CHORD_KEYS, DRUM_KEYS, PAD_ROWS, PIANO_KEYS } from './keymap';
+import { CHORD_KEYS, PAD_ROWS, PIANO_KEYS, drumKey } from './keymap';
 
 /** Keys that are not instrument keys: Space play/stop, Cmd/Ctrl+Z undo, Shift+Cmd/Ctrl+Z redo, Escape closes a panel. */
 function command(e: KeyboardEvent): boolean {
@@ -27,7 +27,7 @@ function resolve(key: string): { voice?: string; pitches?: number[]; chord?: boo
   const track = selectedTrack(s);
   if (!track) return null;
   if (track.kind === 'drums') {
-    const voice = DRUM_KEYS[key];
+    const voice = drumKey(track.bank, key);
     return voice ? { voice, selector: `[data-voice="${voice}"]` } : null;
   }
   const scale = findScale(s.song), tonic = s.song.key.tonic;
@@ -86,8 +86,7 @@ export function useKeyboard() {
       held.set(key, { id, selector: hit.selector });
       flash(hit.selector, true);
       if (hit.voice) {
-        const [sound, n] = hit.voice.split(':');
-        recorder.drum(track.id, hit.voice, { s: sound, ...(n ? { n: +n } : {}), bank: voiceBank(track.bank ?? 'RolandTR909', hit.voice) }, e.timeStamp);
+        recorder.drum(track.id, hit.voice, voiceSound(track.bank, hit.voice), e.timeStamp);
       } else if (hit.pitches) {
         recorder.press(track.id, hit.pitches, id, hit.chord, e.timeStamp);
       }

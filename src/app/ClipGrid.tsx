@@ -4,12 +4,16 @@ import { isAudible } from '../codegen/generate';
 import { INSTRUMENTS } from '../model/presets';
 import { MAX_SLOTS, STEPS_PER_BAR, type Bars, type Clip, type Track } from '../model/types';
 import * as player from '../engine/player';
-import { KIT } from '../model/kit';
+import { kitVoices } from '../model/kit';
 import ScenesBar from './ScenesBar';
 
 const LETTERS = 'ABCDEFGH';
 // Thumbnail rows: cymbals and hats on top, snares and hand percussion in the middle, kicks and toms at the bottom.
-const LANE: Record<string, number> = { cr: 0, rd: 0, oh: 0, hh: 0, tb: 0, sh: 0, rim: 1, sd: 1, 'sd:1': 1, cp: 1, cb: 1, bd: 2, 'bd:1': 2, lt: 2, mt: 2, ht: 2 };
+const LANE: Record<string, number> = {
+  cr: 0, rd: 0, oh: 0, hh: 0, tb: 0, sh: 0, rim: 1, sd: 1, 'sd:1': 1, cp: 1, cb: 1, bd: 2, 'bd:1': 2, lt: 2, mt: 2, ht: 2,
+  nam: 0, dhin: 0, chaapu: 0, ardha: 0, na: 0, ta: 1, ki: 1, dhi: 1, ka: 1, thom: 2, tha: 2, dhum: 2, gumki: 2,
+  tabla_na: 0, tabla_tin: 0, tabla_ta: 1, tabla_tun: 1, tabla_ke: 1, tabla_ge: 2, tabla_ghe: 2,
+};
 
 export default function ClipGrid() {
   const { song, pendingAt, transport, selected, mode, chain, songMode, setChain, tapSlot, createClip, select, stopTrack, stopAllTracks, toggleMute, toggleSolo, setGain, addSlot, addTrack } = useStore();
@@ -114,7 +118,7 @@ function TrackRow({ track: t, audible, queued, songMode, selectedSlot, onSlot, o
               {clip ? (
                 <>
                   <span className="cn">{clip.name}<span>{clip.bars} bar{clip.bars > 1 ? 's' : ''}{active && queued ? ' · next bar' : ''}</span></span>
-                  <Thumb clip={clip} />
+                  <Thumb clip={clip} bank={t.bank} />
                   {order.length > 0 && <span className="order" aria-label={`Plays ${order.join(', ')} in the chain`}>{order.join(' ')}</span>}
                   {clip.code && <span className="badge" title="Hand-written code">code</span>}
                   <span className="prog" />
@@ -130,11 +134,11 @@ function TrackRow({ track: t, audible, queued, songMode, selectedSlot, onSlot, o
   );
 }
 
-function Thumb({ clip }: { clip: Clip }) {
+function Thumb({ clip, bank }: { clip: Clip; bank?: string }) {
   const n = clip.bars * STEPS_PER_BAR;
   if (clip.kind === 'drums') {
     const marks: [number, number][] = [];
-    for (const k of KIT) clip.hits[k.voice]?.forEach((v, s) => v > 0 && marks.push([s, LANE[k.voice] ?? 1]));
+    for (const k of kitVoices(bank)) clip.hits[k.voice]?.forEach((v, s) => v > 0 && marks.push([s, LANE[k.voice] ?? 1]));
     return <span className="thumb drum" style={{ gridTemplateColumns: `repeat(${n}, 1fr)` }}>{marks.map(([s, l], i) => <i key={i} style={{ gridColumn: s + 1, gridRow: l + 1 }} />)}</span>;
   }
   return (

@@ -3,7 +3,7 @@
 // (notes, sound, effects, mute, solo) applies immediately.
 import { fxValues, generate, sections, type GeneratedSong } from '../codegen/generate';
 import type { Song, Track } from '../model/types';
-import { KIT, voiceBank } from '../model/kit';
+import { kitVoices, voiceSound } from '../model/kit';
 import { findScale, scalePitch } from '../model/scales';
 import { useStore } from '../state/store';
 import * as engine from './strudel';
@@ -151,10 +151,7 @@ export function playhead(trackId: string): { slot: number; step: number } | null
 /** The sounds a track can play from its pads or keys (melodic: the keyboard's range, scale pitches included). */
 function trackSounds(song: Song, track: Track): engine.SoundRef[] {
   if (track.kind === 'drums') {
-    return KIT.map(({ voice }) => {
-      const [s, n] = voice.split(':');
-      return { s, n: n ? +n : 0, bank: voiceBank(track.bank ?? 'RolandTR909', voice) };
-    });
+    return kitVoices(track.bank).map(({ voice }) => voiceSound(track.bank, voice) as engine.SoundRef);
   }
   const scale = findScale(song), notes: number[] = [];
   for (let o = track.octave - 1; o <= track.octave + 2; o++) {

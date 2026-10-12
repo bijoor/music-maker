@@ -5,7 +5,7 @@ import * as acorn from 'acorn';
 import * as core from '@strudel/core';
 import * as mini from '@strudel/mini';
 import { transpiler } from '@strudel/transpiler';
-import { voiceBank } from '../model/kit';
+import { kitHas, voiceBank } from '../model/kit';
 import { emptyHits, newId } from '../model/build';
 import { MAX_SLOTS, STEPS_PER_BAR, type Bars, type Clip, type Fx, type Note, type Song, type Track } from '../model/types';
 import { clipCode, trackLabels } from './generate';
@@ -55,8 +55,9 @@ function toDrums(evs: Ev[], bars: Bars, track: Track): Record<string, number[]> 
   for (const e of evs.filter((x) => x.b < bars)) {
     if (!onGrid(e.b) || Object.keys(e.v).some((k) => !['s', 'n', 'bank'].includes(k)) || typeof e.v.s !== 'string') return null;
     const voice = e.v.n ? `${e.v.s}:${e.v.n}` : e.v.s;
-    // The grid always writes the track's machine (or the machine it borrows from); anything else would change the sound.
-    if (e.v.bank !== voiceBank(bank, voice)) return null;
+    // The grid always writes the track's machine (or the machine it borrows from, or none for an Indian kit);
+    // anything else would change the sound.
+    if (!kitHas(bank, voice) || (e.v.bank ?? '') !== voiceBank(bank, voice)) return null;
     hits[voice] ??= Array(bars * STEPS_PER_BAR).fill(0);
     hits[voice][Math.round(e.b * STEPS_PER_BAR)] = 1;
   }

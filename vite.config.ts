@@ -34,10 +34,10 @@ export default defineConfig(({ command }) => ({
         // Control the page from the first visit, so sounds are cached right away (updates still wait for the prompt).
         clientsClaim: true,
         maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
-        // Samples and soundfonts come from GitHub; keep every one used so the app works offline afterwards.
+        // Samples and soundfonts come from GitHub and jsDelivr; keep every one used so the app works offline afterwards.
         runtimeCaching: [
           {
-            urlPattern: ({ url }) => /(^|\.)githubusercontent\.com$|\.github\.io$/.test(url.hostname),
+            urlPattern: ({ url }) => /(^|\.)githubusercontent\.com$|\.github\.io$|^cdn\.jsdelivr\.net$/.test(url.hostname),
             handler: 'CacheFirst',
             options: { cacheName: 'sounds', expiration: { maxEntries: 4000, maxAgeSeconds: YEAR }, cacheableResponse: { statuses: [0, 200] } },
           },

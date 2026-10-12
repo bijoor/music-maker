@@ -5,16 +5,39 @@
 //   Q W E R   toms ×3, rim            A S D F G H J K L ;     white keys from C
 //   A S = kick   D F = snare          Z / X octave down / up, 1–8 chords, hold Shift to sustain
 //   T Y G H B N  the smaller pads     Scale pads: A S D F … the scale from Sa, Q W E R … the octave above
+// (Mridangam and tabla pads use the same blocks, in their pad order.)
 
-export const DRUM_KEYS: Record<string, string> = {
-  '1': 'cr', '2': 'rd', '3': 'oh', '4': 'hh',
-  q: 'ht', w: 'mt', e: 'lt', r: 'rim',
-  a: 'bd', s: 'bd', d: 'sd', f: 'sd',
-  t: 'cp', y: 'cb', g: 'tb', h: 'sh', b: 'bd:1', n: 'sd:1',
+import { kitVoices } from '../model/kit';
+
+const MAIN_ROWS = ['1234', 'qwer', 'asdf'];
+const AUX_KEYS = 'tyghbn';
+
+/**
+ * Keys for a kit's pads, laid out like the pads: main pads take the 4×3 block 1–4 / Q–R / A–F in order (a wide
+ * pad takes two or four keys), smaller pads take T Y G H B N. Returns key → voice and voice → hint.
+ */
+function layout(bank?: string) {
+  const keys: Record<string, string> = {}, hints: Record<string, string> = {};
+  const cells = MAIN_ROWS.join('').split('');
+  let c = 0, a = 0;
+  for (const k of kitVoices(bank)) {
+    const mine = k.main ? cells.slice(c, (c += k.span ?? 1)) : AUX_KEYS[a++] ? [AUX_KEYS[a - 1]] : [];
+    mine.forEach((key) => (keys[key] = k.voice));
+    if (mine.length) hints[k.voice] = (mine.length > 2 ? `${mine[0]}–${mine[mine.length - 1]}` : mine.join(' ')).toUpperCase();
+  }
+  return { keys, hints };
+}
+const layouts = new Map<string, ReturnType<typeof layout>>();
+const kitLayout = (bank?: string) => {
+  const id = bank ?? '';
+  if (!layouts.has(id)) layouts.set(id, layout(bank));
+  return layouts.get(id)!;
 };
 
-/** The key shown on each drum pad. */
-export const DRUM_HINT: Record<string, string> = { cr: '1', rd: '2', oh: '3', hh: '4', ht: 'Q', mt: 'W', lt: 'E', rim: 'R', bd: 'A S', sd: 'D F', cp: 'T', cb: 'Y', tb: 'G', sh: 'H', 'bd:1': 'B', 'sd:1': 'N' };
+/** The pad a computer key plays on a track with this kit or drum machine. */
+export const drumKey = (bank: string | undefined, key: string): string | undefined => kitLayout(bank).keys[key];
+/** The key shown on a pad. */
+export const drumHint = (bank: string | undefined, voice: string): string => kitLayout(bank).hints[voice] ?? '';
 
 /** Piano layout: semitones above the C of the track's octave. */
 export const PIANO_KEYS: Record<string, number> = {

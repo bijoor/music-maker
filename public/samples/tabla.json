@@ -1,0 +1,42 @@
+{
+ "_base": "https://cdn.jsdelivr.net/gh/tidalcycles/Dirt-Samples@master/tabla/",
+ "tabla_ge": [
+  "000_bass_flick1.wav",
+  "001_bass_flick2.wav"
+ ],
+ "tabla_ghe": [
+  "002_bass_lick1.wav"
+ ],
+ "tabla_ke": [
+  "003_dead_hit1.wav",
+  "004_dead_hit2.wav",
+  "005_dead_hit3.wav"
+ ],
+ "tabla_ta": [
+  "006_d_sharp_hit.wav"
+ ],
+ "tabla_tin": [
+  "007_hi_flick1.wav",
+  "008_hi_flick2.wav"
+ ],
+ "tabla_na": [
+  "009_hi_hit1.wav",
+  "010_hi_hit10.wav",
+  "011_hi_hit2.wav",
+  "012_hi_hit3.wav",
+  "013_hi_hit4.wav",
+  "014_hi_hit5.wav",
+  "015_hi_hit6.wav",
+  "016_hi_hit7.wav",
+  "017_hi_hit8.wav",
+  "018_hi_hit9.wav"
+ ],
+ "tabla_tun": [
+  "019_lower1_hit.wav",
+  "020_lower2_hit.wav",
+  "021_lower3_hit.wav",
+  "022_lower4_hit.wav",
+  "023_lower5_hit.wav",
+  "024_lower6_hit.wav"
+ ]
+}
