@@ -191,6 +191,17 @@ export function edit(track: string, pattern: any, period?: number) {
   return s.at;
 }
 
+/** Where `track` is in its current clip or chain: bars since it started, modulo its period. Null if silent. */
+export function position(track: string): { bars: number; period: number } | null {
+  if (!started()) return null;
+  const now = r.scheduler.now();
+  let cur: Segment | undefined;
+  for (const s of tracks.get(track) ?? []) if (s.at <= now) cur = s;
+  if (!cur || cur.raw === silence) return null;
+  const rel = cur.shift ? now - cur.at : now;
+  return { bars: ((rel % cur.period) + cur.period) % cur.period, period: cur.period };
+}
+
 export const nextBar = () => (started() ? Math.ceil(horizon()) : 0);
 export const cycleNow = () => (started() ? r.scheduler.now() : 0);
 export const isStarted = started;

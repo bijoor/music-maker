@@ -4,6 +4,7 @@ import { useStore } from '../state/store';
 import * as engine from '../engine/strudel';
 import Transport from './Transport';
 import ClipGrid from './ClipGrid';
+import ClipEditor from './ClipEditor';
 import CodePanel from './CodePanel';
 
 export default function App() {
@@ -13,6 +14,7 @@ export default function App() {
     <div className="app">
       <Transport />
       <ClipGrid />
+      <ClipEditor />
       {codeOpen && <CodePanel />}
     </div>
   );

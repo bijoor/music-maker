@@ -2,7 +2,7 @@
 
 A loop-based music maker for iPad that writes [Strudel](https://strudel.cc) code as you play. Build short clips with drum pads, a keyboard and step grids, launch them on the bar line, and read or edit the generated code when you want to.
 
-Status: **Phase 1** — song model, Strudel code generator with tests, and a first screen: play/stop, tempo, key and scale, a clip grid that launches clips on the bar line, and the generated code with notes lighting up as they play. The Phase 0 test page is at `#lab`.
+Status: **Phase 2** — clip grid (up to 8 slots per track, launch and stop on the bar line, volume, mute, solo, add tracks) and the drum editor: a grid with one row per sound, 16 finger-sized pads, presets and borrowed sounds. The song autosaves in the browser. The Phase 0 test page is at `#lab`.
 
 ## Run it
 

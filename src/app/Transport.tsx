@@ -5,7 +5,7 @@ import * as engine from '../engine/strudel';
 import * as player from '../engine/player';
 
 export default function Transport() {
-  const { song, transport, codeOpen, setBpm, setTonic, setScale, toggleCode } = useStore();
+  const { song, transport, codeOpen, setBpm, setTonic, setScale, toggleCode, resetSong } = useStore();
   const barRef = useRef<HTMLElement>(null);
   const dotsRef = useRef<HTMLSpanElement>(null);
 
@@ -60,6 +60,7 @@ export default function Transport() {
         {song.customScales.length > 0 && <optgroup label="My scales">{group('Custom')}</optgroup>}
       </select>
       <span className="spacer" />
+      <button className="btn sm" onClick={() => { if (confirm('Replace your song with the demo song? Your current clips will be lost.')) resetSong(); }}>Reset demo</button>
       <a className="btn sm" href="#lab">Tests</a>
       <button className={`btn${codeOpen ? ' on' : ''}`} aria-pressed={codeOpen} onClick={toggleCode}>Code</button>
     </header>

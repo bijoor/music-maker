@@ -1,7 +1,7 @@
 // Keeps the Strudel engine in step with the song: whenever the song changes, each track's generated code is
 // compared with what that track is playing. A change of active clips launches on the next bar; anything else
 // (notes, sound, effects, mute, solo) applies immediately.
-import { generate, type GeneratedSong } from '../codegen/generate';
+import { generate, sections, type GeneratedSong } from '../codegen/generate';
 import type { Song } from '../model/types';
 import { useStore } from '../state/store';
 import * as engine from './strudel';
@@ -70,6 +70,33 @@ export function stop() {
 }
 
 export const generated = () => latest;
+
+/** The slot a track is playing right now and the step within that clip (fractional), or null when silent. */
+export function playhead(trackId: string): { slot: number; step: number } | null {
+  const pos = engine.position(trackId);
+  const track = useStore.getState().song.tracks.find((t) => t.id === trackId);
+  if (!pos || !track) return null;
+  let start = 0;
+  for (const sec of sections(track)) {
+    if (pos.bars < start + sec.bars) {
+      const clip = track.slots[sec.slot]!;
+      return { slot: sec.slot, step: ((pos.bars - start) % clip.bars) * 16 };
+    }
+    start += sec.bars;
+  }
+  return null;
+}
+
+/** Play a drum or note immediately (pads and keys), with the track's sound and effects. */
+export function preview(trackId: string, value: Record<string, unknown>) {
+  const track = useStore.getState().song.tracks.find((t) => t.id === trackId);
+  if (!track) return;
+  engine.unlockAudio();
+  engine.initEngine().then(() => {
+    const f = track.fx;
+    engine.trigger({ ...value, gain: f.gain, pan: f.pan, ...(f.lpf ? { lpf: f.lpf } : {}), ...(f.room ? { room: f.room } : {}) });
+  });
+}
 
 // Follow song changes while playing.
 useStore.subscribe((state, prev) => {
