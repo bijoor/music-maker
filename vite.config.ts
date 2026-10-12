@@ -31,6 +31,8 @@ export default defineConfig(({ command }) => ({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
+        // Control the page from the first visit, so sounds are cached right away (updates still wait for the prompt).
+        clientsClaim: true,
         maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
         // Samples and soundfonts come from GitHub; keep every one used so the app works offline afterwards.
         runtimeCaching: [
