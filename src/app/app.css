@@ -50,7 +50,7 @@ select { padding: 6px 8px; min-height: 36px; border: 1px solid var(--line); bord
 
 /* Clip launcher */
 .app { grid-template-rows: auto auto minmax(0, 1fr); }
-.launcher { display: grid; grid-template-rows: auto minmax(0, 1fr); max-height: 38vh; overflow: hidden; position: relative; }
+.launcher { display: grid; grid-template-rows: auto auto minmax(0, 1fr); max-height: 38vh; overflow: hidden; position: relative; }
 .lhead { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
 .lhead h2 { font-family: var(--display); font-size: 15px; margin: 0; }
 select.sm { min-height: 30px; padding: 3px 6px; font-size: 13px; }
@@ -255,4 +255,30 @@ select.sm { min-height: 30px; padding: 3px 6px; font-size: 13px; }
   .ehead { gap: 6px; }
   .ehead h2 span, .wide-only { display: none; }
   .seg button { padding: 5px 9px; }
+}
+
+/* Scenes and song */
+.scenes { display: flex; align-items: center; gap: 8px; padding: 5px 10px; border-bottom: 1px solid var(--line); min-width: 0; }
+.scenes .lbl { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+.scene-list { display: flex; gap: 6px; align-items: center; overflow-x: auto; min-width: 0; }
+.scene { border: 1px solid var(--line); background: var(--panel-2); border-radius: 99px; padding: 5px 14px; min-height: 32px; white-space: nowrap; font-weight: 600; font-size: 13px; }
+.scene.now { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.song-pos { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.clip .order { position: absolute; top: 3px; right: 6px; font-size: 10px; font-weight: 700; background: var(--fg); color: var(--bg); border-radius: 99px; padding: 0 5px; }
+.clip .prog { display: none; }
+.clip.playing .prog, .clip.live .prog { display: block; }
+.clip.live:not(.playing) { box-shadow: inset 0 0 0 2px var(--tc); }
+.clip.live:not(.playing) .prog { background: var(--tc); }
+.dialog.wide { width: min(760px, 100%); }
+.song-steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.song-step { display: flex; align-items: center; gap: 8px; }
+.song-step .num { width: 22px; text-align: right; color: var(--muted); font-variant-numeric: tabular-nums; }
+.song-step select { flex: 1; min-width: 0; }
+.check { display: flex; gap: 8px; align-items: center; font-size: 14px; }
+@media (max-height: 760px) and (min-width: 901px) {
+  .launcher { max-height: 43vh; }
+  .lrow { min-height: 42px; }
+  .clip { min-height: 40px; padding-block: 4px 5px; gap: 3px; }
+  .lrows { gap: 5px; padding-block: 5px; }
+  .scenes, .lhead { padding-block: 4px; }
 }

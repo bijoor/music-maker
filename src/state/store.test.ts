@@ -6,7 +6,7 @@ import { generate } from '../codegen/generate';
 const st = () => useStore.getState();
 const drums = () => st().song.tracks[0];
 
-beforeEach(() => useStore.setState({ song: demoSong() }));
+beforeEach(() => useStore.setState({ song: demoSong(), chain: false, songMode: false, past: [], future: [] }));
 
 describe('clip editing', () => {
   it('creates a clip in an empty slot, selects it, and fills it from a preset', () => {
@@ -93,5 +93,47 @@ describe('recording and undo', () => {
     st().undo();
     expect(drums().active).toEqual([1]);
     expect(st().song.tracks[1].mute).toBe(true);
+  });
+});
+
+describe('chains, scenes and song', () => {
+  it('chains slots in turn when chain mode is on', () => {
+    st().setChain(true);
+    st().stopTrack('t1');
+    st().tapSlot('t1', 0); st().tapSlot('t1', 0); st().tapSlot('t1', 0); st().tapSlot('t1', 2);
+    expect(drums().active).toEqual([0, 0, 0, 2]);
+    st().setChain(false);
+    st().tapSlot('t1', 1);
+    expect(drums().active).toEqual([1]);
+  });
+
+  it('saves a scene and launches it; tracks the scene does not name keep playing', () => {
+    st().saveScene('Verse', false); // drums A, bass A, keys A (lead silent, not included)
+    const verse = st().song.scenes[0];
+    expect(Object.keys(verse.active).sort()).toEqual(['t1', 't2', 't3']);
+    st().tapSlot('t1', 1);
+    st().tapSlot('t4', 0);
+    st().launchScene(verse.id);
+    expect(drums().active).toEqual([0]);
+    expect(st().song.tracks[3].active).toEqual([0]); // lead keeps playing
+    st().saveScene('All', true);
+    expect(st().song.scenes[1].active.t4).toEqual([0]);
+  });
+
+  it('edits the song arrangement and leaves song mode when it becomes empty', () => {
+    st().saveScene('A', true);
+    const id = st().song.scenes[0].id;
+    st().addSongStep(id, 4);
+    st().addSongStep(id);
+    st().setSongStep(1, { bars: 100 });
+    expect(st().song.arrangement.map((x) => x.bars)).toEqual([4, 64]);
+    st().moveSongStep(1, -1);
+    expect(st().song.arrangement.map((x) => x.bars)).toEqual([64, 4]);
+    st().setSongMode(true);
+    expect(st().songMode).toBe(true);
+    st().removeSongStep(0); st().removeSongStep(0);
+    expect(st().songMode).toBe(false);
+    st().deleteScene(id);
+    expect(st().song.scenes).toEqual([]);
   });
 });

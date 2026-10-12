@@ -44,6 +44,10 @@ interface State {
   quantize: number;
   countIn: boolean;
   metronome: boolean;
+  /** Chain mode: tapping a slot adds it to the track's sequence instead of playing it alone. */
+  chain: boolean;
+  /** Play the song arrangement instead of the clips each track has active. */
+  songMode: boolean;
   /** This device's calibrated recording delay in ms (positive: taps register late). Saved per device. */
   recordOffsetMs: number;
   /** Undo history of the song's content (launches, mute and volume are not undone). */
@@ -102,6 +106,19 @@ interface State {
   redo(): void;
   setMessage(message: string | null): void;
   setRecordOffset(ms: number): void;
+
+  // Chains, scenes, song
+  setChain(on: boolean): void;
+  saveScene(name: string, includeSilent: boolean): void;
+  launchScene(sceneId: string): void;
+  updateScene(sceneId: string, includeSilent: boolean): void;
+  renameScene(sceneId: string, name: string): void;
+  deleteScene(sceneId: string): void;
+  setSongMode(on: boolean): void;
+  addSongStep(sceneId: string, bars?: number): void;
+  setSongStep(index: number, change: { sceneId?: string; bars?: number }): void;
+  moveSongStep(index: number, by: number): void;
+  removeSongStep(index: number): void;
   setTransport(t: TransportState): void;
   setPending(trackId: string, at: number | null): void;
 }
@@ -124,6 +141,13 @@ const newClip = (t: Track, bars: Bars): Clip => {
 };
 
 const initial = loadSong() ?? demoSong();
+
+/** What every track is playing now; silent tracks are included as [] (the scene then stops them) if asked. */
+function captureScene(song: Song, includeSilent: boolean): Record<string, number[]> {
+  const out: Record<string, number[]> = {};
+  for (const t of song.tracks) if (t.active.length || includeSilent) out[t.id] = [...t.active];
+  return out;
+}
 
 /** Keep what is playing and the mix as they are now when undoing content: undo should not launch or mute anything. */
 function keepLive(target: Song, current: Song): Song {
@@ -169,6 +193,8 @@ export const useStore = create<State>((set, get) => {
   countIn: true,
   metronome: false,
   recordOffsetMs: loadNumber('recordOffsetMs', 0),
+  chain: false,
+  songMode: false,
   past: [],
   future: [],
   historyGroup: null,
@@ -184,7 +210,7 @@ export const useStore = create<State>((set, get) => {
     }),
   resetSong: () => {
     const song = demoSong();
-    set({ song, selected: { trackId: song.tracks[0].id, slot: 0 }, page: 0, past: [], future: [], historyGroup: null });
+    set({ song, songMode: false, selected: { trackId: song.tracks[0].id, slot: 0 }, page: 0, past: [], future: [], historyGroup: null });
   },
 
   addTrack: (i) => {
@@ -220,8 +246,12 @@ export const useStore = create<State>((set, get) => {
   setOctave: (trackId, octave) => set(onTrack(trackId, (t) => { t.octave = Math.min(6, Math.max(1, octave)); })),
 
   tapSlot: (trackId, slot) => {
+    const chain = get().chain;
+    if (get().songMode) set({ songMode: false });
     set(onTrack(trackId, (t) => {
       if (!t.slots[slot]) return;
+      // Chain: add the slot to the track's sequence (A, A, A, C…). Otherwise play it alone, or stop it.
+      if (chain) { t.active = [...t.active, slot]; return; }
       const alone = t.active.length === 1 && t.active[0] === slot;
       t.active = alone ? [] : [slot];
     }));
@@ -333,6 +363,69 @@ export const useStore = create<State>((set, get) => {
 
   setMode: (mode) => set({ mode }),
   setMessage: (message) => set({ message }),
+  setChain: (chain) => set({ chain }),
+  saveScene: (name, includeSilent) =>
+    edit((s) => ({
+      song: produce(s.song, (song) => {
+        song.scenes.push({ id: newId('s'), name: name.trim() || `Scene ${song.scenes.length + 1}`, active: captureScene(song, includeSilent) });
+      }),
+    })),
+  launchScene: (sceneId) =>
+    set((s) => {
+      const scene = s.song.scenes.find((x) => x.id === sceneId);
+      if (!scene) return {};
+      // Tracks the scene names switch at the next bar; the others keep playing.
+      return {
+        songMode: false,
+        song: produce(s.song, (song) => {
+          for (const t of song.tracks) {
+            const act = scene.active[t.id];
+            if (act) t.active = act.filter((i) => t.slots[i]);
+          }
+        }),
+      };
+    }),
+  updateScene: (sceneId, includeSilent) =>
+    edit((s) => ({
+      song: produce(s.song, (song) => {
+        const scene = song.scenes.find((x) => x.id === sceneId);
+        if (scene) scene.active = captureScene(song, includeSilent);
+      }),
+    })),
+  renameScene: (sceneId, name) =>
+    edit((s) => ({ song: produce(s.song, (song) => { const sc = song.scenes.find((x) => x.id === sceneId); if (sc && name.trim()) sc.name = name.trim(); }) })),
+  deleteScene: (sceneId) =>
+    edit((s) => ({
+      song: produce(s.song, (song) => {
+        song.scenes = song.scenes.filter((x) => x.id !== sceneId);
+        song.arrangement = song.arrangement.filter((st) => st.sceneId !== sceneId);
+      }),
+    })),
+  setSongMode: (songMode) => set((s) => ({ songMode: songMode && s.song.arrangement.length > 0 })),
+  addSongStep: (sceneId, bars = 8) => edit((s) => ({ song: produce(s.song, (song) => { song.arrangement.push({ sceneId, bars }); }) })),
+  setSongStep: (index, change) =>
+    edit((s) => ({
+      song: produce(s.song, (song) => {
+        const st = song.arrangement[index];
+        if (!st) return;
+        if (change.sceneId) st.sceneId = change.sceneId;
+        if (change.bars !== undefined) st.bars = Math.max(1, Math.min(64, Math.round(change.bars)));
+      }),
+    })),
+  moveSongStep: (index, by) =>
+    edit((s) => ({
+      song: produce(s.song, (song) => {
+        const to = index + by;
+        if (to < 0 || to >= song.arrangement.length) return;
+        const [st] = song.arrangement.splice(index, 1);
+        song.arrangement.splice(to, 0, st);
+      }),
+    })),
+  removeSongStep: (index) =>
+    set((s) => {
+      const song = produce(s.song, (d) => { d.arrangement.splice(index, 1); });
+      return { song, songMode: s.songMode && song.arrangement.length > 0, past: [...s.past.slice(-49), s.song], future: [], historyGroup: null };
+    }),
   setRecordOffset: (ms) => {
     const v = Math.round(Math.max(-200, Math.min(300, ms)));
     saveNumber('recordOffsetMs', v);

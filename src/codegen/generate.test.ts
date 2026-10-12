@@ -148,6 +148,27 @@ describe('generated code', () => {
     expect(fx).toEqual(fxValues(song.tracks[1]));
   });
 
+  it('plays the song arrangement, carrying clips over when a scene does not name a track', async () => {
+    const song = demoSong();
+    song.scenes = [
+      { id: 'v', name: 'Verse', active: { t1: [0], t2: [0], t3: [] } },
+      { id: 'c', name: 'Chorus', active: { t1: [1, 1, 1, 2], t3: [1] } }, // bass not named: keeps Root
+    ];
+    song.arrangement = [{ sceneId: 'v', bars: 4 }, { sceneId: 'c', bars: 8 }];
+    const g = generate(song, { songMode: true });
+    expect(g.code).toContain('// song: Verse 4, Chorus 8 (bars)');
+    expect(g.code).toContain('drums: arrange([4, drums_A], [8, arrange([3, drums_B], [1, drums_C])]).room(.15)');
+    expect(g.code).toContain('bass: bass_A.lpf(900).gain(.9)'); // same clip all song: no arrange needed
+    expect(g.code).toContain('keys: arrange([4, silence], [8, keys_B]).room(.4).gain(.7)');
+    expect(g.tracks[0].period).toBe(12);
+    // The chorus chain restarts at the chorus: bars 4–6 busy hats, bar 7 the fill (crash), and again from bar 8.
+    const haps = onsets(await compile(g.tracks[0].runnable), 12);
+    const crashBars = [...new Set(haps.filter((h: any) => h.value.s === 'cr').map((h: any) => Math.floor(h.whole.begin.valueOf())))];
+    expect(crashBars).toEqual([7, 11]);
+    // Without song mode, tracks play their own active clips.
+    expect(generate(song).code).toContain('drums: drums_A.room(.15)');
+  });
+
   it('writes silence for a track with nothing active', () => {
     expect(generate(demoSong()).code).toContain('lead: silence\n');
   });

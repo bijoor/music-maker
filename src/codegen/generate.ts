@@ -26,8 +26,18 @@ export interface TrackCode {
   runnable: string;
   /** False when nothing plays: muted, silenced by solo, or no active clip. */
   audible: boolean;
-  /** Bars before the active sequence repeats. */
+  /** Bars before the active sequence (or the song) repeats. */
   period: number;
+  /**
+   * What the track plays, without effects: 'silence', 'drums_A', 'arrange(...)'. When it changes the player
+   * launches the change on the next bar; any other change (notes, effects, mute) applies at once.
+   */
+  playKey: string;
+}
+
+export interface GenerateOptions {
+  /** Play the song arrangement instead of each track's active clips. */
+  songMode?: boolean;
 }
 
 export interface GeneratedSong {
@@ -185,9 +195,9 @@ function writeClip(w: Writer, track: Track, clip: Clip) {
 // ---------- Tracks and song ----------
 
 /** Consecutive repeats of the same slot merge: [A, A, A, C] → [[3 bars, A], [1 bar, C]]. */
-export function sections(track: Track): { slot: number; bars: number }[] {
+export function sections(track: Track, active: number[] = track.active): { slot: number; bars: number }[] {
   const out: { slot: number; bars: number }[] = [];
-  for (const slot of track.active) {
+  for (const slot of active) {
     const clip = track.slots[slot];
     if (!clip) continue;
     const last = out[out.length - 1];
@@ -227,7 +237,38 @@ export function isAudible(song: Song, track: Track) {
   return !track.mute && (!anySolo || track.solo);
 }
 
-function writeTrack(w: Writer, song: Song, track: Track, label: string): TrackCode {
+/** A track's chain of slots as an expression, e.g. 'drums_A' or 'arrange([3, drums_A], [1, drums_C])'. */
+function chainExpr(track: Track, label: string, active: number[]): { expr: string; bars: number } {
+  const secs = sections(track, active);
+  const bars = secs.reduce((a, x) => a + x.bars, 0);
+  if (!secs.length) return { expr: 'silence', bars: 0 };
+  if (secs.length === 1) return { expr: clipVar(label, secs[0].slot), bars };
+  return { expr: `arrange(${secs.map((x) => `[${x.bars}, ${clipVar(label, x.slot)}]`).join(', ')})`, bars };
+}
+
+/**
+ * The song arrangement for one track: each step plays the clips its scene names for this track (or keeps the
+ * previous step's clips when the scene does not name it), for that step's number of bars.
+ */
+export function songPlan(song: Song, track: Track, label: string): { expr: string; bars: number } {
+  const steps: { expr: string; bars: number }[] = [];
+  let active: number[] = [];
+  for (const step of song.arrangement) {
+    const scene = song.scenes.find((x) => x.id === step.sceneId);
+    if (!scene || step.bars < 1) continue;
+    if (scene.active[track.id]) active = scene.active[track.id];
+    const { expr } = chainExpr(track, label, active);
+    const last = steps[steps.length - 1];
+    if (last && last.expr === expr) last.bars += step.bars;
+    else steps.push({ expr, bars: step.bars });
+  }
+  const bars = steps.reduce((a, x) => a + x.bars, 0);
+  if (!steps.length || steps.every((x) => x.expr === 'silence')) return { expr: 'silence', bars: Math.max(bars, 1) };
+  if (steps.length === 1) return { expr: steps[0].expr, bars };
+  return { expr: `arrange(${steps.map((x) => `[${x.bars}, ${x.expr}]`).join(', ')})`, bars };
+}
+
+function writeTrack(w: Writer, song: Song, track: Track, label: string, opts: GenerateOptions): TrackCode {
   const start = w.text.length;
   w.add(`// @track id=${track.id} name="${track.name.replace(/"/g, "'")}"\n`);
   track.slots.forEach((clip, i) => {
@@ -236,35 +277,37 @@ function writeTrack(w: Writer, song: Song, track: Track, label: string): TrackCo
     writeClip(w, track, clip);
     w.add(`  // ${clip.name} · ${clip.bars} bar${clip.bars > 1 ? 's' : ''}\n`);
   });
-  const secs = sections(track);
-  const audible = isAudible(song, track) && secs.length > 0;
+  const plan = opts.songMode && song.arrangement.length ? songPlan(song, track, label) : chainExpr(track, label, track.active);
+  const audible = isAudible(song, track) && plan.expr !== 'silence';
   const shownLabel = `${isAudible(song, track) ? '' : '_'}${label}: `;
   const labelStart = w.text.length;
   w.add(shownLabel);
-  if (!secs.length) w.add('silence');
-  else if (secs.length === 1) w.add(clipVar(label, secs[0].slot));
-  else w.add(`arrange(${secs.map((s) => `[${s.bars}, ${clipVar(label, s.slot)}]`).join(', ')})`);
-  if (secs.length) writeFx(w, track);
+  w.add(plan.expr);
+  if (plan.expr !== 'silence') writeFx(w, track);
   w.add(`\n// @end ${track.id}`);
   const end = w.text.length;
   const block = w.text.slice(start, end);
   const rel = labelStart - start;
   const runnable = block.slice(0, rel) + ' '.repeat(shownLabel.length) + block.slice(rel + shownLabel.length);
-  return { trackId: track.id, label, start, end, runnable, audible, period: secs.reduce((a, s) => a + s.bars, 0) || 1 };
+  return { trackId: track.id, label, start, end, runnable, audible, period: plan.bars || 1, playKey: plan.expr };
 }
 
-export function generate(song: Song): GeneratedSong {
+export function generate(song: Song, opts: GenerateOptions = {}): GeneratedSong {
   const w = new Writer();
   const scale = findScale(song);
   w.add(`// @song name="${song.name.replace(/"/g, "'")}"\n`);
   w.add(`setcpm(${num(song.bpm)}/4)\n`);
   w.add(`// key: ${song.key.tonic} ${scale.name}\n`);
+  if (opts.songMode && song.arrangement.length) {
+    const names = song.arrangement.map((st) => `${song.scenes.find((x) => x.id === st.sceneId)?.name ?? '?'} ${st.bars}`).join(', ');
+    w.add(`// song: ${names} (bars)\n`);
+  }
   w.add('// @end song\n');
   const labels = trackLabels(song);
   const tracks: TrackCode[] = [];
   for (const t of song.tracks) {
     w.add('\n');
-    tracks.push(writeTrack(w, song, t, labels.get(t.id)!));
+    tracks.push(writeTrack(w, song, t, labels.get(t.id)!, opts));
     w.add('\n');
   }
   return { code: w.text, tracks, tokens: w.tokens };

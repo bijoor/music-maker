@@ -5,13 +5,14 @@ import { INSTRUMENTS } from '../model/presets';
 import { MAX_SLOTS, STEPS_PER_BAR, type Bars, type Clip, type Track } from '../model/types';
 import * as player from '../engine/player';
 import { KIT } from '../model/kit';
+import ScenesBar from './ScenesBar';
 
 const LETTERS = 'ABCDEFGH';
 // Thumbnail rows: cymbals and hats on top, snares and hand percussion in the middle, kicks and toms at the bottom.
 const LANE: Record<string, number> = { cr: 0, rd: 0, oh: 0, hh: 0, tb: 0, sh: 0, rim: 1, sd: 1, 'sd:1': 1, cp: 1, cb: 1, bd: 2, 'bd:1': 2, lt: 2, mt: 2, ht: 2 };
 
 export default function ClipGrid() {
-  const { song, pendingAt, transport, selected, mode, tapSlot, createClip, select, stopTrack, stopAllTracks, toggleMute, toggleSolo, setGain, addSlot, addTrack } = useStore();
+  const { song, pendingAt, transport, selected, mode, chain, songMode, setChain, tapSlot, createClip, select, stopTrack, stopAllTracks, toggleMute, toggleSolo, setGain, addSlot, addTrack } = useStore();
   const [newLen, setNewLen] = useState<Bars>(1);
   const [adding, setAdding] = useState(false);
   const rowsRef = useRef<HTMLDivElement>(null);
@@ -39,10 +40,12 @@ export default function ClipGrid() {
         <select id="newlen" className="sm" value={newLen} onChange={(e) => setNewLen(+e.target.value as Bars)}>
           {[1, 2, 4].map((n) => <option key={n} value={n}>{n} bar{n > 1 ? 's' : ''}</option>)}
         </select>
-        <span className="muted-text hint">{mode === 'edit' ? 'Edit: tap a clip to open it without playing it.' : mode === 'record' ? 'Record: tap a clip (or + for a new one), then play pads or keys.' : 'Tap a clip to play it from the next bar; tap again to stop.'}</span>
+        <button className={`btn sm${chain ? ' on' : ''}`} aria-pressed={chain} onClick={() => setChain(!chain)} title="Tap slots to add them to a track's sequence">Chain</button>
+        <span className="muted-text hint">{songMode ? 'Song mode: clips follow the song. Tap a clip or scene to take over.' : chain ? 'Chain: tap slots in the order to play them (e.g. A A A C). ■ clears.' : mode === 'edit' ? 'Edit: tap a clip to open it without playing it.' : mode === 'record' ? 'Record: tap a clip (or + for a new one), then play pads or keys.' : 'Tap a clip to play it from the next bar; tap again to stop.'}</span>
         <span className="spacer" />
         <button className="btn sm" onClick={stopAllTracks}>Stop all</button>
       </div>
+      <ScenesBar />
       <div className="lrows" ref={rowsRef} style={{ ['--cols' as string]: columns }}>
         {song.tracks.map((t) => (
           <TrackRow
@@ -50,6 +53,7 @@ export default function ClipGrid() {
             track={t}
             audible={isAudible(song, t)}
             queued={playing && pendingAt[t.id] !== undefined}
+            songMode={songMode}
             selectedSlot={selected.trackId === t.id ? selected.slot : undefined}
             onSlot={(i, clip) => {
               // Edit: a tap only selects. Perform: it launches. Record: an empty slot becomes a clip and launches too.
@@ -74,6 +78,7 @@ interface RowProps {
   track: Track;
   audible: boolean;
   queued: boolean;
+  songMode: boolean;
   selectedSlot: number | null | undefined;
   onSlot(i: number, clip: Clip | null): void;
   onSelect(): void;
@@ -84,7 +89,7 @@ interface RowProps {
   onAddSlot(): void;
 }
 
-function TrackRow({ track: t, audible, queued, selectedSlot, onSlot, onSelect, onStop, onMute, onSolo, onGain, onAddSlot }: RowProps) {
+function TrackRow({ track: t, audible, queued, songMode, selectedSlot, onSlot, onSelect, onStop, onMute, onSolo, onGain, onAddSlot }: RowProps) {
   return (
     <div className={`lrow${audible ? '' : ' silenced'}${selectedSlot !== undefined ? ' sel' : ''}`} style={{ ['--tc' as string]: t.color }}>
       <div className="thd" onClick={(e) => { if (!(e.target as HTMLElement).closest('input,button')) onSelect(); }}>
@@ -100,15 +105,18 @@ function TrackRow({ track: t, audible, queued, selectedSlot, onSlot, onSelect, o
       </div>
       <div className="slots">
         {t.slots.map((clip, i) => {
-          const active = t.active.includes(i);
+          // In song mode the song decides what plays; the live look comes from the playhead instead.
+          const active = !songMode && t.active.includes(i);
+          const order = !songMode && t.active.length > 1 ? t.active.flatMap((s, k) => (s === i ? [k + 1] : [])) : [];
           const cls = ['clip', clip ? '' : 'empty', active ? (queued ? 'queued' : 'playing') : '', selectedSlot === i ? 'selected' : ''].filter(Boolean).join(' ');
           return (
-            <button key={i} className={cls} aria-pressed={active} aria-label={clip ? `${clip.name}, slot ${LETTERS[i]}` : `New clip in slot ${LETTERS[i]}`} onClick={() => onSlot(i, clip)}>
+            <button key={i} className={cls} data-track={t.id} data-slot={i} aria-pressed={active} aria-label={clip ? `${clip.name}, slot ${LETTERS[i]}` : `New clip in slot ${LETTERS[i]}`} onClick={() => onSlot(i, clip)}>
               {clip ? (
                 <>
                   <span className="cn">{clip.name}<span>{clip.bars} bar{clip.bars > 1 ? 's' : ''}{active && queued ? ' · next bar' : ''}</span></span>
                   <Thumb clip={clip} />
-                  {active && <span className="prog" data-prog={`${t.id}:${i}`} />}
+                  {order.length > 0 && <span className="order" aria-label={`Plays ${order.join(', ')} in the chain`}>{order.join(' ')}</span>}
+                  <span className="prog" />
                 </>
               ) : '+'}
             </button>
@@ -135,7 +143,7 @@ function Thumb({ clip }: { clip: Clip }) {
   );
 }
 
-/** Moves the progress bar of every playing clip. */
+/** Moves the progress bar of the clip each track is playing, and marks it live (also in song mode). */
 function useProgress(ref: RefObject<HTMLDivElement | null>) {
   useEffect(() => {
     let raf = 0;
@@ -143,10 +151,12 @@ function useProgress(ref: RefObject<HTMLDivElement | null>) {
       const { song } = useStore.getState();
       for (const t of song.tracks) {
         const ph = player.playhead(t.id);
-        ref.current?.querySelectorAll<HTMLElement>(`[data-prog^="${t.id}:"]`).forEach((el) => {
-          const slot = +el.dataset.prog!.split(':')[1];
+        ref.current?.querySelectorAll<HTMLElement>(`.clip[data-track="${t.id}"]`).forEach((el) => {
+          const slot = +el.dataset.slot!;
           const clip = t.slots[slot];
-          el.style.setProperty('--pos', ph && ph.slot === slot && clip ? String(ph.step / (clip.bars * STEPS_PER_BAR)) : '0');
+          const live = !!ph && ph.slot === slot && !!clip;
+          el.classList.toggle('live', live);
+          el.style.setProperty('--pos', live ? String(ph!.step / (clip!.bars * STEPS_PER_BAR)) : '0');
         });
       }
       raf = requestAnimationFrame(tick);

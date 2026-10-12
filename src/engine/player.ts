@@ -9,8 +9,8 @@ import * as engine from './strudel';
 interface Playing {
   /** Code currently playing on the track ('' = silence). */
   code: string;
-  /** Active slots of the last launch. */
-  active: string;
+  /** What the track plays (see TrackCode.playKey); a change launches on the next bar. */
+  key: string;
 }
 
 const playing = new Map<string, Playing>();
@@ -27,23 +27,26 @@ async function compileCached(code: string) {
 const CLICK = 's("rim*4").bank("RolandTR909").gain("[.9 .45 .45 .45]")';
 
 async function apply(song: Song, notBefore = 0) {
-  const g = generate(song);
+  const g = generate(song, { songMode: useStore.getState().songMode });
   latest = g;
-  const { setPending } = useStore.getState();
+  // Compile everything first, then launch together, so all tracks that change switch on the same bar.
+  const work: { tc: (typeof g.tracks)[number]; code: string; pattern: unknown; launch: boolean }[] = [];
   for (const tc of g.tracks) {
-    const track = song.tracks.find((t) => t.id === tc.trackId)!;
     const code = tc.audible ? tc.runnable : '';
-    const active = track.active.join(',');
     const prev = playing.get(tc.trackId);
-    if (prev && prev.code === code && prev.active === active) continue;
+    if (prev && prev.code === code && prev.key === tc.playKey) continue;
     const pattern = code ? await compileCached(code) : engine.silence;
-    if (!prev || prev.active !== active) {
+    work.push({ tc, code, pattern, launch: !prev || prev.key !== tc.playKey });
+  }
+  const { setPending } = useStore.getState();
+  for (const { tc, code, pattern, launch } of work) {
+    if (launch) {
       const at = engine.launch(tc.trackId, pattern, { period: tc.period, notBefore });
       if (engine.isStarted() && at > engine.cycleNow()) setPending(tc.trackId, at);
     } else {
       engine.edit(tc.trackId, pattern, tc.period);
     }
-    playing.set(tc.trackId, { code, active });
+    playing.set(tc.trackId, { code, key: tc.playKey });
   }
 }
 
@@ -88,16 +91,50 @@ export function stop() {
 
 export const generated = () => latest;
 
+/** The arrangement step at a position (bars into the song) and the bars into that step. */
+function songStepAt(song: Song, bars: number): { index: number; into: number } | null {
+  let start = 0;
+  for (let i = 0; i < song.arrangement.length; i++) {
+    const st = song.arrangement[i];
+    if (!song.scenes.some((x) => x.id === st.sceneId) || st.bars < 1) continue;
+    if (bars < start + st.bars) return { index: i, into: bars - start };
+    start += st.bars;
+  }
+  return null;
+}
+
+/** The slots a track plays during an arrangement step (carried over from earlier steps when not named). */
+function activeAtStep(song: Song, trackId: string, index: number): number[] {
+  let active: number[] = [];
+  for (let i = 0; i <= index; i++) {
+    const scene = song.scenes.find((x) => x.id === song.arrangement[i].sceneId);
+    if (scene?.active[trackId]) active = scene.active[trackId];
+  }
+  return active;
+}
+
 /** The slot a track is playing right now and the step within that clip (fractional), or null when silent. */
 export function playhead(trackId: string): { slot: number; step: number } | null {
   const pos = engine.position(trackId);
-  const track = useStore.getState().song.tracks.find((t) => t.id === trackId);
+  const { song, songMode } = useStore.getState();
+  const track = song.tracks.find((t) => t.id === trackId);
   if (!pos || !track) return null;
+  let active = track.active, bars = pos.bars;
+  if (songMode) {
+    const at = songStepAt(song, pos.bars);
+    if (!at) return null;
+    active = activeAtStep(song, trackId, at.index);
+    bars = at.into;
+  }
+  const secs = sections(track, active);
+  const total = secs.reduce((a, x) => a + x.bars, 0);
+  if (!total) return null;
+  bars %= total;
   let start = 0;
-  for (const sec of sections(track)) {
-    if (pos.bars < start + sec.bars) {
+  for (const sec of secs) {
+    if (bars < start + sec.bars) {
       const clip = track.slots[sec.slot]!;
-      return { slot: sec.slot, step: ((pos.bars - start) % clip.bars) * 16 };
+      return { slot: sec.slot, step: ((bars - start) % clip.bars) * 16 };
     }
     start += sec.bars;
   }
@@ -128,10 +165,23 @@ const launchesChanged = (a: Song, b: Song) =>
 
 useStore.subscribe((state, prev) => {
   if (state.metronome !== prev.metronome && state.transport === 'playing') setMetronome(state.metronome);
-  if (state.song === prev.song) return;
+  if (state.song === prev.song && state.songMode === prev.songMode) return;
   if (state.song.bpm !== prev.song.bpm) engine.setBpm(state.song.bpm);
   if (state.transport !== 'playing') return;
   clearTimeout(pendingEdit);
-  if (launchesChanged(state.song, prev.song)) sync(state.song);
+  const songChanged = state.songMode && (state.song.arrangement !== prev.song.arrangement || state.song.scenes !== prev.song.scenes);
+  if (state.songMode !== prev.songMode || songChanged || launchesChanged(state.song, prev.song)) sync(state.song);
   else pendingEdit = setTimeout(() => sync(useStore.getState().song), 150);
 });
+
+/** In song mode: which arrangement step is playing and how far into it, from the heard position. */
+export function songPosition(): { index: number; bar: number; bars: number } | null {
+  const { songMode, song } = useStore.getState();
+  if (!songMode) return null;
+  for (const t of song.tracks) {
+    const pos = engine.position(t.id);
+    const at = pos && songStepAt(song, pos.bars);
+    if (at) return { index: at.index, bar: Math.floor(at.into), bars: song.arrangement[at.index].bars };
+  }
+  return null;
+}
