@@ -16,6 +16,10 @@
     color-scheme: dark;
   }
 }
+/* Nothing in the app is selectable text or has iOS's long-press callout (labels on keys and pads got selected
+   while playing); only places where you type are. */
+.app, .app * { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+.app input, .app textarea, .app [contenteditable], .app .cm-editor, .app .cm-editor * { -webkit-user-select: text; user-select: text; -webkit-touch-callout: default; }
 html, body, #root { height: 100%; }
 body { margin: 0; overflow: hidden; overscroll-behavior: none; background: var(--bg); color: var(--fg); font-family: var(--body); font-size: 14px; -webkit-tap-highlight-color: transparent; }
 button, select, input { font: inherit; color: inherit; }

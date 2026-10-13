@@ -40,6 +40,7 @@ export default function MelodicPlay({ track }: { track: Track }) {
   const play = (pitches: number[], e: PointerEvent<HTMLElement>, chord = false) => {
     const el = e.currentTarget;
     const id = e.pointerId;
+    getSelection()?.removeAllRanges(); // no text stays selected while playing
     // A finger whose lift never arrived (the same pointer id pressing again) is let go first.
     fingers.get(id)?.();
     const vel0 = strikeVelocity(e.clientY, el);

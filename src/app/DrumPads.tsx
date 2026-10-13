@@ -18,6 +18,7 @@ export default function DrumPads({ track }: { track: Track }) {
   // only left/right changes the volume.
   const hit = (k: KitVoice, e: PointerEvent<HTMLElement>) => {
     const el = e.currentTarget, id = e.pointerId, r = el.getBoundingClientRect();
+    getSelection()?.removeAllRanges(); // no text stays selected while playing
     const vel0 = strikeVelocity2D(e.clientX, e.clientY, el), x0 = e.clientX, y0 = e.clientY;
     const sound = recorder.drum(track.id, k.voice, voiceSound(track.bank, k.voice), e.timeStamp, vel0);
     el.classList.add('down');
