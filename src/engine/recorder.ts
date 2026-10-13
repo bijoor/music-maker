@@ -209,6 +209,17 @@ function finishHeld(pointerId: number, timeStamp?: number) {
   if (len > Math.max(q, noteLen)) state().recordNote(h.trackId, h.slot, h.step, h.pitches, len, h.group, h.bend, h.vel);
 }
 
+/**
+ * Let go of everything: every key still held (its recorded length is set as of now), every note ringing under the
+ * pedal, and every held sound in the engine. The safety net for a finger-up that never arrived.
+ */
+export function releaseAll() {
+  [...sounding.keys(), ...held.keys()].forEach((id) => release(id));
+  liftPedal();
+  voices.clear();
+  engine.releaseAll();
+}
+
 /** The key or chord was released: stop its notes (or leave them to the pedal), and set the recorded note's length to how long it was held. */
 export function release(pointerId: number, timeStamp?: number) {
   const stop = sounding.get(pointerId);

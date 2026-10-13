@@ -6,6 +6,7 @@ import Transport from './Transport';
 import ClipGrid from './ClipGrid';
 import ClipEditor from './ClipEditor';
 import { useKeyboard } from './useKeyboard';
+import { useNoteSafety } from './useNoteSafety';
 
 // Handy for checking timing from the browser console during development.
 if (import.meta.env.DEV) (window as unknown as { engine: typeof engine }).engine = engine;
@@ -15,6 +16,7 @@ export default function App() {
   const setMessage = useStore((s) => s.setMessage);
   usePendingClear();
   useKeyboard();
+  useNoteSafety();
   useEffect(() => {
     if (!message) return;
     const t = setTimeout(() => setMessage(null), 2200);

@@ -54,6 +54,8 @@ interface State {
   touchVelocity: number;
   /** Sliding: when the finger stops on a key, the pitch settles onto that key (per device; off = free bends). */
   pitchSnap: boolean;
+  /** Slides: movement smaller than this many pixels counts as the finger standing still (per device). */
+  slideStill: number;
   /** Slide: moving a held finger sideways glides the pitch; off, it plays each key it reaches (per device). */
   glide: boolean;
   /** Length in steps of notes added in the grid, and of chords placed there. */
@@ -158,6 +160,7 @@ interface State {
   setRecordOffset(ms: number): void;
   setTouchVelocity(v: number): void;
   setPitchSnap(on: boolean): void;
+  setSlideStill(px: number): void;
   setGlide(on: boolean): void;
   /** Set the velocity (0–1) of the note starting at `step`. */
   setNoteVelocity(trackId: string, slot: number, step: number, vel: number): void;
@@ -277,6 +280,7 @@ export const useStore = create<State>((set, get) => {
   recordOffsetMs: loadNumber('recordOffsetMs', 0),
   touchVelocity: loadNumber('touchVelocity', 1),
   pitchSnap: loadNumber('pitchSnap', 1) === 1,
+  slideStill: loadNumber('slideStill', 8),
   glide: loadNumber('glide', 0) === 1,
   chain: false,
   songMode: false,
@@ -562,6 +566,10 @@ export const useStore = create<State>((set, get) => {
   setGlide: (on) => {
     saveNumber('glide', on ? 1 : 0);
     set({ glide: on });
+  },
+  setSlideStill: (px) => {
+    saveNumber('slideStill', px);
+    set({ slideStill: px });
   },
   setPitchSnap: (on) => {
     saveNumber('pitchSnap', on ? 1 : 0);

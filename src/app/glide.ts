@@ -68,10 +68,14 @@ export const SETTLE_EASE = 0.06;
 
 export const startSlide = (key: LineKey, x: number, t: number): Slide => ({ x0: x, key, lastX: x, lastT: t, lastOn: key, dir: 0, cur: key.pitch });
 
-/** The pitch for the finger now at `x` (time `t`) over key `on`, and how quickly to get there; updates `s`. */
-export function slideTo(line: LineKey[], s: Slide, x: number, t: number, on: LineKey): { pitch: number; ease?: number } {
+/**
+ * The pitch for the finger now at `x` (time `t`) over key `on`, and how quickly to get there; updates `s`.
+ * Movement smaller than `still` pixels since the last real movement counts as standing still (a resting finger
+ * wobbles), so it neither bends the pitch nor counts as a change of direction; `moved` says whether it moved.
+ */
+export function slideTo(line: LineKey[], s: Slide, x: number, t: number, on: LineKey, still = 1): { pitch: number; ease?: number; moved: boolean } {
   const dx = x - s.lastX;
-  if (Math.abs(dx) < 1) return { pitch: s.cur };
+  if (Math.abs(dx) < Math.max(1, still)) return { pitch: s.cur, moved: false };
   const dir = Math.sign(dx);
   let ease: number | undefined;
   if ((s.dir && dir !== s.dir) || t - s.lastT > PAUSE_MS) {
@@ -85,5 +89,15 @@ export function slideTo(line: LineKey[], s: Slide, x: number, t: number, on: Lin
   s.lastT = t;
   s.lastOn = on;
   s.cur = pitchAlong(anchors(line, s.key.el, s.x0), x);
-  return { pitch: s.cur, ease };
+  return { pitch: s.cur, ease, moved: true };
+}
+
+/**
+ * The key a finger counts as being on, with some give at the edges: it stays on `current` until it is more than
+ * `margin` pixels past current's edge, so a finger resting on a boundary does not flick between two keys. (Only
+ * between keys of the same kind: on the piano, moving up onto a black key takes effect at once.)
+ */
+export function stickyKey(current: LineKey, next: LineKey, x: number, margin: number): LineKey {
+  if (next === current || next.el.className !== current.el.className) return next;
+  return x >= current.left - margin && x <= current.right + margin ? current : next;
 }

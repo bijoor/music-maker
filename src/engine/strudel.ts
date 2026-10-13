@@ -286,10 +286,18 @@ function sampleUrl(value: Record<string, unknown>): string | null {
  * Play a sound immediately, bypassing the pattern scheduler (pads and keys). A sample that is not loaded yet
  * would be dropped by superdough, so it plays as soon as it arrives instead (unless that takes too long).
  */
+/**
+ * How far ahead a pad or key note is scheduled. superdough drops a note whose start time has passed by the time
+ * its sound is ready; the audio clock (currentTime) moves in steps, which on iPad can be longer than a few
+ * milliseconds, especially while the page is busy, so too short a lead silently loses notes played in quick
+ * succession. 15 ms is safely beyond those steps and still feels immediate.
+ */
+const LEAD = 0.015;
+
 export function trigger(value: Record<string, unknown>, duration = 0.25) {
   const ac = getAudioContext();
   // Pass the tempo too: tempo-synced effects such as delay then match the pattern.
-  const play = () => superdough(value, ac.currentTime + 0.005, duration, r?.scheduler.cps ?? 0.5);
+  const play = () => superdough(value, ac.currentTime + LEAD, duration, r?.scheduler.cps ?? 0.5);
   const url = sampleUrl(value);
   if (!url || getLoadedBuffer(url)) return play();
   const asked = performance.now();
@@ -370,6 +378,14 @@ export interface HeldNote {
  * Play a sound until stopped (a held key), up to `max` seconds; its pitch can glide while it sounds. Samples
  * without a loop still end where the recording ends.
  */
+/** Every held note not yet stopped, so they can all be silenced at once (see releaseAll). */
+const live = new Set<HeldNote>();
+
+/** Stop every held note (a safety net: leaving the app, Stop all, or a lost finger-up). */
+export function releaseAll() {
+  [...live].forEach((n) => n.stop());
+}
+
 export function hold(value: Record<string, unknown>, max = 30): HeldNote {
   // Drum machines register their sounds as bank_sound (e.g. RolandTR909_cr).
   wrapSound(value.bank ? `${value.bank}_${value.s}` : String(value.s ?? 'triangle'));
@@ -389,10 +405,11 @@ export function hold(value: Record<string, unknown>, max = 30): HeldNote {
     if (released) releaseVoice(v);
   });
   void trigger({ ...value, holdId: id }, max);
-  return {
+  const note: HeldNote = {
     stop(fade) {
       if (released) return;
       released = true;
+      live.delete(note);
       if (voice) releaseVoice(voice, fade); else setTimeout(() => holders.delete(id), 5000); // still loading (or never sounds)
     },
     glide(semitones, ease) {
@@ -404,6 +421,10 @@ export function hold(value: Record<string, unknown>, max = 30): HeldNote {
       if (voice && !released) setLevel(voice);
     },
   };
+  live.add(note);
+  // Notes that end by themselves (a short preview, a drum hit) leave the set when they would have ended.
+  setTimeout(() => live.delete(note), (max + 1) * 1000);
+  return note;
 }
 
 export type SoundRef = { s: string; bank?: string; n?: number; notes?: number[] };

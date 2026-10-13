@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { anchors, keyAt, pitchAlong, slideTo, startSlide, type LineKey } from './glide';
+import { anchors, keyAt, pitchAlong, slideTo, startSlide, stickyKey, type LineKey } from './glide';
 
 // Three scale pads 100px wide: C, D, E.
 const el = (n: string) => ({ n, contains: () => false }) as unknown as HTMLElement;
@@ -55,5 +55,26 @@ describe('a slide that lands on notes', () => {
     const after = slideTo(line, s, 130, 500, at(130));
     expect(after.ease).toBeGreaterThan(0);
     expect(after.pitch).toBeCloseTo(62 + 2 * (10 / 130), 5); // from D at 120 toward E's centre at 250
+  });
+});
+
+describe('a resting finger', () => {
+  const at = (x: number) => keyAt(line, x);
+  it('wobbles smaller than the steadiness setting neither bend nor reverse the slide', () => {
+    const s = startSlide(line[0], 80, 0);
+    const go = slideTo(line, s, 150, 10, at(150), 8); // a real move: up to D
+    const wobbles = [153, 147, 152, 149].map((x, i) => slideTo(line, s, x, 20 + i * 10, at(x), 8));
+    expect(go.moved).toBe(true);
+    expect(wobbles.every((w) => !w.moved && w.pitch === go.pitch)).toBe(true);
+    expect(s.dir).toBe(1); // still moving right as far as the slide is concerned
+  });
+
+  it('stays on a key until the finger is clearly past its edge', () => {
+    const k = (x: number) => ({ ...line[0], el: { className: 'spad' } as unknown as HTMLElement, x, left: x - 50, right: x + 50 });
+    const c = k(50), d = k(150);
+    expect(stickyKey(c, d, 102, 4)).toBe(c); // 2 px past C's edge: still C
+    expect(stickyKey(c, d, 105, 4)).toBe(d); // 5 px past: D
+    const black = { ...d, el: { className: 'bk in' } as unknown as HTMLElement };
+    expect(stickyKey(c, black, 101, 4)).toBe(black); // onto a black key: at once
   });
 });

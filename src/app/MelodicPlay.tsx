@@ -8,13 +8,21 @@ import StepStrip from './StepStrip';
 import { CHORD_KEYS, PIANO_HINT, padRowKeys } from './keymap';
 import { slideVelocity, strikeVelocity } from './strike';
 import { keyboardOf } from '../model/groups';
-import { anchors, keyAt, keyLine, pitchAlong, slideTo, startSlide } from './glide';
+import { anchors, keyAt, keyLine, pitchAlong, slideTo, startSlide, stickyKey } from './glide';
 
 /** A sliding finger that stops for this long settles onto the key under it, easing over SETTLE_EASE seconds. */
 const SETTLE_AFTER_MS = 100;
 const SETTLE_EASE = 0.08;
 
 const BLACK = [1, 3, 6, 8, 10];
+
+/** Fingers holding keys or chord pads, by pointer id: each lets its key go (stops listening, ends the note). */
+const fingers = new Map<number, () => void>();
+
+/** Let go of every key a finger is still holding (when iOS loses a finger-up, or the app goes to the background). */
+export function releaseFingers() {
+  [...fingers.values()].forEach((end) => end());
+}
 
 /** Chord pads above a piano keyboard or large scale pads; everything plays immediately. */
 export default function MelodicPlay({ track }: { track: Track }) {
@@ -31,15 +39,25 @@ export default function MelodicPlay({ track }: { track: Track }) {
   const chords = padChords(scale, tonic, track.octave, sargam, keyboard === 'pads', perRow);
   const play = (pitches: number[], e: PointerEvent<HTMLElement>, chord = false) => {
     const el = e.currentTarget;
-    const vel0 = strikeVelocity(e.clientY, el);
-    recorder.press(track.id, pitches, e.pointerId, chord, e.timeStamp, vel0);
-    el.classList.add('down');
     const id = e.pointerId;
+    // A finger whose lift never arrived (the same pointer id pressing again) is let go first.
+    fingers.get(id)?.();
+    const vel0 = strikeVelocity(e.clientY, el);
+    recorder.press(track.id, pitches, id, chord, e.timeStamp, vel0);
+    el.classList.add('down');
     if (chord) {
-      const up = (ev: Event) => { recorder.release(id, ev.timeStamp); el.classList.remove('down'); el.removeEventListener('pointerup', up); el.removeEventListener('pointercancel', up); el.removeEventListener('pointerleave', up); };
+      const up = (ev?: Event) => {
+        fingers.delete(id);
+        recorder.release(id, ev?.timeStamp);
+        el.classList.remove('down');
+        el.removeEventListener('pointerup', up);
+        el.removeEventListener('pointercancel', up);
+        el.removeEventListener('pointerleave', up);
+      };
       el.addEventListener('pointerup', up);
       el.addEventListener('pointercancel', up);
       el.addEventListener('pointerleave', up);
+      fingers.set(id, () => up());
       return;
     }
     // Keys: with Slide off, moving the held finger onto another key plays that key. With Slide on, sliding sideways
@@ -54,33 +72,41 @@ export default function MelodicPlay({ track }: { track: Track }) {
     const slide = struck ? startSlide(struck, e.clientX, e.timeStamp) : null;
     const y0 = e.clientY, height = el.getBoundingClientRect().height;
     let lit = el, settle: ReturnType<typeof setTimeout> | undefined;
+    let current = struck;
     const move = (ev: globalThis.PointerEvent) => {
-      if (ev.pointerId !== id || !line.length) return;
-      const on = keyAt(line, ev.clientX, document.elementFromPoint(ev.clientX, ev.clientY));
-      const { glide, pitchSnap } = useStore.getState();
+      if (ev.pointerId !== id || !line.length || !current) return;
+      const { glide, pitchSnap, slideStill } = useStore.getState();
+      // The key the finger is on, with some give at its edges so a resting finger does not flick between keys.
+      const on = (current = stickyKey(current, keyAt(line, ev.clientX, document.elementFromPoint(ev.clientX, ev.clientY)), ev.clientX, slideStill / 2));
+      recorder.swell(id, slideVelocity(vel0, ev.clientY - y0, height));
       // Slide off: each key reached plays its own note. The new note starts at the volume the finger is at now.
       if (!glide) recorder.step(id, on.pitch, ev.timeStamp);
-      recorder.swell(id, slideVelocity(vel0, ev.clientY - y0, height));
+      let moved = true;
       if (glide && pitchSnap && slide) {
-        const { pitch, ease } = slideTo(line, slide, ev.clientX, ev.timeStamp, on);
-        recorder.glide(id, pitch, on.pitch, ev.timeStamp, ease);
+        // Wobbles smaller than the steadiness setting count as standing still: no bend, and the settle timer runs on.
+        const r = slideTo(line, slide, ev.clientX, ev.timeStamp, on, slideStill);
+        moved = r.moved;
+        if (moved) recorder.glide(id, r.pitch, on.pitch, ev.timeStamp, r.ease);
       } else if (glide) recorder.glide(id, pitchAlong(path, ev.clientX), on.pitch, ev.timeStamp);
       if (on.el !== lit) { lit.classList.remove('down'); lit = on.el; lit.classList.add('down'); }
+      if (!moved) return;
       clearTimeout(settle);
       if (glide && pitchSnap) settle = setTimeout(() => { if (slide) slide.cur = on.pitch; recorder.glide(id, on.pitch, on.pitch, undefined, SETTLE_EASE); }, SETTLE_AFTER_MS);
     };
-    const up = (ev: globalThis.PointerEvent) => {
-      if (ev.pointerId !== id) return;
+    const end = (timeStamp?: number) => {
+      fingers.delete(id);
       clearTimeout(settle);
-      recorder.release(id, ev.timeStamp);
+      recorder.release(id, timeStamp);
       lit.classList.remove('down');
       removeEventListener('pointermove', move);
       removeEventListener('pointerup', up);
       removeEventListener('pointercancel', up);
     };
+    const up = (ev: globalThis.PointerEvent) => { if (ev.pointerId === id) end(ev.timeStamp); };
     addEventListener('pointermove', move);
     addEventListener('pointerup', up);
     addEventListener('pointercancel', up);
+    fingers.set(id, () => end());
   };
 
   return (

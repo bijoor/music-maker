@@ -7,6 +7,8 @@ import { MAX_SLOTS, STEPS_PER_BAR, type Bars, type Clip, type Track } from '../m
 import * as player from '../engine/player';
 import { kitName, kitVoices, myKitBank } from '../model/kit';
 import ScenesBar from './ScenesBar';
+import { releaseFingers } from './MelodicPlay';
+import * as recorder from '../engine/recorder';
 import EditableName from './EditableName';
 
 const LETTERS = 'ABCDEFGH';
@@ -66,7 +68,7 @@ export default function ClipGrid() {
         <button className={`btn sm${chain ? ' on' : ''}`} aria-pressed={chain} onClick={() => setChain(!chain)} title="Tap slots to add them to a track's sequence">Chain</button>
         <span className="muted-text hint">{songMode ? 'Song mode: clips follow the song. Tap a clip or scene to take over.' : chain ? 'Chain: tap slots in the order to play them (e.g. A A A C). ■ clears.' : mode === 'edit' ? 'Edit: tap a clip to open it without playing it.' : mode === 'record' ? 'Record: tap a clip (or + for a new one), then play pads or keys.' : 'Tap a clip to play it from the next bar; tap again to stop.'}</span>
         <span className="spacer" />
-        <button className="btn sm" onClick={stopAllTracks}>Stop all</button>
+        <button className="btn sm" title="Stop every track, and silence any note still sounding" onClick={() => { stopAllTracks(); releaseFingers(); recorder.releaseAll(); }}>Stop all</button>
       </div>
       <ScenesBar />
       <div className="lrows" ref={rowsRef} style={{ ['--cols' as string]: columns }}>

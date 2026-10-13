@@ -6,7 +6,7 @@ import * as player from '../engine/player';
 import { connectMidi, type MidiState } from '../engine/midi';
 
 export default function Transport() {
-  const { song, transport, panel, setPanel, updateReady, sargam, mode, countIn, metronome, setBpm, setTonic, setScale, toggleCode, resetSong, setUi, setMode, touchVelocity, setTouchVelocity, pitchSnap, setPitchSnap, openRecorder, newSong, setMessage } = useStore();
+  const { song, transport, panel, setPanel, updateReady, sargam, mode, countIn, metronome, setBpm, setTonic, setScale, toggleCode, resetSong, setUi, setMode, touchVelocity, setTouchVelocity, pitchSnap, setPitchSnap, slideStill, setSlideStill, openRecorder, newSong, setMessage } = useStore();
   const [more, setMore] = useState(false);
   const [confirmReset, setConfirmReset] = useState(false);
   const [midi, setMidi] = useState<{ state: MidiState; devices: string[] }>({ state: 'off', devices: [] });
@@ -96,6 +96,9 @@ export default function Transport() {
               Strike velocity: {touchVelocity === 1 ? 'louder towards the bottom' : touchVelocity === -1 ? 'louder towards the top' : 'off (always full)'}
             </button>
             <button role="menuitemcheckbox" aria-checked={pitchSnap} onClick={() => setPitchSnap(!pitchSnap)}>{pitchSnap ? '✓ ' : ''}Slides settle on the key under the finger</button>
+            <button role="menuitem" onClick={() => setSlideStill(slideStill <= 4 ? 8 : slideStill <= 8 ? 14 : 4)}>
+              Slide steadiness: {slideStill <= 4 ? 'fine (4 px)' : slideStill <= 8 ? 'normal (8 px)' : 'steady (14 px)'}
+            </button>
             <button role="menuitem" onClick={() => { openRecorder(null); setMore(false); }}>Record a drum kit from an instrument…</button>
             <button role="menuitem" onClick={() => { setPanel('about'); setMore(false); }}>About and sound credits</button>
             <a role="menuitem" className="menulink" href="#lab" onClick={() => setMore(false)}>Phase 0 tests</a>
