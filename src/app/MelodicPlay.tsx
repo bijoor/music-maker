@@ -5,7 +5,7 @@ import { pitchToCode } from '../model/notes';
 import type { Track } from '../model/types';
 import * as recorder from '../engine/recorder';
 import StepStrip from './StepStrip';
-import { PAD_ROWS, PIANO_HINT } from './keymap';
+import { PIANO_HINT, padRowKeys } from './keymap';
 import { slideVelocity, strikeVelocity } from './strike';
 import { keyboardOf } from '../model/groups';
 import { anchors, keyAt, keyLine, pitchAlong, slideTo, startSlide } from './glide';
@@ -21,6 +21,7 @@ export default function MelodicPlay({ track }: { track: Track }) {
   const { song, sargam, scaleLock, sustain, glide, setGlide, setUi, setOctave, setTrackKeyboard } = useStore();
   // Each track keeps its own keyboard (new tracks start with their group's).
   const { layout: keyboard, octaves: keyboardOctaves } = keyboardOf(track);
+  const pianoOctaves = Math.min(2, keyboardOctaves); // the piano shows at most two octaves
   const scale = findScale(song);
   const tonic = song.key.tonic;
   // On scale pads the chords line up with the pads above each other: one per scale note, then the upper Sa.
@@ -87,8 +88,9 @@ export default function MelodicPlay({ track }: { track: Track }) {
           <button aria-pressed={keyboard === 'pads'} onClick={() => setTrackKeyboard(track.id, { layout: 'pads' })}>Scale pads</button>
         </div>
         <div className="seg" role="group" aria-label="Keyboard size">
-          <button aria-pressed={keyboardOctaves === 1} onClick={() => setTrackKeyboard(track.id, { octaves: 1 })}>1 oct</button>
-          <button aria-pressed={keyboardOctaves === 2} onClick={() => setTrackKeyboard(track.id, { octaves: 2 })}>2 oct</button>
+          {(keyboard === 'pads' ? [1, 2, 3, 4] as const : [1, 2] as const).map((n) => (
+            <button key={n} aria-pressed={(keyboard === 'pads' ? keyboardOctaves : pianoOctaves) === n} onClick={() => setTrackKeyboard(track.id, { octaves: n })}>{n} oct</button>
+          ))}
         </div>
         {keyboard === 'piano' && <button className={`btn sm${scaleLock ? ' on' : ''}`} aria-pressed={scaleLock} onClick={() => setUi({ scaleLock: !scaleLock })}>Scale lock</button>}
         <button className={`btn sm${sustain ? ' on' : ''}`} aria-pressed={sustain} title="Pedal: notes keep ringing after you let go, until Sustain is turned off (or hold Shift)" onClick={() => setUi({ sustain: !sustain })}>Sustain</button>
@@ -115,12 +117,13 @@ export default function MelodicPlay({ track }: { track: Track }) {
   );
 
   function scalePads() {
+    const rowKeys = padRowKeys(keyboardOctaves);
     const row = (oct: number) => {
       // Every row ends on the Sa above, so the rows' columns line up (the lower row's last pad repeats the upper
       // row's first, for convenience).
       const pitches = scale.degrees.map((d) => scalePitch(scale, tonic, d, oct));
       pitches.push(scalePitch(scale, tonic, 0, oct + 1));
-      const keys = keyboardOctaves === 2 && oct === track.octave ? PAD_ROWS.low : PAD_ROWS.high;
+      const keys = rowKeys[oct - track.octave] ?? [];
       return (
         <div className="padrow">
           {pitches.map((p, i) => {
@@ -135,20 +138,20 @@ export default function MelodicPlay({ track }: { track: Track }) {
       );
     };
     return (
-      <div className="spads" style={{ gridTemplateRows: `repeat(${keyboardOctaves}, 1fr)` }}>
-        {keyboardOctaves === 2 && row(track.octave + 1)}
-        {row(track.octave)}
+      // One row per octave, lowest at the bottom; pads get smaller as rows are added.
+      <div className={`spads rows-${keyboardOctaves}`} style={{ gridTemplateRows: `repeat(${keyboardOctaves}, 1fr)` }}>
+        {Array.from({ length: keyboardOctaves }, (_, i) => row(track.octave + keyboardOctaves - 1 - i))}
       </div>
     );
   }
 
   function piano() {
     const lo = (track.octave + 1) * 12;
-    const whites = 7 * keyboardOctaves + 1;
+    const whites = 7 * pianoOctaves + 1;
     const keys: ReactNode[] = [];
     const blacks: ReactNode[] = [];
     let wi = 0;
-    for (let i = 0; i <= 12 * keyboardOctaves; i++) {
+    for (let i = 0; i <= 12 * pianoOctaves; i++) {
       const m = lo + i, pc = m % 12, black = BLACK.includes(pc);
       const ok = inScale(scale, tonic, m), off = scaleLock && !ok;
       // In-scale keys play the scale's own pitch, including any microtonal offset.

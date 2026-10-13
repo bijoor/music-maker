@@ -5,7 +5,7 @@ import { keyboardOf } from '../model/groups';
 import { findScale, inScale, scaleChords, scalePitch, tonicPc } from '../model/scales';
 import * as recorder from '../engine/recorder';
 import * as player from '../engine/player';
-import { CHORD_KEYS, PAD_ROWS, PIANO_KEYS, drumKey } from './keymap';
+import { CHORD_KEYS, PIANO_KEYS, drumKey, padRowKeys } from './keymap';
 
 /** Keys that are not instrument keys: Enter play/stop, Cmd/Ctrl+Z undo, Shift+Cmd/Ctrl+Z redo, Escape closes a panel. */
 function command(e: KeyboardEvent): boolean {
@@ -38,9 +38,10 @@ function resolve(key: string): { voice?: string; pitches?: number[]; chord?: boo
     return chord ? { pitches: chord.pitches, chord: true, selector: `[data-chord="${ci}"]` } : null;
   }
   if (keyboardOf(track).layout === 'pads') {
-    // Two rows: Z X C V … the track's octave, A S D F … the one above. One row: A S D F … the track's octave.
-    const low = keyboardOf(track).octaves === 2 ? PAD_ROWS.low.indexOf(key) : -1, high = PAD_ROWS.high.indexOf(key);
-    const row = low >= 0 ? { i: low, oct: track.octave } : high >= 0 ? { i: high, oct: track.octave + (keyboardOf(track).octaves === 2 ? 1 : 0) } : null;
+    // Rows of keys, lowest octave first (padRowKeys): Z X C V … the track's octave, then A S D F …, Q W E R ….
+    const rows = padRowKeys(keyboardOf(track).octaves);
+    const r = rows.findIndex((keys) => keys.includes(key));
+    const row = r >= 0 && r < keyboardOf(track).octaves ? { i: rows[r].indexOf(key), oct: track.octave + r } : null;
     if (!row) return null;
     const n = scale.degrees.length;
     const deg = scale.degrees[row.i % n], oct = row.oct + Math.floor(row.i / n);

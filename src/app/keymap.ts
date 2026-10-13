@@ -4,7 +4,8 @@
 //   R T Y U clap, cowbell, shaker, tambourine.
 // Keys (piano layout, "musical typing"): W E  T Y U  O P black keys over A S D F G H J K L ; white keys from C;
 //   Z / X octave down / up.
-// Scale pads: Z X C V … the scale from Sa, A S D F … the octave above (one row: A S D F …); − / = octave down / up.
+// Scale pads: Z X C V … the scale from Sa, A S D F … the octave above, Q W E R … the next (one row: A S D F …);
+//   − / = octave down / up.
 // Melodic tracks: 1–9 chords, hold Shift to sustain. Everywhere: Enter plays and stops the song.
 // Mridangam and tabla: left-hand strokes on F D S A / R E W Q / V C X Z, right-hand strokes on J K L ; / U I O P /
 // M , . /, strokes for both hands on G H T Y B N.
@@ -58,6 +59,9 @@ export const PIANO_KEYS: Record<string, number> = {
 export const PIANO_HINT: Record<number, string> = Object.fromEntries(Object.entries(PIANO_KEYS).map(([k, v]) => [v, k.toUpperCase()]));
 
 /** Scale pads: lower row from Sa of the track's octave, upper row the octave above. */
-export const PAD_ROWS = { low: 'zxcvbnm,./'.split(''), high: 'asdfghjkl;'.split('') };
+export const PAD_ROWS = { low: 'zxcvbnm,./'.split(''), high: 'asdfghjkl;'.split(''), top: 'qwertyuiop'.split('') };
+
+/** Computer keys for each scale pad row, lowest octave first: one row on A S D F…, more from Z X C V… upward. */
+export const padRowKeys = (rows: number): string[][] => (rows === 1 ? [PAD_ROWS.high] : [PAD_ROWS.low, PAD_ROWS.high, PAD_ROWS.top]);
 
 export const CHORD_KEYS = '123456789'.split('');
