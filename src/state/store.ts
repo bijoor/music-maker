@@ -181,6 +181,8 @@ interface State {
   moveStep(trackId: string, index: number, by: number): void;
   removeStep(trackId: string, index: number): void;
   addStep(trackId: string, slot: number): void;
+  /** Play another of the track's clips in a step of its line. */
+  setStepClip(trackId: string, index: number, slot: number): void;
   /** A new empty clip at the end of a track's line (in the next free slot), selected for recording or editing. */
   appendClip(trackId: string, bars: Bars): void;
   /** Make sure a clip plays in its track's line: turn its step on, or add it at the end. */
@@ -643,6 +645,8 @@ export const useStore = create<State>((set, get) => {
       const i = line.findIndex((x) => x.slot === slot);
       setLine(t, i >= 0 ? line.map((x, k) => (k === i ? { ...x, off: false } : x)) : [...line, { slot, times: 1 }]);
     })),
+  setStepClip: (trackId, index, slot) =>
+    set(onTrack(trackId, (t) => { const line = lineOf(t); if (line[index] && t.slots[slot]) { line[index] = { ...line[index], slot }; setLine(t, line); } })),
   addStep: (trackId, slot) =>
     set(onTrack(trackId, (t) => { if (t.slots[slot]) setLine(t, [...lineOf(t), { slot, times: 1 }]); })),
   updateScene: (sceneId, includeSilent) =>

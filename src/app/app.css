@@ -109,8 +109,9 @@ select.sm { min-height: 30px; padding: 3px 6px; font-size: 13px; }
 @media (prefers-reduced-motion: reduce) { .clip.queued { animation: none; } }
 
 /* Clip editor */
-.editor { display: grid; grid-template-rows: auto auto minmax(0, 1fr); overflow: hidden; }
-.editor:not(:has(.soundstrip)) { grid-template-rows: auto minmax(0, 1fr); }
+/* Header, then any strips (step, sound), then the body taking the rest. */
+.editor { display: flex; flex-direction: column; overflow: hidden; }
+.editor > .ebody, .editor > .pbody { flex: 1; min-height: 0; }
 .empty-editor { display: grid; place-items: center; }
 .ehead { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 6px 10px; border-bottom: 1px solid var(--line); }
 .ehead h2 { font-family: var(--display); font-size: 15px; margin: 0; white-space: nowrap; }
@@ -396,13 +397,16 @@ select.sm { min-height: 30px; padding: 3px 6px; font-size: 13px; }
 /* A track's line: its clips in the order they play, scrolling sideways when long. */
 .line { display: flex; gap: 6px; overflow-x: auto; overscroll-behavior-x: contain; min-width: 0; align-items: stretch; scrollbar-width: none; }
 .line::-webkit-scrollbar { display: none; }
-.clip.step { flex: 0 0 clamp(118px, 13vw, 168px); padding: 0; display: block; }
-.step .stepmain { position: absolute; inset: 0; width: 100%; border: 0; background: none; color: inherit; text-align: left; padding: 5px 30px 7px 12px; display: grid; align-content: center; gap: 4px; min-width: 0; }
+.clip.step { flex: 0 0 clamp(140px, 15vw, 180px); padding: 0; display: block; }
+.step .stepmain { position: absolute; inset: 0; width: 100%; border: 0; background: none; color: inherit; text-align: left; padding: 5px 8px 7px 12px; display: grid; align-content: center; gap: 4px; min-width: 0; }
 .step .stepmain .cn { padding-right: 4px; }
-.step .times, .step .onoff { position: absolute; right: 3px; width: 26px; height: 20px; border-radius: 6px; border: 1px solid var(--line); background: var(--panel); color: var(--fg); font-size: 11px; font-weight: 700; padding: 0; line-height: 1; z-index: 1; }
-.step .times { top: 3px; }
-.step .onoff { bottom: 4px; color: var(--tc); font-size: 12px; }
-.clip.step.playing .times, .clip.step.playing .onoff { background: rgba(255, 255, 255, .2); border-color: rgba(255, 255, 255, .5); color: #fff; }
+/* − ×N + : how many times the step plays, at the bottom right of the step. */
+.step .times { position: absolute; right: 3px; bottom: 3px; display: flex; align-items: center; gap: 1px; z-index: 1; background: var(--panel); border: 1px solid var(--line); border-radius: 7px; padding: 1px; }
+.step .times button { width: 22px; height: 20px; border: 0; border-radius: 5px; background: none; color: inherit; font-size: 14px; font-weight: 700; padding: 0; line-height: 1; }
+.step .times button:disabled { opacity: .3; }
+.step .times output { min-width: 22px; text-align: center; font-size: 11px; font-weight: 700; }
+.step .stepmain .thumb { margin-right: 74px; }
+.clip.step.playing .times { background: rgba(0, 0, 0, .18); border-color: rgba(255, 255, 255, .45); color: #fff; }
 .clip.step.off { background: none; border-style: dashed; opacity: .55; }
 .clip.step.off::before { background: var(--line); }
 .clip.step.off .thumb i { background: var(--muted); }
@@ -416,3 +420,7 @@ select.sm { min-height: 30px; padding: 3px 6px; font-size: 13px; }
 .stepmenu .repeat output { font-weight: 700; min-width: 40px; text-align: center; }
 .stepmenu button .muted-text { margin-left: auto; padding-left: 12px; font-size: 11px; }
 .stepmenu button[disabled] { opacity: .4; }
+
+/* The open clip's place in its track's line (under the editor header). */
+.stepstrip { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; padding: 4px 10px; border-bottom: 1px solid var(--line); background: var(--panel-2); }
+.stepstrip select { min-height: 30px; font-size: 13px; }

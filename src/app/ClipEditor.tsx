@@ -3,12 +3,13 @@ import { selectedClip, selectedTrack, useStore } from '../state/store';
 import { BANKS, INDIAN_KITS, myKitBank } from '../model/kit';
 import { groupOf } from '../model/groups';
 import { drumPresets } from '../model/presets';
-import type { Bars } from '../model/types';
+import type { Bars, Track } from '../model/types';
 import DrumGrid from './DrumGrid';
 import Calibrate from './Calibrate';
 import About from './About';
 import SampleRecorder from './SampleRecorder';
 import EditableName from './EditableName';
+import { lineOf } from '../model/lines';
 import SoundStrip from './SoundStrip';
 import SongsPanel from './SongsPanel';
 import SongEditor from './SongEditor';
@@ -134,6 +135,7 @@ export default function ClipEditor() {
           )}
         </div>
       </div>
+      {clip && slot !== null && <StepStrip track={track} slot={slot} />}
       {state.soundOpen && <SoundStrip track={track} />}
       <div className="ebody">
         {clip?.code && slot !== null && view === 'grid' ? (
@@ -159,5 +161,32 @@ export default function ClipEditor() {
         )}
       </div>
     </section>
+  );
+}
+
+/**
+ * The open clip's place in its track's line, inline under the editor header: move it earlier or later, clear its
+ * notes to play new ones (an earlier scene that plays it keeps its own copy), take it out of the line, or play
+ * another of the track's clips in its place.
+ */
+function StepStrip({ track, slot }: { track: Track; slot: number }) {
+  const { moveStep, removeStep, clearClip, setStepClip } = useStore();
+  const line = lineOf(track);
+  const index = line.findIndex((x) => x.slot === slot);
+  if (index < 0) return null;
+  return (
+    <div className="stepstrip" role="group" aria-label="This clip in the track’s line">
+      <span className="muted-text">Step {index + 1} of {line.length}</span>
+      <button className="btn sm" aria-label="Play it earlier" disabled={index === 0} onClick={() => moveStep(track.id, index, -1)}>◀</button>
+      <button className="btn sm" aria-label="Play it later" disabled={index === line.length - 1} onClick={() => moveStep(track.id, index, 1)}>▶</button>
+      <button className="btn sm" title="Empty this clip to play new notes into it; an earlier scene that plays it keeps its notes" onClick={() => clearClip(track.id, slot)}>Clear notes</button>
+      <button className="btn sm" onClick={() => removeStep(track.id, index)}>Remove from the line</button>
+      {track.slots.filter(Boolean).length > 1 && (
+        <select aria-label="Play another clip here" value="" onChange={(e) => e.target.value && setStepClip(track.id, index, +e.target.value)}>
+          <option value="">Play another clip here…</option>
+          {track.slots.map((c, i) => c && i !== slot && <option key={i} value={i}>{c.name}</option>)}
+        </select>
+      )}
+    </div>
   );
 }
