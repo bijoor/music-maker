@@ -81,6 +81,7 @@ export default function Transport() {
       </div>
       <button className={`btn sm${metronome ? ' on' : ''}`} aria-pressed={metronome} onClick={() => setUi({ metronome: !metronome })}>Click</button>
       <span className="spacer" />
+      <button className={`btn sm songname${panel === 'songs' ? ' on' : ''}`} aria-pressed={panel === 'songs'} title="Songs: new, open, save a copy, export, import" onClick={() => setPanel(panel === 'songs' ? null : 'songs')}>♫ {song.name}</button>
       {updateReady && <button className="btn sm on" onClick={updateReady} title="A new version is ready">Update ready · reload</button>}
       <div className="menuwrap">
         <button className="btn sm" aria-expanded={more} onClick={() => { setMore(!more); setConfirmReset(false); }}>More ⋯</button>

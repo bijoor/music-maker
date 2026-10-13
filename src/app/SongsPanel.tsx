@@ -49,7 +49,7 @@ export default function SongsPanel() {
         <div className="row">
           <button className="btn" onClick={() => go(() => newSong(true))}>New blank song</button>
           <button className="btn" onClick={() => go(() => newSong())}>New song with drums, bass and keys</button>
-          <button className="btn" onClick={() => go(duplicateSong)}>Duplicate</button>
+          <button className="btn" onClick={() => go(duplicateSong)}>Save a copy</button>
           <button className="btn" onClick={() => download(`${safe(song.name)}.music.json`, JSON.stringify(song, null, 2), 'application/json')}>Export song file</button>
           <button className="btn" onClick={() => download(`${safe(song.name)}.strudel.js`, generate(song).code, 'text/javascript')}>Export Strudel code</button>
           <button className="btn" onClick={() => fileRef.current?.click()}>Import song file…</button>
@@ -65,7 +65,7 @@ export default function SongsPanel() {
             </li>
           ))}
         </ul>
-        <p className="muted-text">Songs are saved in this browser as you work. Export a song file to keep a copy or move it to another device; the Strudel code file runs in strudel.cc.</p>
+        <p className="muted-text">Songs save themselves on this device as you work (there is no Save button to forget); Save a copy keeps this version and carries on in a copy. Export a song file to keep a copy or move it to another device; the Strudel code file runs in strudel.cc.</p>
       </div>
     </PanelFrame>
   );
