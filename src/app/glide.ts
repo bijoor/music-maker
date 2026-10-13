@@ -44,16 +44,14 @@ export function keyAt(line: LineKey[], x: number, under?: Element | null): LineK
 }
 
 /**
- * A slide that lands on notes (Slide on, settling on): the pitch follows the finger only while it is still on the
- * key the current movement started from, bending toward the next key in the direction it moves and reaching that
- * key's note at its edge. Once the finger enters another key the pitch goes to that key's own note and stays there,
- * however far into the key the finger goes. A new movement — after reversing direction or stopping for a moment —
- * starts a new bend from where the finger is.
+ * A slide that lands on notes (Slide on, settling on): while the finger keeps moving one way the pitch glides
+ * continuously with it, through every key it passes (reaching each key's note at its centre, starting from the
+ * note the movement began on, where it began). When the finger reverses, the pitch settles on the note of the key
+ * it was on and a new glide starts from there; stopping settles too (the caller times that, see SETTLE_AFTER_MS).
  */
 export interface Slide {
-  /** Where the current movement started, its pitch then, and the key it started on. */
+  /** Where the current movement started, and the key whose note it started from. */
   x0: number;
-  pitch: number;
   key: LineKey;
   /** Last position, time and key seen, the direction of travel (−1, 0, 1), and the pitch now. */
   lastX: number;
@@ -65,37 +63,27 @@ export interface Slide {
 
 /** A stop longer than this before moving again starts a new movement. */
 const PAUSE_MS = 150;
-/** Seconds the pitch takes to reach a key's note on entering it. */
-export const ENTER_EASE = 0.06;
+/** Seconds the pitch takes to settle on a key's note when the finger reverses. */
+export const SETTLE_EASE = 0.06;
 
-export const startSlide = (key: LineKey, x: number, t: number): Slide => ({ x0: x, pitch: key.pitch, key, lastX: x, lastT: t, lastOn: key, dir: 0, cur: key.pitch });
+export const startSlide = (key: LineKey, x: number, t: number): Slide => ({ x0: x, key, lastX: x, lastT: t, lastOn: key, dir: 0, cur: key.pitch });
 
 /** The pitch for the finger now at `x` (time `t`) over key `on`, and how quickly to get there; updates `s`. */
 export function slideTo(line: LineKey[], s: Slide, x: number, t: number, on: LineKey): { pitch: number; ease?: number } {
   const dx = x - s.lastX;
   if (Math.abs(dx) < 1) return { pitch: s.cur };
   const dir = Math.sign(dx);
+  let ease: number | undefined;
   if ((s.dir && dir !== s.dir) || t - s.lastT > PAUSE_MS) {
-    // A new movement: bend from here, from the key under the finger.
+    // A new movement: settle on the note of the key the finger was on, and glide on from there.
     s.x0 = s.lastX;
-    s.pitch = s.cur;
     s.key = s.lastOn;
+    ease = SETTLE_EASE;
   }
   s.dir = dir;
   s.lastX = x;
   s.lastT = t;
   s.lastOn = on;
-  let pitch: number, ease: number | undefined;
-  if (on.el !== s.key.el) {
-    pitch = on.pitch;
-    ease = ENTER_EASE;
-  } else {
-    const i = line.indexOf(s.key), next = line[i + dir];
-    const edge = dir > 0 ? s.key.right : s.key.left;
-    const span = Math.abs(edge - s.x0) || 1;
-    const f = Math.max(0, Math.min(1, Math.abs(x - s.x0) / span));
-    pitch = next ? s.pitch + f * (next.pitch - s.pitch) : s.pitch;
-  }
-  s.cur = pitch;
-  return { pitch, ease };
+  s.cur = pitchAlong(anchors(line, s.key.el, s.x0), x);
+  return { pitch: s.cur, ease };
 }

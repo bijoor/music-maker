@@ -39,9 +39,8 @@ export default function MelodicPlay({ track }: { track: Track }) {
       return;
     }
     // Keys: with Slide off, moving the held finger onto another key plays that key. With Slide on, sliding sideways
-    // glides the pitch, landing on notes: it bends toward the next key only while the finger is on the key the
-    // movement started from, goes to each key's own note on entering it, and settles on the key under the finger
-    // when it stops; reversing or pausing starts a new bend (glide.ts slideTo). With settling turned off in More,
+    // glides the pitch, landing on notes: it glides continuously while the finger keeps moving one way, and settles
+    // on the note of the key under the finger when it stops or reverses (glide.ts slideTo). With settling off in More,
     // bends are free: the pitch follows the finger, reaching each key's note at its centre. Sliding up or down
     // changes the volume from the velocity it was struck at, on the same scale as striking.
     if (el.hasPointerCapture?.(id)) el.releasePointerCapture(id);

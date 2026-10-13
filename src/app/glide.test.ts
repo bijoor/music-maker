@@ -31,36 +31,29 @@ describe('gliding along the keys', () => {
 });
 
 describe('a slide that lands on notes', () => {
-  // C D E, 100px each; the finger strikes C near its right edge, at 80.
+  // C D E, 100px each, centres at 50, 150, 250; the finger strikes C near its right edge, at 80.
   const at = (x: number) => keyAt(line, x);
-  const run = (moves: [number, number][]) => {
+
+  it('glides continuously while the finger keeps moving one way, through the keys it passes', () => {
     const s = startSlide(line[0], 80, 0);
-    return moves.map(([x, t]) => slideTo(line, s, x, t, at(x)));
-  };
-
-  it('bends from the struck point and reaches the next key’s note at its edge', () => {
-    const [a, b] = run([[90, 10], [99, 20]]);
-    expect(a.pitch).toBeCloseTo(61, 5); // halfway from 80 to C's edge at 100: halfway from C to D
-    expect(b.pitch).toBeCloseTo(61.9, 5);
+    const r = [115, 150, 200, 250].map((x, i) => slideTo(line, s, x, 10 * (i + 1), at(x)));
+    expect(r.map((x) => Math.round(x.pitch * 100) / 100)).toEqual([61, 62, 63, 64]); // 80→150 is C→D, then D→E
+    expect(r.every((x) => x.ease === undefined)).toBe(true);
   });
 
-  it('goes to a key’s own note on entering it, however far in the finger goes', () => {
-    const r = run([[110, 10], [160, 20], [195, 30]]);
-    r.forEach((x) => expect(x.pitch).toBe(62));
-    expect(r[0].ease).toBeGreaterThan(0);
-  });
-
-  it('steps from note to note across keys in one movement', () => {
-    expect(run([[130, 10], [230, 20], [280, 30]]).map((x) => x.pitch)).toEqual([62, 64, 64]);
-  });
-
-  it('starts a new bend after reversing direction or pausing', () => {
+  it('settles on the note of the key it was on when the finger reverses, and glides on from there', () => {
     const s = startSlide(line[0], 80, 0);
-    slideTo(line, s, 150, 10, at(150)); // into D: 62
-    const back = slideTo(line, s, 140, 20, at(140)); // reversed: a new bend from 150 toward C, which it reaches at D's left edge (100)
-    expect(back.pitch).toBeCloseTo(62 - 2 * (10 / 50), 5);
-    const after = slideTo(line, s, 160, 400, at(160)); // after a pause, moving right: a new bend from 140 toward E (edge at 200)
-    expect(after.pitch).toBeGreaterThan(back.pitch);
-    expect(after.pitch).toBeLessThan(64);
+    slideTo(line, s, 170, 10, at(170)); // past D's centre: above D
+    const back = slideTo(line, s, 160, 20, at(160)); // reversed on D: glide from D's note, starting at 170
+    expect(back.ease).toBeGreaterThan(0);
+    expect(back.pitch).toBeCloseTo(62 - 2 * (10 / 120), 5); // from D at 170 toward C's centre at 50
+  });
+
+  it('a pause then moving again also starts from the key’s note', () => {
+    const s = startSlide(line[0], 80, 0);
+    slideTo(line, s, 120, 10, at(120)); // on D, between C and D
+    const after = slideTo(line, s, 130, 500, at(130));
+    expect(after.ease).toBeGreaterThan(0);
+    expect(after.pitch).toBeCloseTo(62 + 2 * (10 / 130), 5); // from D at 120 toward E's centre at 250
   });
 });
