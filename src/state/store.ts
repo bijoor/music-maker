@@ -4,7 +4,8 @@ import { produce } from 'immer';
 import { demoSong } from '../model/demo';
 import { emptyHits, newId, track as makeTrack, defaultFx } from '../model/build';
 import { drumPresets, INSTRUMENTS } from '../model/presets';
-import { kitHas } from '../model/kit';
+import { kitHas, type MyKit } from '../model/kit';
+import { loadMyKits, onMyKits } from './myKits';
 import { MAX_SLOTS, STEPS_PER_BAR, type Bars, type Clip, type Fx, type ScaleDef, type Song, type Track } from '../model/types';
 import { setBend as setBendIn, toggleNote as toggleNoteIn, writeNote } from '../model/clipEdit';
 import { findScale, scalePitch } from '../model/scales';
@@ -15,7 +16,7 @@ export type EditorView = 'grid' | 'play';
 export type KeyboardLayout = 'piano' | 'pads';
 export type Mode = 'perform' | 'record' | 'edit';
 /** What the bottom area shows instead of the clip editor (no pop-up dialogs). */
-export type Panel = 'code' | 'song' | 'scale' | 'calibrate' | 'songs' | 'about';
+export type Panel = 'code' | 'song' | 'scale' | 'calibrate' | 'songs' | 'about' | 'recorder';
 
 interface Selection {
   trackId: string;
@@ -35,6 +36,10 @@ interface State {
   page: number;
   /** Panel shown in the bottom area instead of the clip editor; null = clip editor. */
   panel: Panel | null;
+  /** The recorded kit the sample recorder is editing (null: a new kit). */
+  recorderKit: string | null;
+  /** Kits recorded on this device. */
+  myKits: MyKit[];
   /** Show Sa Re Ga labels instead of letter names. */
   sargam: boolean;
   /** Show the sound controls strip in the clip editor. */
@@ -129,6 +134,8 @@ interface State {
   setView(view: EditorView): void;
   setPage(page: number): void;
   setPanel(panel: Panel | null): void;
+  /** Open the sample recorder on a recorded kit, or on a new one (null). */
+  openRecorder(kitId: string | null): void;
   /** Replace the song with one read back from edited code (one undo step). */
   applySong(song: Song): void;
   /** Drop a clip's hand-written code and play its grid notes again. */
@@ -247,6 +254,8 @@ export const useStore = create<State>((set, get) => {
   view: 'grid',
   page: 0,
   panel: null,
+  recorderKit: null,
+  myKits: loadMyKits(),
   sargam: false,
   soundOpen: false,
   keyboard: 'piano',
@@ -448,6 +457,7 @@ export const useStore = create<State>((set, get) => {
   setView: (view) => set({ view }),
   setPage: (page) => set({ page }),
   setPanel: (panel) => set({ panel }),
+  openRecorder: (kitId) => set({ panel: 'recorder', recorderKit: kitId }),
   applySong: (song) =>
     edit((s) => {
       const t = song.tracks.find((x) => x.id === s.selected.trackId) ?? song.tracks[0];
@@ -596,3 +606,6 @@ export const selectedClip = (s: State) => {
   const t = selectedTrack(s);
   return t && s.selected.slot !== null ? t.slots[s.selected.slot] ?? null : null;
 };
+
+// The store keeps a copy of the recorded kits so menus and pads update when one is saved or deleted.
+onMyKits((myKits) => useStore.setState({ myKits }));

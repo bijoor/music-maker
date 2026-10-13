@@ -1,5 +1,5 @@
 import type { PointerEvent } from 'react';
-import { HAND_NAMES, kitVoices, voiceSound, type Hand, type KitVoice } from '../model/kit';
+import { handName, kitVoices, voiceSound, type Hand, type KitVoice } from '../model/kit';
 import type { Track } from '../model/types';
 import * as recorder from '../engine/recorder';
 import StepStrip from './StepStrip';
@@ -7,8 +7,7 @@ import { drumHint } from './keymap';
 import { slideVelocity2D, strikeVelocity2D } from './strike';
 
 /** Finger-sized pads: large main pads (kick and snare double width), smaller pads for less frequent sounds. Indian kits show their strokes. */
-/** Pads whose pitch bends when the finger slides up (semitones over the pad's height): the tabla's Ge and the mridangam's Thom. */
-const BENDING = new Set(['tabla_ge', 'thom']);
+/** Semitones a bending pad (KitVoice.bends) rises over the pad's height when the finger slides up. */
 const MAX_BEND = 5;
 
 export default function DrumPads({ track }: { track: Track }) {
@@ -24,7 +23,7 @@ export default function DrumPads({ track }: { track: Track }) {
     el.classList.add('down');
     setTimeout(() => el.classList.remove('down'), 150);
     if (el.hasPointerCapture?.(id)) el.releasePointerCapture(id);
-    const bends = BENDING.has(k.voice);
+    const bends = !!k.bends;
     const move = (ev: globalThis.PointerEvent) => {
       if (ev.pointerId !== id) return;
       const dx = ev.clientX - x0, dy = ev.clientY - y0;
@@ -53,6 +52,7 @@ export default function DrumPads({ track }: { track: Track }) {
       <span className="kbd-hint">{drumHint(track.bank, k.voice)}</span>
     </button>
   );
+  if (!kit.length) return <div className="padview"><p className="muted-text empty-kit">This recorded kit is not on this device. Its hits are kept; record or choose a kit to play.</p></div>;
   return (
     <div className="padview">
       <StepStrip />
@@ -60,8 +60,8 @@ export default function DrumPads({ track }: { track: Track }) {
         // Indian kits: laid out as the drums sit, left hand | both hands | right hand.
         <div className="kit hands">
           {(['left', 'both', 'right'] as Hand[]).map((h) => (
-            <section key={h} className={`hand ${h}`} aria-label={HAND_NAMES[track.bank ?? '']?.[h] ?? h}>
-              <h3>{HAND_NAMES[track.bank ?? '']?.[h] ?? h}</h3>
+            <section key={h} className={`hand ${h}`} aria-label={handName(track.bank, h)}>
+              <h3>{handName(track.bank, h)}</h3>
               <div className="hand-pads">{kit.filter((k) => k.hand === h).map(pad)}</div>
             </section>
           ))}

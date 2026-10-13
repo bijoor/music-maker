@@ -432,6 +432,28 @@ export function preload(sounds: SoundRef[]) {
   }
 }
 
+/** The engine's audio context (for recording and auditioning samples on the same clock and sample rate). */
+export const audioContext = () => getAudioContext() as AudioContext;
+
+/** Whether a sound of this name is already loaded (so a recorded stroke does not shadow it). */
+export const hasSound = (name: string) => name.toLowerCase() in (soundMap.get() as Record<string, unknown>);
+
+/** Make sounds playable by name: name → file URL (e.g. a recorded stroke held on this device). */
+export function registerSounds(map: Record<string, string>) {
+  void samples(Object.fromEntries(Object.entries(map).map(([k, url]) => [k, [url]])));
+}
+
+/** Play raw samples once, straight away (auditioning a recording before it is saved). */
+export function playSamples(x: Float32Array, sampleRate: number) {
+  const ac = getAudioContext();
+  const buf = ac.createBuffer(1, x.length, sampleRate);
+  buf.copyToChannel(x, 0);
+  const src = ac.createBufferSource();
+  src.buffer = buf;
+  src.connect(ac.destination);
+  src.start();
+}
+
 export function audioInfo() {
   const ac = getAudioContext() as AudioContext;
   return { sampleRate: ac.sampleRate, baseLatency: ac.baseLatency ?? null, outputLatency: (ac as any).outputLatency ?? null, state: ac.state };

@@ -2,7 +2,7 @@
 // keys (so Record and Edit work with it too). Available in desktop Chrome and Edge; Safari (and so iPad)
 // does not support Web MIDI.
 import { selectedTrack, useStore } from '../state/store';
-import { isIndianKit, kitVoices, voiceSound } from '../model/kit';
+import { isStrokeKit, kitVoices, voiceSound } from '../model/kit';
 import { findScale, inScale, scalePitch, tonicPc } from '../model/scales';
 import * as recorder from './recorder';
 
@@ -29,7 +29,7 @@ function onMessage(e: MIDIMessageEvent) {
   if (kind === 0x90 && vel > 0) {
     if (track.kind === 'drums') {
       // Indian kits: the strokes in pad order from C2 (MIDI 36) up.
-      const voice = isIndianKit(track.bank) ? kitVoices(track.bank)[note - 36]?.voice : GM_DRUMS[note];
+      const voice = isStrokeKit(track.bank) ? kitVoices(track.bank)[note - 36]?.voice : GM_DRUMS[note];
       if (!voice) return;
       recorder.drum(track.id, voice, voiceSound(track.bank, voice), e.timeStamp, midiVelocity(vel));
     } else {

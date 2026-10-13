@@ -1,11 +1,12 @@
 import { lazy, Suspense, useState } from 'react';
 import { selectedClip, selectedTrack, useStore } from '../state/store';
-import { BANKS, INDIAN_KITS } from '../model/kit';
+import { BANKS, INDIAN_KITS, myKitBank } from '../model/kit';
 import { drumPresets } from '../model/presets';
 import type { Bars } from '../model/types';
 import DrumGrid from './DrumGrid';
 import Calibrate from './Calibrate';
 import About from './About';
+import SampleRecorder from './SampleRecorder';
 import SoundStrip from './SoundStrip';
 import SongsPanel from './SongsPanel';
 import SongEditor from './SongEditor';
@@ -33,6 +34,7 @@ export default function ClipEditor() {
   if (state.panel === 'calibrate') return <Calibrate />;
   if (state.panel === 'songs') return <SongsPanel />;
   if (state.panel === 'about') return <About />;
+  if (state.panel === 'recorder') return <SampleRecorder key={state.recorderKit ?? 'new'} />;
   if (!track) return <section className="card editor empty-editor"><p className="muted-text">Add a track to start.</p></section>;
   const slot = selected.slot;
   const bar = clip ? Math.min(page, clip.bars - 1) : 0;
@@ -55,10 +57,18 @@ export default function ClipEditor() {
           </>
         )}
         {track.kind === 'drums' && (
-          <select aria-label="Drum kit" value={track.bank} onChange={(e) => setBank(track.id, e.target.value)}>
+          <select aria-label="Drum kit" value={track.bank} onChange={(e) => (e.target.value === '__record' ? state.openRecorder(null) : setBank(track.id, e.target.value))}>
             <optgroup label="Drum machines">{BANKS.map((b) => <option key={b} value={b}>{b.replace('Roland', '')}</option>)}</optgroup>
             <optgroup label="Indian">{Object.keys(INDIAN_KITS).map((b) => <option key={b} value={b}>{b}</option>)}</optgroup>
+            <optgroup label="My kits">
+              {state.myKits.map((k) => <option key={k.id} value={myKitBank(k.id)}>{k.name}</option>)}
+              {track.bank?.startsWith('my:') && !state.myKits.some((k) => myKitBank(k.id) === track.bank) && <option value={track.bank}>Kit not on this device</option>}
+              <option value="__record">＋ Record a new kit…</option>
+            </optgroup>
           </select>
+        )}
+        {track.kind === 'drums' && track.bank?.startsWith('my:') && state.myKits.some((k) => myKitBank(k.id) === track.bank) && (
+          <button className="btn sm" onClick={() => state.openRecorder(track.bank!.slice(3))}>Edit kit</button>
         )}
         {track.kind === 'melodic' && (
           <select aria-label="Instrument sound" value={track.sound} onChange={(e) => setSound(track.id, e.target.value)}>
