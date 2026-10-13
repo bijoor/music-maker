@@ -168,13 +168,13 @@ describe('scenes built live', () => {
     const scene = st().song.scenes[0];
     expect(st().song.current).toBe(scene.id);
     st().setChain(true);
-    st().stopTrack('t1');
+    st().removeStep('t1', 0); // start with an empty line
     st().tapSlot('t1', 0); st().tapSlot('t1', 0); st().tapSlot('t1', 0); st().tapSlot('t1', 2);
     expect(st().song.scenes[0].active.t1).toEqual([0, 0, 0, 2]);
   });
 
   it('edits a line: repeat counts, off steps, order, adding a clip at the end', () => {
-    st().stopTrack('t1');
+    st().removeStep('t1', 0); // start with an empty line
     st().addStep('t1', 0); st().addStep('t1', 2);
     st().setStepTimes('t1', 0, 3);
     expect(drums().active).toEqual([0, 0, 0, 2]);
@@ -188,7 +188,7 @@ describe('scenes built live', () => {
   });
 
   it('a new scene copies what is heard (not the off steps) and becomes current; the old one is kept', () => {
-    st().stopTrack('t1');
+    st().removeStep('t1', 0); // start with an empty line
     st().addStep('t1', 0); st().addStep('t1', 2); st().toggleStep('t1', 1);
     const first = st().song.current!;
     st().newScene();
@@ -218,7 +218,7 @@ describe('scenes built live', () => {
 
   it('cuts shorter lines at the top of the scene so every track restarts together', async () => {
     const { generate } = await import('../codegen/generate');
-    st().stopTrack('t1');
+    st().removeStep('t1', 0); // start with an empty line
     st().addStep('t1', 0); st().setStepTimes('t1', 0, 3); // drums: 3 bars; keys play a 2-bar clip; bass 1 bar
     st().tapSlot('t2', 0); st().tapSlot('t2', 0);
     const code = generate(st().song).code;
@@ -226,5 +226,32 @@ describe('scenes built live', () => {
     expect(code).toMatch(/keys: keys_A\.ribbon\(0, 3\)/);
     st().setSceneFit(st().song.current!, 'cycle');
     expect(generate(st().song).code).not.toContain('ribbon');
+  });
+});
+
+describe('track lines on screen', () => {
+  beforeEach(() => useStore.setState({ song: withCurrentScene(demoSong()), chain: false, songMode: false, past: [], future: [] }));
+
+  it('stopping turns a track’s steps off, keeping them to turn back on', () => {
+    st().stopTrack('t1');
+    expect(drums().active).toEqual([]);
+    expect(drums().line).toEqual([{ slot: 0, times: 1, off: true }]);
+    st().toggleStep('t1', 0);
+    expect(drums().active).toEqual([0]);
+  });
+
+  it('adds a new clip at the end of the line, in the next free slot, and selects it', () => {
+    st().appendClip('t1', 2);
+    expect(drums().active).toEqual([0, 3]);
+    expect(drums().slots[3]).toMatchObject({ kind: 'drums', bars: 2 });
+    expect(st().selected).toEqual({ trackId: 't1', slot: 3 });
+  });
+
+  it('recording into a clip that is not playing puts it in the line rather than replacing the line', () => {
+    st().playInLine('t1', 2);
+    expect(drums().active).toEqual([0, 2]);
+    st().toggleStep('t1', 1); // off
+    st().playInLine('t1', 2); // back on, in its place
+    expect(drums().active).toEqual([0, 2]);
   });
 });

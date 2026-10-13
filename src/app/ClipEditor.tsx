@@ -47,7 +47,7 @@ export default function ClipEditor() {
         <span className="sw" />
         <h2>
           <EditableName value={track.name} label={`track ${track.name}`} onRename={(n) => state.renameTrack(track.id, n)} />
-          {clip && slot !== null && <span> · {LETTERS[slot]} · <EditableName value={clip.name} label={`clip ${clip.name}`} onRename={(n) => state.renameClip(track.id, slot, n)} /></span>}
+          {clip && slot !== null && <span className="sub"> · {LETTERS[slot]} · <EditableName value={clip.name} label={`clip ${clip.name}`} onRename={(n) => state.renameClip(track.id, slot, n)} /></span>}
         </h2>
         {clip && slot !== null && (
           <>

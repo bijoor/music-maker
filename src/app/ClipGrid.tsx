@@ -3,7 +3,8 @@ import { useStore } from '../state/store';
 import { isAudible } from '../codegen/generate';
 import { GROUPS } from '../model/presets';
 import { soundName } from '../model/sounds';
-import { MAX_SLOTS, STEPS_PER_BAR, type Bars, type Clip, type Track } from '../model/types';
+import { STEPS_PER_BAR, type Bars, type Clip, type Step, type Track } from '../model/types';
+import { lineOf } from '../model/lines';
 import * as player from '../engine/player';
 import { kitName, kitVoices, myKitBank } from '../model/kit';
 import ScenesBar from './ScenesBar';
@@ -11,7 +12,6 @@ import { releaseFingers } from './MelodicPlay';
 import * as recorder from '../engine/recorder';
 import EditableName from './EditableName';
 
-const LETTERS = 'ABCDEFGHIJKLMNOP';
 // Thumbnail rows: cymbals and hats on top, snares and hand percussion in the middle, kicks and toms at the bottom.
 const LANE: Record<string, number> = {
   cr: 0, rd: 0, oh: 0, hh: 0, tb: 0, sh: 0, rim: 1, sd: 1, 'sd:1': 1, cp: 1, cb: 1, bd: 2, 'bd:1': 2, lt: 2, mt: 2, ht: 2,
@@ -21,15 +21,24 @@ const LANE: Record<string, number> = {
 };
 
 export default function ClipGrid() {
-  const { song, pendingAt, transport, selected, mode, chain, songMode, setChain, tapSlot, createClip, select, stopTrack, stopAllTracks, toggleMute, toggleSolo, setGain, addSlot, addTrack, myKits, renameTrack } = useStore();
+  const { song, pendingAt, transport, selected, mode, songMode, select, stopTrack, stopAllTracks, toggleMute, toggleSolo, setGain, addTrack, myKits, renameTrack, toggleStep, setStepTimes, moveStep, removeStep, addStep, appendClip, setSongMode } = useStore();
   const [newLen, setNewLen] = useState<Bars>(1);
   const [adding, setAdding] = useState(false);
   // The add-track menu floats over the page (the clip area would clip it), anchored under its button.
   const [addAt, setAddAt] = useState({ left: 0, top: 0 });
   const rowsRef = useRef<HTMLDivElement>(null);
   const playing = transport === 'playing';
-  const columns = Math.min(MAX_SLOTS, Math.max(...song.tracks.map((t) => t.slots.length + (t.slots.length < MAX_SLOTS ? 1 : 0)), 4));
+  // A step's menu (press and hold) or a track's add menu (＋), floating over the page.
+  const [menu, setMenu] = useState<{ kind: 'step' | 'add'; trackId: string; index: number; at: { left: number; top: number } } | null>(null);
+  const openMenu = (kind: 'step' | 'add', trackId: string, index: number, el: HTMLElement) => {
+    const r = el.getBoundingClientRect();
+    setMenu({ kind, trackId, index, at: { left: Math.max(8, Math.min(r.left, innerWidth - 270)), top: Math.min(r.bottom + 4, innerHeight - 300) } });
+  };
+  const leaveSong = () => { if (songMode) setSongMode(false); };
   useProgress(rowsRef);
+  const menuTrack = menu && song.tracks.find((t) => t.id === menu.trackId);
+  const menuLine = menuTrack ? lineOf(menuTrack) : [];
+  const menuStep = menu?.kind === 'step' ? menuLine[menu.index] : undefined;
 
   return (
     <section className="card launcher" aria-label="Clips">
@@ -65,13 +74,12 @@ export default function ClipGrid() {
         <select id="newlen" className="sm" value={newLen} onChange={(e) => setNewLen(+e.target.value as Bars)}>
           {[1, 2, 4].map((n) => <option key={n} value={n}>{n} bar{n > 1 ? 's' : ''}</option>)}
         </select>
-        <button className={`btn sm${chain ? ' on' : ''}`} aria-pressed={chain} onClick={() => setChain(!chain)} title="Tap slots to add them to a track's sequence">Chain</button>
-        <span className="muted-text hint">{songMode ? 'Song mode: clips follow the song. Tap a clip or scene to take over.' : chain ? 'Chain: tap slots in the order to play them (e.g. A A A C). ■ clears.' : mode === 'edit' ? 'Edit: tap a clip to open it without playing it.' : mode === 'record' ? 'Record: tap a clip (or + for a new one), then play pads or keys.' : 'Tap a clip to play it from the next bar; tap again to stop.'}</span>
+        <span className="muted-text hint">{songMode ? 'Song mode: the song order plays. Change a step or tap a scene to take over.' : mode === 'record' ? 'Record: ＋ adds a clip to a track’s line; tap it, then play pads or keys.' : 'Each track plays its line in turn: ×N repeats a clip, ● turns it off or on, hold for more, ＋ adds a clip.'}</span>
         <span className="spacer" />
         <button className="btn sm" title="Stop every track, and silence any note still sounding" onClick={() => { stopAllTracks(); releaseFingers(); recorder.releaseAll(); }}>Stop all</button>
       </div>
       <ScenesBar />
-      <div className="lrows" ref={rowsRef} style={{ ['--cols' as string]: columns }}>
+      <div className="lrows" ref={rowsRef}>
         {song.tracks.map((t) => (
           <TrackRow
             key={t.id}
@@ -80,22 +88,49 @@ export default function ClipGrid() {
             queued={playing && pendingAt[t.id] !== undefined}
             songMode={songMode}
             selectedSlot={selected.trackId === t.id ? selected.slot : undefined}
-            onSlot={(i, clip) => {
-              // Edit: a tap only selects. Perform: it launches. Record: an empty slot becomes a clip and launches too.
-              if (!clip) { createClip(t.id, i, newLen); if (mode === 'record') tapSlot(t.id, i); }
-              else if (mode === 'edit') select(t.id, i);
-              else tapSlot(t.id, i);
-            }}
+            onStepTap={(i, step) => { leaveSong(); if (step.off) toggleStep(t.id, i); select(t.id, step.slot); }}
+            onStepTimes={(i, step) => { leaveSong(); setStepTimes(t.id, i, step.times >= 8 ? 1 : step.times + 1); }}
+            onStepToggle={(i) => { leaveSong(); toggleStep(t.id, i); }}
+            onStepMenu={(i, el) => openMenu('step', t.id, i, el)}
+            onAdd={(el) => openMenu('add', t.id, -1, el)}
             onSelect={() => { const first = t.active[0] ?? t.slots.findIndex(Boolean); select(t.id, first >= 0 ? first : null); }}
             onStop={() => stopTrack(t.id)}
             onMute={() => toggleMute(t.id)}
             onSolo={() => toggleSolo(t.id)}
             onGain={(g) => setGain(t.id, g)}
-            onAddSlot={() => addSlot(t.id)}
             onRename={(name) => renameTrack(t.id, name)}
           />
         ))}
       </div>
+      {menu && menuTrack && (
+        <>
+          <div className="menu-backdrop" onClick={() => setMenu(null)} />
+          {menu.kind === 'step' && menuStep ? (
+            <div className="menu fixed stepmenu" role="menu" style={menu.at}>
+              <span className="muted-text">{menuTrack.slots[menuStep.slot]?.name}</span>
+              <div className="repeat" role="group" aria-label="Times it plays">
+                <button aria-label="Play it once less" disabled={menuStep.times <= 1} onClick={() => setStepTimes(menu.trackId, menu.index, menuStep.times - 1)}>−</button>
+                <output>×{menuStep.times}</output>
+                <button aria-label="Play it once more" onClick={() => setStepTimes(menu.trackId, menu.index, menuStep.times + 1)}>+</button>
+              </div>
+              <button role="menuitem" onClick={() => { toggleStep(menu.trackId, menu.index); setMenu(null); }}>{menuStep.off ? 'Turn on' : 'Turn off'}</button>
+              <button role="menuitem" disabled={menu.index === 0} onClick={() => { moveStep(menu.trackId, menu.index, -1); setMenu(null); }}>Move earlier</button>
+              <button role="menuitem" disabled={menu.index === menuLine.length - 1} onClick={() => { moveStep(menu.trackId, menu.index, 1); setMenu(null); }}>Move later</button>
+              <button role="menuitem" onClick={() => { removeStep(menu.trackId, menu.index); setMenu(null); }}>Remove from the line</button>
+            </div>
+          ) : menu.kind === 'add' ? (
+            <div className="menu fixed stepmenu" role="menu" style={menu.at}>
+              <button role="menuitem" onClick={() => { leaveSong(); appendClip(menu.trackId, newLen); setMenu(null); }}>＋ New clip · {newLen} bar{newLen > 1 ? 's' : ''}</button>
+              {menuTrack.slots.some(Boolean) && <span className="muted-text">Or play one of this track’s clips next</span>}
+              {menuTrack.slots.map((c, i) => c && (
+                <button key={i} role="menuitem" onClick={() => { leaveSong(); addStep(menu.trackId, i); setMenu(null); }}>
+                  {c.name}<span className="muted-text">{c.bars} bar{c.bars > 1 ? 's' : ''}</span>
+                </button>
+              ))}
+            </div>
+          ) : null}
+        </>
+      )}
     </section>
   );
 }
@@ -106,17 +141,22 @@ interface RowProps {
   queued: boolean;
   songMode: boolean;
   selectedSlot: number | null | undefined;
-  onSlot(i: number, clip: Clip | null): void;
+  onStepTap(index: number, step: Step): void;
+  onStepTimes(index: number, step: Step): void;
+  onStepToggle(index: number): void;
+  onStepMenu(index: number, el: HTMLElement): void;
+  onAdd(el: HTMLElement): void;
   onSelect(): void;
   onStop(): void;
   onMute(): void;
   onSolo(): void;
   onGain(g: number): void;
-  onAddSlot(): void;
   onRename(name: string): void;
 }
 
-function TrackRow({ track: t, audible, queued, songMode, selectedSlot, onSlot, onSelect, onStop, onMute, onSolo, onGain, onAddSlot, onRename }: RowProps) {
+/** A track: its header, then its line in the current scene — the clips it plays in turn — and ＋ to add one. */
+function TrackRow({ track: t, audible, queued, songMode, selectedSlot, onStepTap, onStepTimes, onStepToggle, onStepMenu, onAdd, onSelect, onStop, onMute, onSolo, onGain, onRename }: RowProps) {
+  const line = lineOf(t);
   return (
     <div className={`lrow${audible ? '' : ' silenced'}${selectedSlot !== undefined ? ' sel' : ''}`} style={{ ['--tc' as string]: t.color }}>
       <div className="thd" onClick={(e) => { if (!(e.target as HTMLElement).closest('input,button')) onSelect(); }}>
@@ -130,29 +170,59 @@ function TrackRow({ track: t, audible, queued, songMode, selectedSlot, onSlot, o
           <button className="s" aria-pressed={t.solo} aria-label={`Solo ${t.name}`} onClick={onSolo}>S</button>
         </span>
       </div>
-      <div className="slots">
-        {t.slots.map((clip, i) => {
-          // In song mode the song decides what plays; the live look comes from the playhead instead.
-          const active = !songMode && t.active.includes(i);
-          const order = !songMode && t.active.length > 1 ? t.active.flatMap((s, k) => (s === i ? [k + 1] : [])) : [];
-          const cls = ['clip', clip ? '' : 'empty', active ? (queued ? 'queued' : 'playing') : '', selectedSlot === i ? 'selected' : ''].filter(Boolean).join(' ');
+      <div className="line" aria-label={`${t.name}: what it plays`}>
+        {line.map((step, i) => {
+          const clip = t.slots[step.slot];
+          if (!clip) return null;
           return (
-            <button key={i} className={cls} data-track={t.id} data-slot={i} aria-pressed={active} aria-label={clip ? `${clip.name}, slot ${LETTERS[i]}` : `New clip in slot ${LETTERS[i]}`} onClick={() => onSlot(i, clip)}>
-              {clip ? (
-                <>
-                  <span className="cn">{clip.name}<span>{clip.bars} bar{clip.bars > 1 ? 's' : ''}{active && queued ? ' · next bar' : ''}</span></span>
-                  <Thumb clip={clip} bank={t.bank} />
-                  {order.length > 0 && <span className="order" aria-label={`Plays ${order.join(', ')} in the chain`}>{order.join(' ')}</span>}
-                  {clip.code && <span className="badge" title="Hand-written code">code</span>}
-                  <span className="prog" />
-                </>
-              ) : '+'}
-            </button>
+            <StepView
+              key={`${i}:${step.slot}`}
+              track={t} step={step} index={i} clip={clip}
+              playing={!songMode && !step.off} queued={queued} selected={selectedSlot === step.slot}
+              onTap={() => onStepTap(i, step)} onTimes={() => onStepTimes(i, step)} onToggle={() => onStepToggle(i)} onMenu={(el) => onStepMenu(i, el)}
+            />
           );
         })}
-        {t.slots.length < MAX_SLOTS && <button className="addslot" aria-label={`Add a slot to ${t.name}`} onClick={onAddSlot}>+ slot</button>}
+        <button className={`addstep${line.length ? '' : ' first'}`} aria-label={`Add a clip to ${t.name}`} onClick={(e) => onAdd(e.currentTarget)}>{line.length ? '＋' : '＋ Clip'}</button>
       </div>
-      <button className="tstop" aria-label={`Stop ${t.name}`} onClick={onStop}>■</button>
+      <button className="tstop" aria-label={`Stop ${t.name}`} title="Turn this track’s clips off" onClick={onStop}>■</button>
+    </div>
+  );
+}
+
+/** One step of a line: tap to open the clip (and turn the step on), ×N for one more repeat, ● for off/on, hold for more. */
+function StepView({ track: t, step, index, clip, playing, queued, selected, onTap, onTimes, onToggle, onMenu }: {
+  track: Track; step: Step; index: number; clip: Clip; playing: boolean; queued: boolean; selected: boolean;
+  onTap(): void; onTimes(): void; onToggle(): void; onMenu(el: HTMLElement): void;
+}) {
+  const hold = useRef<{ timer?: ReturnType<typeof setTimeout>; held: boolean; x: number; y: number }>({ held: false, x: 0, y: 0 });
+  const root = useRef<HTMLDivElement>(null);
+  const cls = ['clip', 'step', step.off ? 'off' : playing ? (queued ? 'queued' : 'playing') : '', selected ? 'selected' : ''].filter(Boolean).join(' ');
+  return (
+    <div ref={root} className={cls} data-track={t.id} data-slot={step.slot} data-step={index}>
+      <button
+        className="stepmain"
+        aria-label={`${clip.name}${step.times > 1 ? `, ${step.times} times` : ''}${step.off ? ', off' : ''}`}
+        onPointerDown={(e) => {
+          const h = hold.current;
+          h.held = false; h.x = e.clientX; h.y = e.clientY;
+          clearTimeout(h.timer);
+          h.timer = setTimeout(() => { h.held = true; if (root.current) onMenu(root.current); }, 500);
+        }}
+        onPointerMove={(e) => { const h = hold.current; if (Math.hypot(e.clientX - h.x, e.clientY - h.y) > 8) clearTimeout(h.timer); }}
+        onPointerUp={() => clearTimeout(hold.current.timer)}
+        onPointerLeave={() => clearTimeout(hold.current.timer)}
+        onPointerCancel={() => clearTimeout(hold.current.timer)}
+        onContextMenu={(e) => e.preventDefault()}
+        onClick={() => { if (hold.current.held) { hold.current.held = false; return; } onTap(); }}
+      >
+        <span className="cn">{clip.name}<span>{clip.bars} bar{clip.bars > 1 ? 's' : ''}{playing && queued ? ' · next bar' : ''}</span></span>
+        <Thumb clip={clip} bank={t.bank} />
+        {clip.code && <span className="badge" title="Hand-written code">code</span>}
+      </button>
+      <button className="times" aria-label={`Plays ${step.times} time${step.times > 1 ? 's' : ''}; tap for one more`} onClick={onTimes}>×{step.times}</button>
+      <button className="onoff" aria-pressed={!step.off} aria-label={step.off ? `Turn ${clip.name} on` : `Turn ${clip.name} off`} onClick={onToggle}>{step.off ? '○' : '●'}</button>
+      <span className="prog" />
     </div>
   );
 }

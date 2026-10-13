@@ -181,6 +181,10 @@ interface State {
   moveStep(trackId: string, index: number, by: number): void;
   removeStep(trackId: string, index: number): void;
   addStep(trackId: string, slot: number): void;
+  /** A new empty clip at the end of a track's line (in the next free slot), selected for recording or editing. */
+  appendClip(trackId: string, bars: Bars): void;
+  /** Make sure a clip plays in its track's line: turn its step on, or add it at the end. */
+  playInLine(trackId: string, slot: number): void;
   /**
    * Bar the current scene started on: every track's line lines up with it (runtime, not saved). null: the scene
    * was just chosen and starts on the next bar the player launches on (the player fills this in).
@@ -447,8 +451,9 @@ export const useStore = create<State>((set, get) => {
     }));
     get().select(trackId, slot);
   },
-  stopTrack: (trackId) => set(onTrack(trackId, (t) => { t.active = []; })),
-  stopAllTracks: () => set((s) => ({ song: produce(s.song, (song) => { song.tracks.forEach((t) => (t.active = [])); }) })),
+  // Stopping turns a track's steps off: the line stays visible (until another scene is chosen) to turn back on.
+  stopTrack: (trackId) => set(onTrack(trackId, (t) => setLine(t, lineOf(t).map((x) => ({ ...x, off: true }))))),
+  stopAllTracks: () => set((s) => ({ song: produce(s.song, (song) => { song.tracks.forEach((t) => setLine(t, lineOf(t).map((x) => ({ ...x, off: true })))); }) })),
 
   select: (trackId, slot) => set((s) => (s.selected.trackId === trackId && s.selected.slot === slot ? {} : { selected: { trackId, slot }, page: 0 })),
   createClip: (trackId, slot, bars) => {
@@ -457,8 +462,9 @@ export const useStore = create<State>((set, get) => {
   },
   deleteClip: (trackId, slot) =>
     edit(onTrack(trackId, (t) => {
+      const line = lineOf(t).filter((x) => x.slot !== slot);
       t.slots[slot] = null;
-      t.active = t.active.filter((i) => i !== slot);
+      setLine(t, line);
     })),
   duplicateClip: (trackId, slot) => {
     const t = findTrack(get().song, trackId);
@@ -615,6 +621,28 @@ export const useStore = create<State>((set, get) => {
     })),
   removeStep: (trackId, index) =>
     set(onTrack(trackId, (t) => setLine(t, lineOf(t).filter((_, i) => i !== index)))),
+  appendClip: (trackId, bars) => {
+    let slot = -1;
+    edit(onTrack(trackId, (t) => {
+      slot = t.slots.findIndex((c) => !c);
+      if (slot < 0) {
+        if (t.slots.length >= MAX_SLOTS) return;
+        t.slots.push(null);
+        slot = t.slots.length - 1;
+      }
+      t.slots[slot] = newClip(t, bars);
+      setLine(t, [...lineOf(t), { slot, times: 1 }]);
+    }));
+    if (slot >= 0) get().select(trackId, slot);
+    else get().setMessage(`A track holds up to ${MAX_SLOTS} clips; remove one first`);
+  },
+  playInLine: (trackId, slot) =>
+    set(onTrack(trackId, (t) => {
+      if (!t.slots[slot] || t.active.includes(slot)) return;
+      const line = lineOf(t);
+      const i = line.findIndex((x) => x.slot === slot);
+      setLine(t, i >= 0 ? line.map((x, k) => (k === i ? { ...x, off: false } : x)) : [...line, { slot, times: 1 }]);
+    })),
   addStep: (trackId, slot) =>
     set(onTrack(trackId, (t) => { if (t.slots[slot]) setLine(t, [...lineOf(t), { slot, times: 1 }]); })),
   updateScene: (sceneId, includeSilent) =>

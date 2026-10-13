@@ -50,14 +50,14 @@ function readyToRecord(track: Track, slot: number): boolean {
   const s = state();
   const onlyThis = track.active.length === 1 && track.active[0] === slot;
   if (s.transport === 'stopped') {
-    if (!onlyThis) s.tapSlot(track.id, slot);
+    if (!onlyThis) s.playInLine(track.id, slot);
     player.play({ countIn: s.countIn });
     s.setMessage(s.countIn ? 'Count-in: recording starts after one bar' : 'Recording');
     return false;
   }
   if (s.transport !== 'playing') return false;
   if (!track.active.includes(slot)) {
-    s.tapSlot(track.id, slot);
+    s.playInLine(track.id, slot);
     s.setMessage('The clip starts at the next bar; keep playing to record');
     return false;
   }

@@ -114,7 +114,7 @@ select.sm { min-height: 30px; padding: 3px 6px; font-size: 13px; }
 .empty-editor { display: grid; place-items: center; }
 .ehead { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 6px 10px; border-bottom: 1px solid var(--line); }
 .ehead h2 { font-family: var(--display); font-size: 15px; margin: 0; white-space: nowrap; }
-.ehead h2 span { font-family: var(--body); font-weight: 400; color: var(--muted); font-size: 13px; }
+.ehead h2 .sub { font-family: var(--body); font-weight: 400; color: var(--muted); font-size: 13px; }
 .ehead .sw { width: 10px; height: 22px; border-radius: 3px; background: var(--tc); }
 .ehead select { min-height: 32px; padding: 3px 6px; font-size: 13px; max-width: 160px; }
 .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 9px; overflow: hidden; background: var(--panel); }
@@ -283,7 +283,7 @@ select.sm { min-height: 30px; padding: 3px 6px; font-size: 13px; }
   .modes button { padding: 5px 9px; }
   .play { width: 50px; }
   .ehead { gap: 6px; }
-  .ehead h2 span, .wide-only { display: none; }
+  .ehead h2 .sub, .wide-only { display: none; }
   .seg button { padding: 5px 9px; }
 }
 
@@ -392,3 +392,27 @@ select.sm { min-height: 30px; padding: 3px 6px; font-size: 13px; }
 
 /* The scene being played and built. */
 .scene.current { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+
+/* A track's line: its clips in the order they play, scrolling sideways when long. */
+.line { display: flex; gap: 6px; overflow-x: auto; overscroll-behavior-x: contain; min-width: 0; align-items: stretch; scrollbar-width: none; }
+.line::-webkit-scrollbar { display: none; }
+.clip.step { flex: 0 0 clamp(118px, 13vw, 168px); padding: 0; display: block; }
+.step .stepmain { position: absolute; inset: 0; width: 100%; border: 0; background: none; color: inherit; text-align: left; padding: 5px 30px 7px 12px; display: grid; align-content: center; gap: 4px; min-width: 0; }
+.step .stepmain .cn { padding-right: 4px; }
+.step .times, .step .onoff { position: absolute; right: 3px; width: 26px; height: 20px; border-radius: 6px; border: 1px solid var(--line); background: var(--panel); color: var(--fg); font-size: 11px; font-weight: 700; padding: 0; line-height: 1; z-index: 1; }
+.step .times { top: 3px; }
+.step .onoff { bottom: 4px; color: var(--tc); font-size: 12px; }
+.clip.step.playing .times, .clip.step.playing .onoff { background: rgba(255, 255, 255, .2); border-color: rgba(255, 255, 255, .5); color: #fff; }
+.clip.step.off { background: none; border-style: dashed; opacity: .55; }
+.clip.step.off::before { background: var(--line); }
+.clip.step.off .thumb i { background: var(--muted); }
+.addstep { flex: 0 0 auto; min-width: 44px; border: 1px dashed var(--line); background: none; color: var(--muted); border-radius: 9px; font-size: 16px; padding: 0 10px; }
+.addstep.first { min-width: 110px; font-size: 13px; }
+.menu-backdrop { position: fixed; inset: 0; z-index: 79; }
+.stepmenu { min-width: 240px; max-height: calc(100vh - 120px); overflow-y: auto; }
+.stepmenu > .muted-text { padding: 6px 12px 2px; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; }
+.stepmenu .repeat { display: flex; align-items: center; gap: 10px; padding: 6px 12px; }
+.stepmenu .repeat button { min-height: 36px; min-width: 44px; justify-content: center; border: 1px solid var(--line); background: var(--panel-2); border-radius: 8px; font-size: 18px; }
+.stepmenu .repeat output { font-weight: 700; min-width: 40px; text-align: center; }
+.stepmenu button .muted-text { margin-left: auto; padding-left: 12px; font-size: 11px; }
+.stepmenu button[disabled] { opacity: .4; }
