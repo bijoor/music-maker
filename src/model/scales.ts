@@ -85,3 +85,13 @@ export function scaleChords(scale: ScaleDef, tonic: string, octave: number, sarg
   }
   return chords;
 }
+
+/**
+ * The chord row above the keyboard: over scale pads it lines up with the pads (one chord per scale note, then the
+ * tonic an octave up; with two-octave rows, the chords of both octaves), over the piano just the scale's chords.
+ */
+export function padChords(scale: ScaleDef, tonic: string, octave: number, sargam: boolean, pads: boolean, perRow = 1): Chord[] {
+  if (!pads) return scaleChords(scale, tonic, octave, sargam);
+  if (perRow === 2) return [...scaleChords(scale, tonic, octave, sargam), ...scaleChords(scale, tonic, octave + 1, sargam, true)];
+  return scaleChords(scale, tonic, octave, sargam, true);
+}

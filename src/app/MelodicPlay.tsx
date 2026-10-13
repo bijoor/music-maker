@@ -1,11 +1,11 @@
 import type { PointerEvent, ReactNode } from 'react';
 import { useStore } from '../state/store';
-import { findScale, inScale, pitchLabel, scaleChords, scalePitch, tonicPc } from '../model/scales';
+import { findScale, inScale, padChords, pitchLabel, scalePitch, tonicPc } from '../model/scales';
 import { pitchToCode } from '../model/notes';
 import type { Track } from '../model/types';
 import * as recorder from '../engine/recorder';
 import StepStrip from './StepStrip';
-import { PIANO_HINT, padRowKeys } from './keymap';
+import { CHORD_KEYS, PIANO_HINT, padRowKeys } from './keymap';
 import { slideVelocity, strikeVelocity } from './strike';
 import { keyboardOf } from '../model/groups';
 import { anchors, keyAt, keyLine, pitchAlong, slideTo, startSlide } from './glide';
@@ -20,12 +20,15 @@ const BLACK = [1, 3, 6, 8, 10];
 export default function MelodicPlay({ track }: { track: Track }) {
   const { song, sargam, scaleLock, sustain, glide, setGlide, setUi, setOctave, setTrackKeyboard } = useStore();
   // Each track keeps its own keyboard (new tracks start with their group's).
-  const { layout: keyboard, octaves: keyboardOctaves } = keyboardOf(track);
+  const { layout: keyboard, octaves: keyboardOctaves, perRow: perRowSetting } = keyboardOf(track);
+  // Scale pads: rows of one octave, or two for wide rows.
+  const perRow = keyboard === 'pads' ? perRowSetting ?? 1 : 1;
   const pianoOctaves = Math.min(2, keyboardOctaves); // the piano shows at most two octaves
   const scale = findScale(song);
   const tonic = song.key.tonic;
-  // On scale pads the chords line up with the pads above each other: one per scale note, then the upper Sa.
-  const chords = scaleChords(scale, tonic, track.octave, sargam, keyboard === 'pads');
+  // On scale pads the chords line up with the pads: one per scale note, then the upper Sa (with wide rows, the
+  // chords of both octaves).
+  const chords = padChords(scale, tonic, track.octave, sargam, keyboard === 'pads', perRow);
   const play = (pitches: number[], e: PointerEvent<HTMLElement>, chord = false) => {
     const el = e.currentTarget;
     const vel0 = strikeVelocity(e.clientY, el);
@@ -88,10 +91,14 @@ export default function MelodicPlay({ track }: { track: Track }) {
           <button aria-pressed={keyboard === 'pads'} onClick={() => setTrackKeyboard(track.id, { layout: 'pads' })}>Scale pads</button>
         </div>
         <div className="seg" role="group" aria-label="Keyboard size">
-          {(keyboard === 'pads' ? [1, 2, 3, 4] as const : [1, 2] as const).map((n) => (
-            <button key={n} aria-pressed={(keyboard === 'pads' ? keyboardOctaves : pianoOctaves) === n} onClick={() => setTrackKeyboard(track.id, { octaves: n })}>{n} oct</button>
+          {(keyboard === 'piano' ? [1, 2] as const : perRow === 2 ? [1, 2, 3] as const : [1, 2, 3, 4] as const).map((n) => (
+            <button key={n} aria-pressed={(keyboard === 'pads' ? keyboardOctaves : pianoOctaves) === n} onClick={() => setTrackKeyboard(track.id, { octaves: n })}>{n * perRow} oct</button>
           ))}
         </div>
+        {keyboard === 'pads' && (
+          <button className={`btn sm${perRow === 2 ? ' on' : ''}`} aria-pressed={perRow === 2} title="Two octaves in each row of pads"
+            onClick={() => setTrackKeyboard(track.id, perRow === 2 ? { perRow: 1 } : { perRow: 2, octaves: Math.min(3, keyboardOctaves) as 1 | 2 | 3 })}>Wide rows</button>
+        )}
         {keyboard === 'piano' && <button className={`btn sm${scaleLock ? ' on' : ''}`} aria-pressed={scaleLock} onClick={() => setUi({ scaleLock: !scaleLock })}>Scale lock</button>}
         <button className={`btn sm${sustain ? ' on' : ''}`} aria-pressed={sustain} title="Pedal: notes keep ringing after you let go, until Sustain is turned off (or hold Shift)" onClick={() => setUi({ sustain: !sustain })}>Sustain</button>
         <button className={`btn sm${glide ? ' on' : ''}`} aria-pressed={glide} title="Slide a held finger sideways to glide the pitch smoothly between keys" onClick={() => setGlide(!glide)}>Slide</button>
@@ -101,7 +108,7 @@ export default function MelodicPlay({ track }: { track: Track }) {
       <div className={`chords${keyboard === 'pads' ? ' over-pads' : ''}`} style={{ gridTemplateColumns: `repeat(${chords.length}, minmax(0, 1fr))` }}>
         {chords.map((c, i) => (
           <button key={i} className="chord" data-chord={i} onPointerDown={(e) => play(c.pitches, e, true)}>
-            <strong>{c.name}</strong><span>{c.numeral}</span><span className="kbd-hint">{i + 1}</span>
+            <strong>{c.name}</strong><span>{c.numeral}</span><span className="kbd-hint">{CHORD_KEYS[i] ?? ''}</span>
           </button>
         ))}
       </div>
@@ -121,9 +128,9 @@ export default function MelodicPlay({ track }: { track: Track }) {
     const row = (oct: number) => {
       // Every row ends on the Sa above, so the rows' columns line up (the lower row's last pad repeats the upper
       // row's first, for convenience).
-      const pitches = scale.degrees.map((d) => scalePitch(scale, tonic, d, oct));
-      pitches.push(scalePitch(scale, tonic, 0, oct + 1));
-      const keys = rowKeys[oct - track.octave] ?? [];
+      const pitches = Array.from({ length: perRow }, (_, k) => scale.degrees.map((d) => scalePitch(scale, tonic, d, oct + k))).flat();
+      pitches.push(scalePitch(scale, tonic, 0, oct + perRow));
+      const keys = rowKeys[(oct - track.octave) / perRow] ?? [];
       return (
         <div className="padrow">
           {pitches.map((p, i) => {
@@ -140,7 +147,7 @@ export default function MelodicPlay({ track }: { track: Track }) {
     return (
       // One row per octave, lowest at the bottom; pads get smaller as rows are added.
       <div className={`spads rows-${keyboardOctaves}`} style={{ gridTemplateRows: `repeat(${keyboardOctaves}, 1fr)` }}>
-        {Array.from({ length: keyboardOctaves }, (_, i) => row(track.octave + keyboardOctaves - 1 - i))}
+        {Array.from({ length: keyboardOctaves }, (_, i) => row(track.octave + (keyboardOctaves - 1 - i) * perRow))}
       </div>
     );
   }

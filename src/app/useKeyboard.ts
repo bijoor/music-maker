@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { selectedTrack, useStore } from '../state/store';
 import { voiceSound } from '../model/kit';
 import { keyboardOf } from '../model/groups';
-import { findScale, inScale, scaleChords, scalePitch, tonicPc } from '../model/scales';
+import { findScale, inScale, padChords, scalePitch, tonicPc } from '../model/scales';
 import * as recorder from '../engine/recorder';
 import * as player from '../engine/player';
 import { CHORD_KEYS, PIANO_KEYS, drumKey, padRowKeys } from './keymap';
@@ -34,14 +34,16 @@ function resolve(key: string): { voice?: string; pitches?: number[]; chord?: boo
   const scale = findScale(s.song), tonic = s.song.key.tonic;
   const ci = CHORD_KEYS.indexOf(key);
   if (ci >= 0) {
-    const chord = scaleChords(scale, tonic, track.octave, false, keyboardOf(track).layout === 'pads')[ci];
+    const kb = keyboardOf(track);
+    const chord = padChords(scale, tonic, track.octave, false, kb.layout === 'pads', kb.perRow)[ci];
     return chord ? { pitches: chord.pitches, chord: true, selector: `[data-chord="${ci}"]` } : null;
   }
   if (keyboardOf(track).layout === 'pads') {
     // Rows of keys, lowest octave first (padRowKeys): Z X C V … the track's octave, then A S D F …, Q W E R ….
     const rows = padRowKeys(keyboardOf(track).octaves);
     const r = rows.findIndex((keys) => keys.includes(key));
-    const row = r >= 0 && r < keyboardOf(track).octaves ? { i: rows[r].indexOf(key), oct: track.octave + r } : null;
+    const perRow = keyboardOf(track).perRow ?? 1;
+    const row = r >= 0 && r < keyboardOf(track).octaves ? { i: rows[r].indexOf(key), oct: track.octave + r * perRow } : null;
     if (!row) return null;
     const n = scale.degrees.length;
     const deg = scale.degrees[row.i % n], oct = row.oct + Math.floor(row.i / n);

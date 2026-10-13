@@ -31,10 +31,14 @@ export const INDIAN_PRESETS: Record<string, Record<string, Record<string, number
 /** The presets offered for a track's kit or drum machine. */
 export const drumPresets = (bank?: string) => (bank && INDIAN_PRESETS[bank]) || DRUM_PRESETS;
 
-/** A keyboard layout for melodic tracks: piano keys (one or two octaves) or scale pads (one to four octaves). */
+/**
+ * A keyboard layout for melodic tracks: piano keys (one or two octaves) or scale pads. For scale pads `octaves`
+ * is the number of rows (one to four) and `perRow` how many octaves each row holds (one, or two for wide rows).
+ */
 export interface KeyboardSetup {
   layout: 'piano' | 'pads';
   octaves: 1 | 2 | 3 | 4;
+  perRow?: 1 | 2;
 }
 
 /**

@@ -82,7 +82,7 @@ export interface Track {
   /** The + Track group it was added from (model/presets GROUPS); older tracks are placed by their sound. */
   group?: string;
   /** Melodic tracks: the keyboard layout it plays with (else its group's default). */
-  keyboard?: { layout: 'piano' | 'pads'; octaves: 1 | 2 | 3 | 4 };
+  keyboard?: { layout: 'piano' | 'pads'; octaves: 1 | 2 | 3 | 4; perRow?: 1 | 2 };
 }
 
 /** A saved set of active slots, from any tracks. Tracks it does not name keep playing. */
