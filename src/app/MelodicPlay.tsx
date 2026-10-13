@@ -8,7 +8,7 @@ import StepStrip from './StepStrip';
 import { PAD_ROWS, PIANO_HINT } from './keymap';
 import { slideVelocity, strikeVelocity } from './strike';
 import { keyboardOf } from '../model/groups';
-import { anchors, keyAt, keyLine, pitchAlong } from './glide';
+import { anchors, keyAt, keyLine, pitchAlong, slideTo, startSlide } from './glide';
 
 /** A sliding finger that stops for this long settles onto the key under it, easing over SETTLE_EASE seconds. */
 const SETTLE_AFTER_MS = 100;
@@ -39,13 +39,16 @@ export default function MelodicPlay({ track }: { track: Track }) {
       return;
     }
     // Keys: with Slide off, moving the held finger onto another key plays that key. With Slide on, sliding sideways
-    // glides the pitch: it starts exactly on the struck key wherever it was
-    // struck, and moves evenly to each other key's pitch at that key's centre. When the finger stops on a key, the
-    // pitch settles onto that key (unless turned off in More). Sliding up or down changes the volume from the
-    // velocity it was struck at, on the same scale as striking.
+    // glides the pitch, landing on notes: it bends toward the next key only while the finger is on the key the
+    // movement started from, goes to each key's own note on entering it, and settles on the key under the finger
+    // when it stops; reversing or pausing starts a new bend (glide.ts slideTo). With settling turned off in More,
+    // bends are free: the pitch follows the finger, reaching each key's note at its centre. Sliding up or down
+    // changes the volume from the velocity it was struck at, on the same scale as striking.
     if (el.hasPointerCapture?.(id)) el.releasePointerCapture(id);
     const line = keyLine(el);
     const path = anchors(line, el, e.clientX);
+    const struck = line.find((k) => k.el === el);
+    const slide = struck ? startSlide(struck, e.clientX, e.timeStamp) : null;
     const y0 = e.clientY, height = el.getBoundingClientRect().height;
     let lit = el, settle: ReturnType<typeof setTimeout> | undefined;
     const move = (ev: globalThis.PointerEvent) => {
@@ -55,10 +58,13 @@ export default function MelodicPlay({ track }: { track: Track }) {
       // Slide off: each key reached plays its own note. The new note starts at the volume the finger is at now.
       if (!glide) recorder.step(id, on.pitch, ev.timeStamp);
       recorder.swell(id, slideVelocity(vel0, ev.clientY - y0, height));
-      if (glide) recorder.glide(id, pitchAlong(path, ev.clientX), on.pitch, ev.timeStamp);
+      if (glide && pitchSnap && slide) {
+        const { pitch, ease } = slideTo(line, slide, ev.clientX, ev.timeStamp, on);
+        recorder.glide(id, pitch, on.pitch, ev.timeStamp, ease);
+      } else if (glide) recorder.glide(id, pitchAlong(path, ev.clientX), on.pitch, ev.timeStamp);
       if (on.el !== lit) { lit.classList.remove('down'); lit = on.el; lit.classList.add('down'); }
       clearTimeout(settle);
-      if (glide && pitchSnap) settle = setTimeout(() => recorder.glide(id, on.pitch, on.pitch, undefined, SETTLE_EASE), SETTLE_AFTER_MS);
+      if (glide && pitchSnap) settle = setTimeout(() => { if (slide) slide.cur = on.pitch; recorder.glide(id, on.pitch, on.pitch, undefined, SETTLE_EASE); }, SETTLE_AFTER_MS);
     };
     const up = (ev: globalThis.PointerEvent) => {
       if (ev.pointerId !== id) return;
