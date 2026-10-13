@@ -112,7 +112,7 @@ async function readClip(text: string, track: Track, existing: Clip | null, name?
   }
   const bars = detectBars(evs);
   const id = existing?.id ?? newId('c');
-  const clipName = name ?? existing?.name ?? (track.kind === 'drums' ? 'Beat' : 'Clip');
+  const clipName = name ?? existing?.name ?? `${track.kind === 'drums' ? 'Beat' : 'Clip'} ${track.slots.filter(Boolean).length + 1}`;
   if (bars) {
     if (track.kind === 'drums') {
       const hits = toDrums(evs, bars, track);

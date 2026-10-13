@@ -6,6 +6,7 @@ import { MAX_SLOTS, STEPS_PER_BAR, type Bars, type Clip, type Track } from '../m
 import * as player from '../engine/player';
 import { kitVoices, myKitBank } from '../model/kit';
 import ScenesBar from './ScenesBar';
+import EditableName from './EditableName';
 
 const LETTERS = 'ABCDEFGH';
 // Thumbnail rows: cymbals and hats on top, snares and hand percussion in the middle, kicks and toms at the bottom.
@@ -17,7 +18,7 @@ const LANE: Record<string, number> = {
 };
 
 export default function ClipGrid() {
-  const { song, pendingAt, transport, selected, mode, chain, songMode, setChain, tapSlot, createClip, select, stopTrack, stopAllTracks, toggleMute, toggleSolo, setGain, addSlot, addTrack, myKits } = useStore();
+  const { song, pendingAt, transport, selected, mode, chain, songMode, setChain, tapSlot, createClip, select, stopTrack, stopAllTracks, toggleMute, toggleSolo, setGain, addSlot, addTrack, myKits, renameTrack } = useStore();
   const [newLen, setNewLen] = useState<Bars>(1);
   const [adding, setAdding] = useState(false);
   // The add-track menu floats over the page (the clip area would clip it), anchored under its button.
@@ -85,6 +86,7 @@ export default function ClipGrid() {
             onSolo={() => toggleSolo(t.id)}
             onGain={(g) => setGain(t.id, g)}
             onAddSlot={() => addSlot(t.id)}
+            onRename={(name) => renameTrack(t.id, name)}
           />
         ))}
       </div>
@@ -105,15 +107,16 @@ interface RowProps {
   onSolo(): void;
   onGain(g: number): void;
   onAddSlot(): void;
+  onRename(name: string): void;
 }
 
-function TrackRow({ track: t, audible, queued, songMode, selectedSlot, onSlot, onSelect, onStop, onMute, onSolo, onGain, onAddSlot }: RowProps) {
+function TrackRow({ track: t, audible, queued, songMode, selectedSlot, onSlot, onSelect, onStop, onMute, onSolo, onGain, onAddSlot, onRename }: RowProps) {
   return (
     <div className={`lrow${audible ? '' : ' silenced'}${selectedSlot !== undefined ? ' sel' : ''}`} style={{ ['--tc' as string]: t.color }}>
       <div className="thd" onClick={(e) => { if (!(e.target as HTMLElement).closest('input,button')) onSelect(); }}>
         <span className="c" />
         <span className="n">
-          <strong>{t.name}{t.playCode && <span className="custom"> · custom line</span>}</strong>
+          <strong><EditableName value={t.name} label={`track ${t.name}`} onRename={onRename} />{t.playCode && <span className="custom"> · custom line</span>}</strong>
           <input className="vol" type="range" min={0} max={1.5} step={0.01} value={t.fx.gain} aria-label={`${t.name} volume`} onChange={(e) => onGain(+e.target.value)} />
         </span>
         <span className="ms">

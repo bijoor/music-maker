@@ -7,6 +7,7 @@ import DrumGrid from './DrumGrid';
 import Calibrate from './Calibrate';
 import About from './About';
 import SampleRecorder from './SampleRecorder';
+import EditableName from './EditableName';
 import SoundStrip from './SoundStrip';
 import SongsPanel from './SongsPanel';
 import SongEditor from './SongEditor';
@@ -43,7 +44,10 @@ export default function ClipEditor() {
     <section className="card editor" style={{ ['--tc' as string]: track.color }} aria-label="Clip editor">
       <div className="ehead">
         <span className="sw" />
-        <h2>{track.name}{clip && slot !== null && <span> · {LETTERS[slot]} · {clip.name}</span>}</h2>
+        <h2>
+          <EditableName value={track.name} label={`track ${track.name}`} onRename={(n) => state.renameTrack(track.id, n)} />
+          {clip && slot !== null && <span> · {LETTERS[slot]} · <EditableName value={clip.name} label={`clip ${clip.name}`} onRename={(n) => state.renameClip(track.id, slot, n)} /></span>}
+        </h2>
         {clip && slot !== null && (
           <>
             <div className="seg" role="group" aria-label="Clip length">

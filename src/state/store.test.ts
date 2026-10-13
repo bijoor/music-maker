@@ -137,3 +137,26 @@ describe('chains, scenes and song', () => {
     expect(st().song.scenes).toEqual([]);
   });
 });
+
+describe('names', () => {
+  it('renames tracks and clips (blank names are ignored), and undo brings the old name back', () => {
+    st().renameTrack('t1', '  Tabla  ');
+    st().renameClip('t1', 0, 'Theka');
+    st().renameClip('t1', 0, '   ');
+    expect(drums().name).toBe('Tabla');
+    expect(drums().slots[0]!.name).toBe('Theka');
+    expect(generate(st().song).code).toContain('const tabla_A =');
+    st().undo();
+    expect(drums().slots[0]!.name).not.toBe('Theka');
+  });
+
+  it('numbers new clips rather than naming them after the track', async () => {
+    const { INSTRUMENTS } = await import('../model/presets');
+    st().addTrack(INSTRUMENTS.findIndex((p) => p.drone));
+    const drone = st().song.tracks[st().song.tracks.length - 1];
+    expect(drone.slots[0]!.name).toBe('Clip 1');
+    st().createClip(drone.id, 1, 1);
+    expect(drone.name).not.toBe(st().song.tracks[st().song.tracks.length - 1].slots[1]!.name);
+    expect(st().song.tracks[st().song.tracks.length - 1].slots[1]!.name).toBe('Clip 2');
+  });
+});

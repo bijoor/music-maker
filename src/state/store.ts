@@ -165,6 +165,8 @@ interface State {
   launchScene(sceneId: string): void;
   updateScene(sceneId: string, includeSilent: boolean): void;
   renameScene(sceneId: string, name: string): void;
+  renameTrack(trackId: string, name: string): void;
+  renameClip(trackId: string, slot: number, name: string): void;
   deleteScene(sceneId: string): void;
   setSongMode(on: boolean): void;
   addSongStep(sceneId: string, bars?: number): void;
@@ -318,7 +320,7 @@ export const useStore = create<State>((set, get) => {
           // A one-bar clip holding the scale's drone notes (Sa–Pa, or Sa–Ma for ragas like Malkauns).
           const scale = findScale(song);
           const pitches = (scale.drone ?? [0, 7]).map((d) => scalePitch(scale, song.key.tonic, d, p.octave));
-          t.slots[0] = { kind: 'melodic', id: newId('c'), name: 'Drone', bars: 1, notes: [{ step: 0, len: STEPS_PER_BAR, pitches, vel: 1 }] };
+          t.slots[0] = { kind: 'melodic', id: newId('c'), name: 'Clip 1', bars: 1, notes: [{ step: 0, len: STEPS_PER_BAR, pitches, vel: 1 }] };
           t.fx.gain = 0.6;
         }
         song.tracks.push(t);
@@ -509,6 +511,10 @@ export const useStore = create<State>((set, get) => {
         if (scene) scene.active = captureScene(song, includeSilent);
       }),
     })),
+  renameTrack: (trackId, name) =>
+    edit(onTrack(trackId, (t) => { if (name.trim()) t.name = name.trim(); })),
+  renameClip: (trackId, slot, name) =>
+    edit(onTrack(trackId, (t) => { const c = t.slots[slot]; if (c && name.trim()) c.name = name.trim(); })),
   renameScene: (sceneId, name) =>
     edit((s) => ({ song: produce(s.song, (song) => { const sc = song.scenes.find((x) => x.id === sceneId); if (sc && name.trim()) sc.name = name.trim(); }) })),
   deleteScene: (sceneId) =>
