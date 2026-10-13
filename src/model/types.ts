@@ -49,6 +49,12 @@ export interface Fx {
   lpf?: number;
   room?: number;
   delay?: number;
+  /**
+   * Seconds each note takes to fade in, and keeps ringing after it ends (Strudel's attack and release). Together
+   * they let a held note that repeats every bar (a drone) overlap itself instead of stopping at the bar line.
+   */
+  attack?: number;
+  release?: number;
 }
 
 export interface Track {

@@ -60,6 +60,13 @@ describe('reading edited code back into the song', () => {
     expect(song.tracks[1].mute).toBe(true);
   });
 
+  it('reads fade-in and ring-out on the play line (a drone overlapping its bar lines)', async () => {
+    const { song } = await parseCode(code().replace('keys: keys_A.room(.4).gain(.7)', 'keys: keys_A.attack(.4).release(2).room(.4).gain(.7)'), demoSong());
+    expect(song.tracks[2].fx).toMatchObject({ attack: 0.4, release: 2, room: 0.4, gain: 0.7 });
+    expect(song.tracks[2].playCode).toBeUndefined();
+    expect(generate(song).code).toContain('keys: keys_A.attack(.4).release(2).room(.4).gain(.7)');
+  });
+
   it('keeps a play line it cannot express as custom code', async () => {
     const edited = code().replace('keys: keys_A.room(.4).gain(.7)', 'keys: keys_A.room(.4).gain(.7).jux(rev)');
     const { song } = await parseCode(edited, demoSong());

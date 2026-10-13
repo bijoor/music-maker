@@ -259,6 +259,8 @@ export function sections(track: Track, active: number[] = track.active): { slot:
 export function fxControls(track: Track): [string, number][] {
   const f = track.fx;
   const out: [string, number][] = [];
+  if (f.attack) out.push(['attack', f.attack]);
+  if (f.release) out.push(['release', f.release]);
   if (f.lpf !== undefined && f.lpf < 20000) out.push(['lpf', Math.round(f.lpf)]);
   if (f.room) out.push(['room', f.room]);
   if (f.delay) out.push(['delay', f.delay]);

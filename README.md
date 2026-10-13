@@ -55,6 +55,7 @@ Plan: see the project plan document (shared separately).
 
 ## Expression: velocity and bends
 
+- **Fade in / Ring out** (Sound strip; `.attack()` / `.release()` on the track's line): each note fades in and keeps ringing after it ends, so a held note repeating every bar — a drone — overlaps itself instead of stopping at the bar line. New Drone tracks start with them set, on the recorded harmonium.
 - **Keys sound while held**, like a real instrument (and GeoShred): keys, scale pads and chord pads play until the finger lifts. The **Sustain** button (or holding Shift) is a pedal: notes keep ringing after you let go, until the next note is played (they fade over a quarter second) or Sustain is turned off.
 - **Drum pads**: where a pad is struck sets the velocity in both directions (soft top-left, full bottom-right); keeping the finger down and sliding any way swells or fades the hit while it rings. On the tabla's Ge and the mridangam's Thom, sliding up raises the pitch (up to 5 semitones over the pad's height, like pressing into the bass head) and left/right changes the volume.
 - **Strike velocity** (as in GeoShred): where you strike a pad, key or scale pad sets how hard the note plays — soft at the top, full near the bottom (More → Strike velocity flips it or turns it off). MIDI velocity is used too. Softer notes and hits show lighter on the grids; a note's velocity can be changed on the note grid. In code: `.velocity("…")` in the notes' rhythm (a drum voice with softer hits gets a layer of its own).

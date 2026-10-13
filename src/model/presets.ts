@@ -58,5 +58,5 @@ export const INSTRUMENTS: InstrumentPreset[] = [
   { label: 'Acoustic guitar', name: 'Guitar', kind: 'melodic', color: '#7a5c2e', sound: 'acoustic_guitar', octave: 3, poly: true },
   { label: 'Sitar', name: 'Sitar', kind: 'melodic', color: '#b35c00', sound: 'gm_sitar', octave: 3, poly: false },
   { label: 'Flute (bansuri-like)', name: 'Flute', kind: 'melodic', color: '#3b8a8a', sound: 'gm_flute', octave: 4, poly: false },
-  { label: 'Drone (Sa–Pa)', name: 'Drone', kind: 'melodic', color: '#c2255c', sound: 'gm_reed_organ', octave: 3, poly: true, drone: true },
+  { label: 'Drone (Sa–Pa)', name: 'Drone', kind: 'melodic', color: '#c2255c', sound: 'harmonium', octave: 3, poly: true, drone: true },
 ];

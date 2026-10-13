@@ -321,7 +321,8 @@ export const useStore = create<State>((set, get) => {
           const scale = findScale(song);
           const pitches = (scale.drone ?? [0, 7]).map((d) => scalePitch(scale, song.key.tonic, d, p.octave));
           t.slots[0] = { kind: 'melodic', id: newId('c'), name: 'Clip 1', bars: 1, notes: [{ step: 0, len: STEPS_PER_BAR, pitches, vel: 1 }] };
-          t.fx.gain = 0.6;
+          // Each bar's notes fade in as the last bar's ring out, so the drone never stops at the bar line.
+          t.fx = { ...t.fx, gain: 0.6, attack: 0.4, release: 2 };
         }
         song.tracks.push(t);
       }),

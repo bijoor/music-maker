@@ -324,7 +324,7 @@ select.sm { min-height: 30px; padding: 3px 6px; font-size: 13px; }
 .pad.down .kbd-hint, .spad.down .kbd-hint, .chord.down .kbd-hint { color: #fff; border-color: #fff8; }
 
 /* Sound strip */
-.soundstrip { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px 14px; padding: 6px 12px 8px; border-bottom: 1px solid var(--line); background: var(--panel-2); }
+.soundstrip { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 6px 14px; padding: 6px 12px 8px; border-bottom: 1px solid var(--line); background: var(--panel-2); }
 .fxs { display: grid; grid-template-columns: auto minmax(0, 1fr); grid-template-rows: auto auto; gap: 0 8px; align-items: center; }
 .fxs .lbl { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
 .fxs output { font-size: 12px; font-family: var(--mono); text-align: right; }

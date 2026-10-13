@@ -159,7 +159,7 @@ function readPlay(text: string, label: string | undefined, track: Track, song: S
   let core_ = text.trim();
   const fx: Fx = { gain: 1, pan: 0.5 };
   let fxFound = false;
-  const fxRe = /\.(lpf|cutoff|room|delay|pan|gain)\(\s*(-?\d*\.?\d+)\s*\)\s*$/;
+  const fxRe = /\.(attack|release|lpf|cutoff|room|delay|pan|gain)\(\s*(-?\d*\.?\d+)\s*\)\s*$/;
   for (let m = fxRe.exec(core_); m; m = fxRe.exec(core_)) {
     fxFound = true;
     const k = m[1] === 'cutoff' ? 'lpf' : (m[1] as keyof Fx);

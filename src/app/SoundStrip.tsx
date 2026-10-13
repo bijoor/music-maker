@@ -25,6 +25,8 @@ export default function SoundStrip({ track }: { track: Track }) {
       {slider('Cutoff', fromCut(f.lpf), 0, 1, 0.005, f.lpf === undefined ? 'open' : f.lpf >= 1000 ? `${(f.lpf / 1000).toFixed(1)} kHz` : `${f.lpf} Hz`, (v) => setFx(track.id, { lpf: toCut(v) }))}
       {slider('Reverb', f.room ?? 0, 0, 1, 0.01, num(f.room ?? 0), (v) => setFx(track.id, { room: v || undefined }))}
       {slider('Delay', f.delay ?? 0, 0, 1, 0.01, num(f.delay ?? 0), (v) => setFx(track.id, { delay: v || undefined }))}
+      {slider('Fade in', f.attack ?? 0, 0, 2, 0.05, f.attack ? `${num(f.attack)} s` : 'off', (v) => setFx(track.id, { attack: v || undefined }))}
+      {slider('Ring out', f.release ?? 0, 0, 4, 0.05, f.release ? `${num(f.release)} s` : 'off', (v) => setFx(track.id, { release: v || undefined }))}
     </div>
   );
 }
