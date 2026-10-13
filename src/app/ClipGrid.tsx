@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState, type RefObject } from 'react';
 import { useStore } from '../state/store';
 import { isAudible } from '../codegen/generate';
-import { INSTRUMENTS } from '../model/presets';
+import { GROUPS } from '../model/presets';
+import { soundName } from '../model/sounds';
 import { MAX_SLOTS, STEPS_PER_BAR, type Bars, type Clip, type Track } from '../model/types';
 import * as player from '../engine/player';
-import { kitVoices, myKitBank } from '../model/kit';
+import { kitName, kitVoices, myKitBank } from '../model/kit';
 import ScenesBar from './ScenesBar';
 import EditableName from './EditableName';
 
@@ -40,15 +41,18 @@ export default function ClipGrid() {
               {(['drums', 'melodic'] as const).map((kind) => (
                 <div key={kind} className="addcol">
                   <span className="muted-text">{kind === 'drums' ? 'Drums' : 'Instruments'}</span>
-                  {INSTRUMENTS.map((p, i) => p.kind === kind && (
-                    <button key={p.label} role="menuitem" onClick={() => { addTrack(i); setAdding(false); }}>
-                      <i style={{ background: p.color }} />{p.label}
-                    </button>
-                  ))}
-                  {kind === 'drums' && myKits.map((k) => (
-                    <button key={k.id} role="menuitem" onClick={() => { addTrack({ label: k.name, name: k.name, kind: 'drums', color: '#8f5a2b', bank: myKitBank(k.id), octave: 3, poly: false }); setAdding(false); }}>
-                      <i style={{ background: '#8f5a2b' }} />{k.name} <span className="muted-text">· my kit</span>
-                    </button>
+                  {GROUPS.filter((g) => g.kind === kind).map((g) => (
+                    <div key={g.id} className="addgroup">
+                      <button role="menuitem" onClick={() => { addTrack(g); setAdding(false); }}>
+                        <i style={{ background: g.color }} />{g.label}<span className="muted-text">{g.kind === 'drums' ? kitName(g.bank) : soundName(g.sound)}</span>
+                      </button>
+                      {/* Kits recorded into this group, as a quick start. */}
+                      {myKits.filter((k) => (k.group ?? 'indian-drums') === g.id).map((k) => (
+                        <button key={k.id} role="menuitem" className="sub" onClick={() => { addTrack(g, myKitBank(k.id)); setAdding(false); }}>
+                          <i style={{ background: g.color }} />{k.name}<span className="muted-text">my kit</span>
+                        </button>
+                      ))}
+                    </div>
                   ))}
                 </div>
               ))}

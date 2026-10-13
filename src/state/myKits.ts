@@ -53,7 +53,7 @@ export interface StrokeDraft {
  * `dholak_na`, unique among all sounds, and kept when the stroke is renamed later (clips refer to it). Strokes
  * dropped from the kit lose their sounds. Returns the kit.
  */
-export async function saveMyKit(draft: { id?: string; name: string; strokes: StrokeDraft[] }, taken: (name: string) => boolean): Promise<MyKit> {
+export async function saveMyKit(draft: { id?: string; name: string; group?: string; strokes: StrokeDraft[] }, taken: (name: string) => boolean): Promise<MyKit> {
   const kits = getMyKits();
   const old = kits.find((k) => k.id === draft.id);
   const id = old?.id ?? `${slug(draft.name)}${Date.now().toString(36)}`;
@@ -72,7 +72,7 @@ export async function saveMyKit(draft: { id?: string; name: string; strokes: Str
     strokes.push({ voice, name: s.name.trim() || 'Stroke', main: true, hand: s.hand, ...(s.bends ? { bends: true } : {}) });
   }
   for (const s of old?.strokes ?? []) if (!strokes.some((x) => x.voice === s.voice)) void deleteSample(s.voice);
-  const kit: MyKit = { id, name: draft.name.trim() || 'My kit', strokes };
+  const kit: MyKit = { id, name: draft.name.trim() || 'My kit', strokes, group: draft.group ?? old?.group ?? 'indian-drums' };
   save(old ? kits.map((k) => (k.id === id ? kit : k)) : [...kits, kit]);
   return kit;
 }

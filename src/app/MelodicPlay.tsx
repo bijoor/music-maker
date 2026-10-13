@@ -7,6 +7,7 @@ import * as recorder from '../engine/recorder';
 import StepStrip from './StepStrip';
 import { PAD_ROWS, PIANO_HINT } from './keymap';
 import { slideVelocity, strikeVelocity } from './strike';
+import { keyboardOf } from '../model/groups';
 import { anchors, keyAt, keyLine, pitchAlong } from './glide';
 
 /** A sliding finger that stops for this long settles onto the key under it, easing over SETTLE_EASE seconds. */
@@ -17,7 +18,9 @@ const BLACK = [1, 3, 6, 8, 10];
 
 /** Chord pads above a piano keyboard or large scale pads; everything plays immediately. */
 export default function MelodicPlay({ track }: { track: Track }) {
-  const { song, sargam, keyboard, keyboardOctaves, scaleLock, sustain, glide, setGlide, setUi, setOctave } = useStore();
+  const { song, sargam, scaleLock, sustain, glide, setGlide, setUi, setOctave, setTrackKeyboard } = useStore();
+  // Each track keeps its own keyboard (new tracks start with their group's).
+  const { layout: keyboard, octaves: keyboardOctaves } = keyboardOf(track);
   const scale = findScale(song);
   const tonic = song.key.tonic;
   // On scale pads the chords line up with the pads above each other: one per scale note, then the upper Sa.
@@ -75,12 +78,12 @@ export default function MelodicPlay({ track }: { track: Track }) {
     <div className="mplay">
       <div className="mtools">
         <div className="seg" role="group" aria-label="Keyboard layout">
-          <button aria-pressed={keyboard === 'piano'} onClick={() => setUi({ keyboard: 'piano' })}>Piano</button>
-          <button aria-pressed={keyboard === 'pads'} onClick={() => setUi({ keyboard: 'pads' })}>Scale pads</button>
+          <button aria-pressed={keyboard === 'piano'} onClick={() => setTrackKeyboard(track.id, { layout: 'piano' })}>Piano</button>
+          <button aria-pressed={keyboard === 'pads'} onClick={() => setTrackKeyboard(track.id, { layout: 'pads' })}>Scale pads</button>
         </div>
         <div className="seg" role="group" aria-label="Keyboard size">
-          <button aria-pressed={keyboardOctaves === 1} onClick={() => setUi({ keyboardOctaves: 1 })}>1 oct</button>
-          <button aria-pressed={keyboardOctaves === 2} onClick={() => setUi({ keyboardOctaves: 2 })}>2 oct</button>
+          <button aria-pressed={keyboardOctaves === 1} onClick={() => setTrackKeyboard(track.id, { octaves: 1 })}>1 oct</button>
+          <button aria-pressed={keyboardOctaves === 2} onClick={() => setTrackKeyboard(track.id, { octaves: 2 })}>2 oct</button>
         </div>
         {keyboard === 'piano' && <button className={`btn sm${scaleLock ? ' on' : ''}`} aria-pressed={scaleLock} onClick={() => setUi({ scaleLock: !scaleLock })}>Scale lock</button>}
         <button className={`btn sm${sustain ? ' on' : ''}`} aria-pressed={sustain} title="Pedal: notes keep ringing after you let go, until Sustain is turned off (or hold Shift)" onClick={() => setUi({ sustain: !sustain })}>Sustain</button>

@@ -1,6 +1,7 @@
 import { lazy, Suspense, useState } from 'react';
 import { selectedClip, selectedTrack, useStore } from '../state/store';
 import { BANKS, INDIAN_KITS, myKitBank } from '../model/kit';
+import { groupOf } from '../model/groups';
 import { drumPresets } from '../model/presets';
 import type { Bars } from '../model/types';
 import DrumGrid from './DrumGrid';
@@ -62,10 +63,14 @@ export default function ClipEditor() {
         )}
         {track.kind === 'drums' && (
           <select aria-label="Drum kit" value={track.bank} onChange={(e) => (e.target.value === '__record' ? state.openRecorder(null) : setBank(track.id, e.target.value))}>
-            <optgroup label="Drum machines">{BANKS.map((b) => <option key={b} value={b}>{b.replace('Roland', '')}</option>)}</optgroup>
-            <optgroup label="Indian">{Object.keys(INDIAN_KITS).map((b) => <option key={b} value={b}>{b}</option>)}</optgroup>
+            {/* The track's own group first (with the kits recorded into it), then the other. */}
+            {(groupOf(track).id === 'indian-drums' ? ['indian-drums', 'drums'] : ['drums', 'indian-drums']).map((g) => (
+              <optgroup key={g} label={g === 'drums' ? 'Drum machines' : 'Indian drums'}>
+                {(g === 'drums' ? BANKS : Object.keys(INDIAN_KITS)).map((b) => <option key={b} value={b}>{b.replace('Roland', '')}</option>)}
+                {state.myKits.filter((k) => (k.group ?? 'indian-drums') === g).map((k) => <option key={k.id} value={myKitBank(k.id)}>{k.name} (my kit)</option>)}
+              </optgroup>
+            ))}
             <optgroup label="My kits">
-              {state.myKits.map((k) => <option key={k.id} value={myKitBank(k.id)}>{k.name}</option>)}
               {track.bank?.startsWith('my:') && !state.myKits.some((k) => myKitBank(k.id) === track.bank) && <option value={track.bank}>Kit not on this device</option>}
               <option value="__record">＋ Record a new kit…</option>
             </optgroup>
@@ -76,7 +81,12 @@ export default function ClipEditor() {
         )}
         {track.kind === 'melodic' && (
           <select aria-label="Instrument sound" value={track.sound} onChange={(e) => setSound(track.id, e.target.value)}>
-            {[...new Set(SOUNDS.map((x) => x.group))].map((g) => (
+            {/* The track's group's instruments first, then all the others. */}
+            {(() => {
+              const mine = groupOf(track).sounds ?? [];
+              const all = [...new Set(SOUNDS.map((x) => x.group))];
+              return [...mine.filter((g) => all.includes(g)), ...all.filter((g) => !mine.includes(g))];
+            })().map((g) => (
               <optgroup key={g} label={g}>{SOUNDS.filter((x) => x.group === g).map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</optgroup>
             ))}
             {!SOUNDS.some((x) => x.id === track.sound) && <option value={track.sound}>{track.sound}</option>}

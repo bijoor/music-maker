@@ -31,8 +31,23 @@ export const INDIAN_PRESETS: Record<string, Record<string, Record<string, number
 /** The presets offered for a track's kit or drum machine. */
 export const drumPresets = (bank?: string) => (bank && INDIAN_PRESETS[bank]) || DRUM_PRESETS;
 
+/** A keyboard layout for melodic tracks: piano keys or scale pads, one or two octaves. */
+export interface KeyboardSetup {
+  layout: 'piano' | 'pads';
+  octaves: 1 | 2;
+}
+
+/**
+ * A kind of track offered by + Track. Tracks take the group's colour and are named after it ("Strings",
+ * "Strings 2"); melodic groups also set the starting instrument and keyboard layout, and list their instruments
+ * first in the track's instrument menu.
+ */
 export interface InstrumentPreset {
+  /** Group id (stored on the track). */
+  id: string;
+  /** What + Track shows. */
   label: string;
+  /** Default track name. */
   name: string;
   kind: 'drums' | 'melodic';
   color: string;
@@ -42,21 +57,25 @@ export interface InstrumentPreset {
   poly: boolean;
   /** Start with a held drone clip on the scale's drone notes (Sa–Pa). */
   drone?: boolean;
+  /** Melodic groups: the keyboard a new track opens with. */
+  keyboard?: KeyboardSetup;
+  /** Melodic groups: the instrument menu's groups (model/sounds) that belong here, listed first. */
+  sounds?: string[];
 }
 
-export const INSTRUMENTS: InstrumentPreset[] = [
-  { label: 'Drum kit · TR-909', name: 'Drums', kind: 'drums', color: '#e8590c', bank: 'RolandTR909', octave: 3, poly: false },
-  { label: 'Drum kit · TR-808', name: 'Drums 808', kind: 'drums', color: '#f08c00', bank: 'RolandTR808', octave: 3, poly: false },
-  { label: 'Drum kit · LinnDrum', name: 'Linn', kind: 'drums', color: '#e67700', bank: 'LinnDrum', octave: 3, poly: false },
-  { label: 'Tabla', name: 'Tabla', kind: 'drums', color: '#a5531c', bank: 'Tabla', octave: 3, poly: false },
-  { label: 'Mridangam', name: 'Mridangam', kind: 'drums', color: '#8f5a2b', bank: 'Mridangam', octave: 3, poly: false },
-  { label: 'Synth bass', name: 'Bass', kind: 'melodic', color: '#2f9e44', sound: 'gm_synth_bass_1', octave: 2, poly: false },
-  { label: 'Piano', name: 'Piano', kind: 'melodic', color: '#1c7ed6', sound: 'piano', octave: 3, poly: true },
-  { label: 'Saw lead', name: 'Lead', kind: 'melodic', color: '#ae3ec9', sound: 'sawtooth', octave: 4, poly: false },
-  { label: 'Strings', name: 'Strings', kind: 'melodic', color: '#0c8599', sound: 'gm_synth_strings_1', octave: 3, poly: true },
-  { label: 'Harmonium', name: 'Harmonium', kind: 'melodic', color: '#9c3d54', sound: 'harmonium', octave: 3, poly: true },
-  { label: 'Acoustic guitar', name: 'Guitar', kind: 'melodic', color: '#7a5c2e', sound: 'acoustic_guitar', octave: 3, poly: true },
-  { label: 'Sitar', name: 'Sitar', kind: 'melodic', color: '#b35c00', sound: 'gm_sitar', octave: 3, poly: false },
-  { label: 'Flute (bansuri-like)', name: 'Flute', kind: 'melodic', color: '#3b8a8a', sound: 'gm_flute', octave: 4, poly: false },
-  { label: 'Drone (Sa–Pa)', name: 'Drone', kind: 'melodic', color: '#c2255c', sound: 'harmonium', octave: 3, poly: true, drone: true },
+export const GROUPS: InstrumentPreset[] = [
+  { id: 'drums', label: 'Drums', name: 'Drums', kind: 'drums', color: '#e8590c', bank: 'RolandTR909', octave: 3, poly: false },
+  { id: 'indian-drums', label: 'Indian drums', name: 'Indian drums', kind: 'drums', color: '#a5531c', bank: 'Tabla', octave: 3, poly: false },
+  { id: 'indian', label: 'Indian', name: 'Indian', kind: 'melodic', color: '#b35c00', sound: 'harmonium', octave: 3, poly: true, keyboard: { layout: 'pads', octaves: 2 }, sounds: ['Indian'] },
+  { id: 'keys', label: 'Keys', name: 'Keys', kind: 'melodic', color: '#1c7ed6', sound: 'piano', octave: 3, poly: true, keyboard: { layout: 'piano', octaves: 2 }, sounds: ['Keys', 'Mallets & bells'] },
+  { id: 'strings', label: 'Strings & guitars', name: 'Strings', kind: 'melodic', color: '#0c8599', sound: 'gm_string_ensemble_1', octave: 3, poly: true, keyboard: { layout: 'piano', octaves: 2 }, sounds: ['Strings', 'Guitars'] },
+  { id: 'wind', label: 'Wind & brass', name: 'Wind', kind: 'melodic', color: '#3b8a8a', sound: 'flute', octave: 4, poly: false, keyboard: { layout: 'pads', octaves: 2 }, sounds: ['Wind', 'Brass'] },
+  { id: 'bass', label: 'Bass', name: 'Bass', kind: 'melodic', color: '#2f9e44', sound: 'gm_synth_bass_1', octave: 2, poly: false, keyboard: { layout: 'piano', octaves: 2 }, sounds: ['Bass'] },
+  { id: 'synth', label: 'Synth', name: 'Synth', kind: 'melodic', color: '#ae3ec9', sound: 'sawtooth', octave: 4, poly: false, keyboard: { layout: 'piano', octaves: 2 }, sounds: ['Synth', 'Voice'] },
+  { id: 'drone', label: 'Drone (Sa–Pa)', name: 'Drone', kind: 'melodic', color: '#c2255c', sound: 'harmonium', octave: 3, poly: true, drone: true, keyboard: { layout: 'pads', octaves: 1 }, sounds: ['Indian', 'Keys'] },
 ];
+
+/** Kept for older callers: the groups are the instruments + Track offers. */
+export const INSTRUMENTS = GROUPS;
+
+export const groupById = (id?: string) => GROUPS.find((g) => g.id === id);

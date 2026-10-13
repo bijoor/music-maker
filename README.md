@@ -53,6 +53,10 @@ The latest build of `main` is also published at <https://bijoor.github.io/music-
 
 Plan: see the project plan document (shared separately).
 
+## Track groups
+
++ Track offers groups: **Drums** and **Indian drums**, and **Indian**, **Keys**, **Strings & guitars**, **Wind & brass**, **Bass**, **Synth** and **Drone**. A new track takes its group's colour and name ("Strings", "Strings 2"), instrument (or kit) and keyboard: Indian, Wind and Drone open on scale pads, the others on the piano. Each track keeps its own keyboard; changing it also makes it the group's default for new tracks on this device. A track's instrument menu lists its group's instruments first (all the others below), and recorded kits belong to the group chosen when recording them (Indian drums by default).
+
 ## Expression: velocity and bends
 
 - **Fade in / Ring out** (Sound strip; `.attack()` / `.release()` on the track's line): each note fades in and keeps ringing after it ends, so a held note repeating every bar — a drone — overlaps itself instead of stopping at the bar line. New Drone tracks start with them set, on the recorded harmonium.

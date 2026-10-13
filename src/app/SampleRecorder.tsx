@@ -33,6 +33,7 @@ export default function SampleRecorder() {
   const { recorderKit, myKits, setPanel, setBank, setMessage } = useStore();
   const editing = myKits.find((k) => k.id === recorderKit);
   const [name, setName] = useState(editing?.name ?? '');
+  const [group, setGroup] = useState(editing?.group ?? 'indian-drums');
   const [strokes, setStrokes] = useState<Draft[]>([]);
   const [take, setTake] = useState<MicTake | null>(null);
   const [error, setError] = useState('');
@@ -97,7 +98,7 @@ export default function SampleRecorder() {
     setBusy(true);
     try {
       const kit = await saveMyKit(
-        { id: editing?.id, name, strokes: strokes.map(({ voice, name, hand, bends, wav }) => ({ voice, name, hand, bends, wav })) },
+        { id: editing?.id, name, group, strokes: strokes.map(({ voice, name, hand, bends, wav }) => ({ voice, name, hand, bends, wav })) },
         engine.hasSound,
       );
       const track = selectedTrack(useStore.getState());
@@ -135,6 +136,13 @@ export default function SampleRecorder() {
             <span className="muted-text">Kit name</span>
             <input id="rec-kit-name" value={name} placeholder="e.g. Dholak" onChange={(e) => setName(e.target.value)} autoComplete="off" />
           </label>
+          <div className="rec-name">
+            <span className="muted-text">Group</span>
+            <div className="seg" role="group" aria-label="Group">
+              <button aria-pressed={group === 'indian-drums'} onClick={() => setGroup('indian-drums')}>Indian drums</button>
+              <button aria-pressed={group === 'drums'} onClick={() => setGroup('drums')}>Drums</button>
+            </div>
+          </div>
           {take ? (
             <button className="btn rec on" onClick={stop}>■ Stop</button>
           ) : (

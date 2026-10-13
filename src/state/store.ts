@@ -3,7 +3,8 @@ import { create } from 'zustand';
 import { produce } from 'immer';
 import { demoSong } from '../model/demo';
 import { emptyHits, newId, track as makeTrack, defaultFx } from '../model/build';
-import { drumPresets, INSTRUMENTS, type InstrumentPreset } from '../model/presets';
+import { drumPresets, INSTRUMENTS, type InstrumentPreset, type KeyboardSetup } from '../model/presets';
+import { groupKeyboard, groupOf, keyboardOf, setGroupKeyboard, trackName } from '../model/groups';
 import { kitHas, type MyKit } from '../model/kit';
 import { loadMyKits, onMyKits } from './myKits';
 import { MAX_SLOTS, STEPS_PER_BAR, type Bars, type Clip, type Fx, type ScaleDef, type Song, type Track } from '../model/types';
@@ -13,7 +14,6 @@ import { deleteSongById, listSongs, loadCurrent, loadNumber, loadSongById, saveN
 
 export type TransportState = 'stopped' | 'loading' | 'playing';
 export type EditorView = 'grid' | 'play';
-export type KeyboardLayout = 'piano' | 'pads';
 export type Mode = 'perform' | 'record' | 'edit';
 /** What the bottom area shows instead of the clip editor (no pop-up dialogs). */
 export type Panel = 'code' | 'song' | 'scale' | 'calibrate' | 'songs' | 'about' | 'recorder';
@@ -44,8 +44,6 @@ interface State {
   sargam: boolean;
   /** Show the sound controls strip in the clip editor. */
   soundOpen: boolean;
-  keyboard: KeyboardLayout;
-  keyboardOctaves: 1 | 2;
   scaleLock: boolean;
   /** Sustain pedal: notes keep ringing after their key is let go, until it is turned off (keys always sound while held). */
   sustain: boolean;
@@ -100,8 +98,13 @@ interface State {
   addCustomScale(scale: Omit<ScaleDef, 'id' | 'group'>): void;
 
   // Tracks
-  /** Add a track: one of INSTRUMENTS (by index) or any instrument preset (e.g. a recorded kit). */
-  addTrack(instrument: number | InstrumentPreset): void;
+  /**
+   * Add a track from a group (by index into GROUPS, or the group itself): named after the group, in its colour,
+   * with its instrument (or `bank`, e.g. a recorded kit) and keyboard.
+   */
+  addTrack(group: number | InstrumentPreset, bank?: string): void;
+  /** Change a melodic track's keyboard; it also becomes its group's default for new tracks. */
+  setTrackKeyboard(trackId: string, keyboard: Partial<KeyboardSetup>): void;
   removeTrack(trackId: string): void;
   setGain(trackId: string, gain: number): void;
   /** Change a track's effects (cutoff, reverb, delay, pan, volume); not undoable, like a mixer. */
@@ -144,7 +147,7 @@ interface State {
   resetClipCode(trackId: string, slot: number): void;
   resetPlayCode(trackId: string): void;
   toggleCode(): void;
-  setUi(ui: Partial<Pick<State, 'soundOpen' | 'sargam' | 'keyboard' | 'keyboardOctaves' | 'scaleLock' | 'sustain' | 'noteLen' | 'chordLen' | 'cursor' | 'quantize' | 'countIn' | 'metronome'>>): void;
+  setUi(ui: Partial<Pick<State, 'soundOpen' | 'sargam' | 'scaleLock' | 'sustain' | 'noteLen' | 'chordLen' | 'cursor' | 'quantize' | 'countIn' | 'metronome'>>): void;
   setMode(mode: Mode): void;
   /** Recording: add a drum hit or a note (held notes are written again with a longer length on release). */
   recordHit(trackId: string, slot: number, voice: string, step: number, group: string, vel?: number): void;
@@ -262,8 +265,6 @@ export const useStore = create<State>((set, get) => {
   myKits: loadMyKits(),
   sargam: false,
   soundOpen: false,
-  keyboard: 'piano',
-  keyboardOctaves: 2,
   scaleLock: true,
   sustain: false,
   noteLen: 2,
@@ -310,12 +311,15 @@ export const useStore = create<State>((set, get) => {
     set({ song, songMode: false, selected: { trackId: song.tracks[0].id, slot: 0 }, page: 0, past: [], future: [], historyGroup: null });
   },
 
-  addTrack: (i) => {
+  addTrack: (i, bank) => {
     const p = typeof i === 'number' ? INSTRUMENTS[i] : i;
     const id = newId('t');
     edit((s) => ({
       song: produce(s.song, (song) => {
-        const t = makeTrack({ id, name: p.name, kind: p.kind, color: p.color, bank: p.bank, sound: p.sound, octave: p.octave, poly: p.poly, fx: defaultFx() });
+        const t = makeTrack({
+          id, name: trackName(p, song.tracks), group: p.id, kind: p.kind, color: p.color, bank: bank ?? p.bank, sound: p.sound, octave: p.octave, poly: p.poly, fx: defaultFx(),
+          ...(p.kind === 'melodic' ? { keyboard: groupKeyboard(p) } : {}),
+        });
         if (p.drone) {
           // A one-bar clip holding the scale's drone notes (Sa–Pa, or Sa–Ma for ragas like Malkauns).
           const scale = findScale(song);
@@ -335,6 +339,11 @@ export const useStore = create<State>((set, get) => {
       const selected = s.selected.trackId === trackId ? { trackId: song.tracks[0]?.id ?? '', slot: null } : s.selected;
       return { song, selected };
     }),
+  setTrackKeyboard: (trackId, keyboard) =>
+    set(onTrack(trackId, (t) => {
+      t.keyboard = { ...keyboardOf(t), ...keyboard };
+      setGroupKeyboard(groupOf(t).id, t.keyboard);
+    })),
   setGain: (trackId, gain) => set(onTrack(trackId, (t) => { t.fx.gain = Math.round(gain * 100) / 100; })),
   setFx: (trackId, fx) =>
     set(onTrack(trackId, (t) => {

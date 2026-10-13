@@ -21,6 +21,8 @@ export interface MyKit {
   id: string;
   name: string;
   strokes: KitVoice[];
+  /** The + Track group the kit belongs to: 'drums' or 'indian-drums' (the default). */
+  group?: string;
 }
 
 let myKits: MyKit[] = [];

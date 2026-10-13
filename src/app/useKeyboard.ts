@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { selectedTrack, useStore } from '../state/store';
 import { voiceSound } from '../model/kit';
+import { keyboardOf } from '../model/groups';
 import { findScale, inScale, scaleChords, scalePitch, tonicPc } from '../model/scales';
 import * as recorder from '../engine/recorder';
 import * as player from '../engine/player';
@@ -33,13 +34,13 @@ function resolve(key: string): { voice?: string; pitches?: number[]; chord?: boo
   const scale = findScale(s.song), tonic = s.song.key.tonic;
   const ci = CHORD_KEYS.indexOf(key);
   if (ci >= 0) {
-    const chord = scaleChords(scale, tonic, track.octave, false, s.keyboard === 'pads')[ci];
+    const chord = scaleChords(scale, tonic, track.octave, false, keyboardOf(track).layout === 'pads')[ci];
     return chord ? { pitches: chord.pitches, chord: true, selector: `[data-chord="${ci}"]` } : null;
   }
-  if (s.keyboard === 'pads') {
+  if (keyboardOf(track).layout === 'pads') {
     // Two rows: Z X C V … the track's octave, A S D F … the one above. One row: A S D F … the track's octave.
-    const low = s.keyboardOctaves === 2 ? PAD_ROWS.low.indexOf(key) : -1, high = PAD_ROWS.high.indexOf(key);
-    const row = low >= 0 ? { i: low, oct: track.octave } : high >= 0 ? { i: high, oct: track.octave + (s.keyboardOctaves === 2 ? 1 : 0) } : null;
+    const low = keyboardOf(track).octaves === 2 ? PAD_ROWS.low.indexOf(key) : -1, high = PAD_ROWS.high.indexOf(key);
+    const row = low >= 0 ? { i: low, oct: track.octave } : high >= 0 ? { i: high, oct: track.octave + (keyboardOf(track).octaves === 2 ? 1 : 0) } : null;
     if (!row) return null;
     const n = scale.degrees.length;
     const deg = scale.degrees[row.i % n], oct = row.oct + Math.floor(row.i / n);
@@ -80,7 +81,7 @@ export function useKeyboard() {
       const key = keyOf(e);
       const s = useStore.getState(), track = selectedTrack(s);
       // Octave down / up: Z / X on the piano; − / = on scale pads, whose lower row uses Z and X.
-      const octKeys = s.keyboard === 'pads' ? ['-', '='] : ['z', 'x'];
+      const octKeys = track && keyboardOf(track).layout === 'pads' ? ['-', '='] : ['z', 'x'];
       if (track?.kind === 'melodic' && octKeys.includes(key)) { s.setOctave(track.id, track.octave + (key === octKeys[1] ? 1 : -1)); e.preventDefault(); return; }
       if (held.has(key)) return;
       const hit = resolve(key);
