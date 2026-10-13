@@ -3,7 +3,7 @@ import { create } from 'zustand';
 import { produce } from 'immer';
 import { demoSong } from '../model/demo';
 import { emptyHits, newId, track as makeTrack, defaultFx } from '../model/build';
-import { drumPresets, INSTRUMENTS } from '../model/presets';
+import { drumPresets, INSTRUMENTS, type InstrumentPreset } from '../model/presets';
 import { kitHas, type MyKit } from '../model/kit';
 import { loadMyKits, onMyKits } from './myKits';
 import { MAX_SLOTS, STEPS_PER_BAR, type Bars, type Clip, type Fx, type ScaleDef, type Song, type Track } from '../model/types';
@@ -90,7 +90,8 @@ interface State {
   setScale(scaleId: string): void;
   resetSong(): void;
   // Song library (local storage) and files
-  newSong(): void;
+  /** Start a new song: blank (no tracks), or with an empty drum kit, bass and piano. */
+  newSong(blank?: boolean): void;
   openSong(id: string): void;
   duplicateSong(): void;
   deleteSong(id: string): void;
@@ -99,7 +100,8 @@ interface State {
   addCustomScale(scale: Omit<ScaleDef, 'id' | 'group'>): void;
 
   // Tracks
-  addTrack(instrument: number): void;
+  /** Add a track: one of INSTRUMENTS (by index) or any instrument preset (e.g. a recorded kit). */
+  addTrack(instrument: number | InstrumentPreset): void;
   removeTrack(trackId: string): void;
   setGain(trackId: string, gain: number): void;
   /** Change a track's effects (cutoff, reverb, delay, pan, volume); not undoable, like a mixer. */
@@ -194,12 +196,12 @@ const stored = loadCurrent(() => newId('song'));
 const initialId = stored?.id ?? newId('song');
 const initial = stored?.song ?? demoSong();
 
-/** A new song: a drum kit, a bass and a piano, all empty. */
-function emptySong(): Song {
+/** A new song: blank (no tracks at all), or a drum kit, a bass and a piano, all empty. */
+function emptySong(blank = false): Song {
   const n = listSongs().length + 1;
   return {
     version: 1, name: `Song ${n}`, bpm: 100, key: { tonic: 'C', scaleId: 'minor' }, customScales: [], scenes: [], arrangement: [],
-    tracks: [
+    tracks: blank ? [] : [
       makeTrack({ id: newId('t'), name: 'Drums', kind: 'drums', color: '#e8590c', bank: 'RolandTR909' }),
       makeTrack({ id: newId('t'), name: 'Bass', kind: 'melodic', color: '#2f9e44', sound: 'gm_synth_bass_1', octave: 2 }),
       makeTrack({ id: newId('t'), name: 'Keys', kind: 'melodic', color: '#1c7ed6', sound: 'piano', octave: 3, poly: true }),
@@ -289,7 +291,7 @@ export const useStore = create<State>((set, get) => {
       const id = newId('scale');
       return { song: produce(s.song, (song) => { song.customScales.push({ ...scale, id, group: 'Custom' }); song.key.scaleId = id; }) };
     }),
-  newSong: () => switchTo(set, newId('song'), emptySong()),
+  newSong: (blank = false) => switchTo(set, newId('song'), emptySong(blank)),
   openSong: (id) => { const song = loadSongById(id); if (song) switchTo(set, id, song); },
   duplicateSong: () => { const s = get(); switchTo(set, newId('song'), { ...structuredClone(s.song), name: `${s.song.name} copy` }); },
   deleteSong: (id) => {
@@ -307,7 +309,7 @@ export const useStore = create<State>((set, get) => {
   },
 
   addTrack: (i) => {
-    const p = INSTRUMENTS[i];
+    const p = typeof i === 'number' ? INSTRUMENTS[i] : i;
     const id = newId('t');
     edit((s) => ({
       song: produce(s.song, (song) => {

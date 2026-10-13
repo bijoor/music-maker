@@ -4,7 +4,7 @@ import { isAudible } from '../codegen/generate';
 import { INSTRUMENTS } from '../model/presets';
 import { MAX_SLOTS, STEPS_PER_BAR, type Bars, type Clip, type Track } from '../model/types';
 import * as player from '../engine/player';
-import { kitVoices } from '../model/kit';
+import { kitVoices, myKitBank } from '../model/kit';
 import ScenesBar from './ScenesBar';
 
 const LETTERS = 'ABCDEFGH';
@@ -17,9 +17,11 @@ const LANE: Record<string, number> = {
 };
 
 export default function ClipGrid() {
-  const { song, pendingAt, transport, selected, mode, chain, songMode, setChain, tapSlot, createClip, select, stopTrack, stopAllTracks, toggleMute, toggleSolo, setGain, addSlot, addTrack } = useStore();
+  const { song, pendingAt, transport, selected, mode, chain, songMode, setChain, tapSlot, createClip, select, stopTrack, stopAllTracks, toggleMute, toggleSolo, setGain, addSlot, addTrack, myKits } = useStore();
   const [newLen, setNewLen] = useState<Bars>(1);
   const [adding, setAdding] = useState(false);
+  // The add-track menu floats over the page (the clip area would clip it), anchored under its button.
+  const [addAt, setAddAt] = useState({ left: 0, top: 0 });
   const rowsRef = useRef<HTMLDivElement>(null);
   const playing = transport === 'playing';
   const columns = Math.min(MAX_SLOTS, Math.max(...song.tracks.map((t) => t.slots.length + (t.slots.length < MAX_SLOTS ? 1 : 0)), 4));
@@ -30,13 +32,24 @@ export default function ClipGrid() {
       <div className="lhead">
         <h2>Clips</h2>
         <div className="addwrap">
-          <button className="btn sm" aria-expanded={adding} onClick={() => setAdding(!adding)}>+ Track</button>
+          <button className="btn sm" aria-expanded={adding} onClick={(e) => { const r = e.currentTarget.getBoundingClientRect(); setAddAt({ left: Math.max(8, Math.min(r.left, innerWidth - 440)), top: r.bottom + 4 }); setAdding(!adding); }}>+ Track</button>
           {adding && (
-            <div className="menu" role="menu">
-              {INSTRUMENTS.map((p, i) => (
-                <button key={p.label} role="menuitem" onClick={() => { addTrack(i); setAdding(false); }}>
-                  <i style={{ background: p.color }} />{p.label}
-                </button>
+            // Two columns that fit on screen (scrolling if they ever do not): drums, then melodic instruments.
+            <div className="menu fixed addmenu" role="menu" style={addAt}>
+              {(['drums', 'melodic'] as const).map((kind) => (
+                <div key={kind} className="addcol">
+                  <span className="muted-text">{kind === 'drums' ? 'Drums' : 'Instruments'}</span>
+                  {INSTRUMENTS.map((p, i) => p.kind === kind && (
+                    <button key={p.label} role="menuitem" onClick={() => { addTrack(i); setAdding(false); }}>
+                      <i style={{ background: p.color }} />{p.label}
+                    </button>
+                  ))}
+                  {kind === 'drums' && myKits.map((k) => (
+                    <button key={k.id} role="menuitem" onClick={() => { addTrack({ label: k.name, name: k.name, kind: 'drums', color: '#8f5a2b', bank: myKitBank(k.id), octave: 3, poly: false }); setAdding(false); }}>
+                      <i style={{ background: '#8f5a2b' }} />{k.name} <span className="muted-text">· my kit</span>
+                    </button>
+                  ))}
+                </div>
               ))}
             </div>
           )}

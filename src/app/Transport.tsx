@@ -6,7 +6,7 @@ import * as player from '../engine/player';
 import { connectMidi, type MidiState } from '../engine/midi';
 
 export default function Transport() {
-  const { song, transport, panel, setPanel, updateReady, sargam, mode, countIn, metronome, setBpm, setTonic, setScale, toggleCode, resetSong, setUi, setMode, touchVelocity, setTouchVelocity, pitchSnap, setPitchSnap, openRecorder } = useStore();
+  const { song, transport, panel, setPanel, updateReady, sargam, mode, countIn, metronome, setBpm, setTonic, setScale, toggleCode, resetSong, setUi, setMode, touchVelocity, setTouchVelocity, pitchSnap, setPitchSnap, openRecorder, newSong, setMessage } = useStore();
   const [more, setMore] = useState(false);
   const [confirmReset, setConfirmReset] = useState(false);
   const [midi, setMidi] = useState<{ state: MidiState; devices: string[] }>({ state: 'off', devices: [] });
@@ -86,6 +86,7 @@ export default function Transport() {
         <button className="btn sm" aria-expanded={more} onClick={() => { setMore(!more); setConfirmReset(false); }}>More ⋯</button>
         {more && (
           <div className="menu right" role="menu">
+            <button role="menuitem" onClick={() => { player.stop(); newSong(true); setMessage('New blank song · the last one is in Songs'); setMore(false); }}>New blank song</button>
             <button role="menuitem" onClick={() => { setPanel('songs'); setMore(false); }}>Songs: new, open, export, import…</button>
             <button role="menuitem" onClick={() => { connect(); setMore(false); }}>{midi.state === 'connected' ? `MIDI: ${midi.devices.join(', ')}` : midi.state === 'waiting' ? 'MIDI on (no device yet)' : 'Connect a MIDI keyboard or pads'}</button>
             <button role="menuitemcheckbox" aria-checked={sargam} onClick={() => { setUi({ sargam: !sargam }); setMore(false); }}>{sargam ? '✓ ' : ''}Sa Re Ga labels</button>

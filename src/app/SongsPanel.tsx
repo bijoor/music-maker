@@ -47,7 +47,8 @@ export default function SongsPanel() {
           <input key={songId} defaultValue={song.name} onBlur={(e) => renameSong(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()} />
         </label>
         <div className="row">
-          <button className="btn" onClick={() => go(newSong)}>New song</button>
+          <button className="btn" onClick={() => go(() => newSong(true))}>New blank song</button>
+          <button className="btn" onClick={() => go(() => newSong())}>New song with drums, bass and keys</button>
           <button className="btn" onClick={() => go(duplicateSong)}>Duplicate</button>
           <button className="btn" onClick={() => download(`${safe(song.name)}.music.json`, JSON.stringify(song, null, 2), 'application/json')}>Export song file</button>
           <button className="btn" onClick={() => download(`${safe(song.name)}.strudel.js`, generate(song).code, 'text/javascript')}>Export Strudel code</button>
