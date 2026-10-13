@@ -18,7 +18,7 @@ export interface ParseResult {
   errors: string[];
 }
 
-const LETTERS = 'ABCDEFGH';
+const LETTERS = 'ABCDEFGHIJKLMNOP';
 let scope: Promise<unknown> | null = null;
 const ensureScope = () => (scope ??= core.evalScope(core, mini));
 
@@ -135,13 +135,14 @@ async function readClip(text: string, track: Track, existing: Clip | null, name?
  * Returns the slots in turn, or null if the text is something else.
  */
 function readChain(text: string, track: Track): number[] | null {
-  const t = text.trim();
+  // `.ribbon(0, N)` only cuts the line at the scene's length (the scene says that), so it is not part of the line.
+  const t = text.trim().replace(/\.ribbon\(\s*0\s*,\s*\d+\s*\)$/, '');
   if (t === 'silence') return [];
-  const ref = /^[A-Za-z0-9_$]+_([A-H])$/.exec(t);
+  const ref = /^[A-Za-z0-9_$]+_([A-P])$/.exec(t);
   if (ref) return track.slots[LETTERS.indexOf(ref[1])] ? [LETTERS.indexOf(ref[1])] : null;
   const arr = /^arrange\(([\s\S]*)\)$/.exec(t);
   if (!arr) return null;
-  const entry = /\[\s*(\d+)\s*,\s*[A-Za-z0-9_$]+_([A-H])\s*\]/g;
+  const entry = /\[\s*(\d+)\s*,\s*[A-Za-z0-9_$]+_([A-P])\s*\]/g;
   if (arr[1].replace(entry, '').replace(/[\s,]/g, '') !== '') return null;
   const seq: number[] = [];
   for (const m of arr[1].matchAll(entry)) {
@@ -208,7 +209,7 @@ export async function parseCode(code: string, song: Song): Promise<ParseResult> 
       if (node.type === 'VariableDeclaration') {
         for (const decl of node.declarations) {
           const id = decl.id.type === 'Identifier' ? decl.id.name : '';
-          const letter = /_([A-H])$/.exec(id)?.[1];
+          const letter = /_([A-P])$/.exec(id)?.[1];
           if (!letter || !decl.init) { notes.push(`${track.name}: ${id || 'declaration'} ignored (clips are named like ${track.name.toLowerCase()}_A)`); continue; }
           const slot = LETTERS.indexOf(letter);
           if (slot >= MAX_SLOTS) continue;

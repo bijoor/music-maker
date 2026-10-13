@@ -29,21 +29,28 @@ async function compileCached(code: string) {
 const CLICK = 's("rim*4").bank("RolandTR909").gain("[.9 .45 .45 .45]")';
 
 async function apply(song: Song, notBefore = 0) {
-  const g = generate(song, { songMode: useStore.getState().songMode });
+  const { songMode, sceneOrigin } = useStore.getState();
+  const g = generate(song, { songMode });
   latest = g;
+  // Scenes: every track's line lines up with the bar the scene started on. A scene just chosen (origin null)
+  // restarts every track together on the next bar, which becomes its start. (Song mode lines up on its own.)
+  const scened = !songMode && !!song.current;
+  const fresh = scened && sceneOrigin === null;
+  let origin = scened && sceneOrigin !== null ? sceneOrigin : undefined;
   // Compile everything first, then launch together, so all tracks that change switch on the same bar.
   const work: { tc: (typeof g.tracks)[number]; code: string; pattern: unknown; launch: boolean }[] = [];
   for (const tc of g.tracks) {
     const code = tc.audible ? tc.runnable : '';
     const prev = playing.get(tc.trackId);
-    if (prev && prev.code === code && prev.key === tc.playKey) continue;
+    if (prev && prev.code === code && prev.key === tc.playKey && !fresh) continue;
     const pattern = code ? await compileCached(code) : engine.silence;
-    work.push({ tc, code, pattern, launch: !prev || prev.key !== tc.playKey });
+    work.push({ tc, code, pattern, launch: fresh || !prev || prev.key !== tc.playKey });
   }
   const { setPending } = useStore.getState();
   for (const { tc, code, pattern, launch } of work) {
     if (launch) {
-      const at = engine.launch(tc.trackId, pattern, { period: tc.period, notBefore });
+      const at = engine.launch(tc.trackId, pattern, { period: tc.period, notBefore, origin });
+      if (fresh && origin === undefined) { origin = at; useStore.getState().setSceneOrigin(at); }
       if (engine.isStarted() && at > engine.cycleNow()) setPending(tc.trackId, at);
     } else {
       engine.edit(tc.trackId, pattern, tc.period);
@@ -69,11 +76,13 @@ export async function play(opts: { countIn?: boolean } = {}) {
   engine.setBpm(useStore.getState().song.bpm);
   playing.clear();
   let start = 0;
+  // The scene starts with the music (after the count-in).
   if (opts.countIn) {
     engine.launch('__count', await compileCached(CLICK));
     engine.launch('__count', engine.silence, { notBefore: 1 });
     start = 1;
   }
+  useStore.getState().setSceneOrigin(start);
   await sync(useStore.getState().song, start);
   useStore.getState().setTransport('playing');
   await setMetronome(useStore.getState().metronome);

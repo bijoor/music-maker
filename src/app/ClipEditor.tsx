@@ -20,7 +20,7 @@ import NoteGrid from './NoteGrid';
 import MelodicPlay from './MelodicPlay';
 import { SOUNDS } from '../model/sounds';
 
-const LETTERS = 'ABCDEFGH';
+const LETTERS = 'ABCDEFGHIJKLMNOP';
 
 /** The selected clip: its settings, and either the Grid (edit notes) or Play (pads/keys) view. */
 export default function ClipEditor() {

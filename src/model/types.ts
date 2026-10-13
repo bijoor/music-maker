@@ -1,7 +1,7 @@
 // The song model: the single source of truth. Strudel code is generated from it.
 
 export const STEPS_PER_BAR = 16;
-export const MAX_SLOTS = 8;
+export const MAX_SLOTS = 16;
 export type Bars = 1 | 2 | 4;
 
 /** Drum clip: one row of hits per voice. Each row has bars × 16 steps; a value is the velocity (0 = no hit). */
@@ -79,6 +79,11 @@ export interface Track {
   active: number[];
   /** Hand-written play line (what the track plays) that the clip launcher cannot express; used until reset. */
   playCode?: string;
+  /**
+   * The track's line in the current scene, as steps with repeat counts and on/off. `active` is what plays (the
+   * line's steps that are on, expanded); `line` is kept only while it says more than that (off steps).
+   */
+  line?: Step[];
   /** The + Track group it was added from (model/presets GROUPS); older tracks are placed by their sound. */
   group?: string;
   /** Melodic tracks: the keyboard layout it plays with (else its group's default). */
@@ -86,10 +91,25 @@ export interface Track {
 }
 
 /** A saved set of active slots, from any tracks. Tracks it does not name keep playing. */
+/**
+ * A scene (a sequence of the song): what each track plays, as the slots in order (a slot repeated plays that many
+ * times: [0, 0, 0, 2] is A ×3 then C). Its length is the longest track's; `fit` says whether shorter tracks repeat
+ * and are cut at the top of the scene so every track restarts together ('cut', the default) or keep cycling at
+ * their own length ('cycle').
+ */
 export interface Scene {
   id: string;
   name: string;
   active: Record<string, number[]>;
+  fit?: 'cut' | 'cycle';
+}
+
+/** One step of a track's line in the current scene: a clip (slot), how many times it plays, and whether it is off. */
+export interface Step {
+  slot: number;
+  times: number;
+  /** Off steps stay in the line while the scene is being built; they are dropped when another scene is chosen. */
+  off?: boolean;
 }
 
 export interface ScaleDef {
@@ -114,4 +134,6 @@ export interface Song {
   scenes: Scene[];
   /** Song mode: scenes in order with a bar count each (Phase 5). */
   arrangement: { sceneId: string; bars: number }[];
+  /** The scene being played and built: changes to what tracks play are saved into it as they happen. */
+  current?: string;
 }

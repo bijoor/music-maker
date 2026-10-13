@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { useStore } from './store';
+import { useStore, withCurrentScene } from './store';
 import { demoSong } from '../model/demo';
 import { generate } from '../codegen/generate';
 
@@ -43,11 +43,11 @@ describe('clip editing', () => {
     expect(drums().active).toEqual([]);
   });
 
-  it('duplicates into a free slot, adds slots up to 8, and deleting a playing clip stops it', () => {
+  it('duplicates into a free slot, adds slots up to 16, and deleting a playing clip stops it', () => {
     expect(st().duplicateClip('t1', 0)).toBe(3);
     expect(drums().slots[3]!.name).toBe('Groove 2');
-    for (let i = 0; i < 10; i++) st().addSlot('t1');
-    expect(drums().slots.length).toBe(8);
+    for (let i = 0; i < 20; i++) st().addSlot('t1');
+    expect(drums().slots.length).toBe(16);
     st().deleteClip('t1', 0);
     expect(drums().active).toEqual([]);
   });
@@ -107,7 +107,7 @@ describe('chains, scenes and song', () => {
     expect(drums().active).toEqual([1]);
   });
 
-  it('saves a scene and launches it; tracks the scene does not name keep playing', () => {
+  it('saves a scene and launches it; tracks the scene does not name are silent in it', () => {
     st().saveScene('Verse', false); // drums A, bass A, keys A (lead silent, not included)
     const verse = st().song.scenes[0];
     expect(Object.keys(verse.active).sort()).toEqual(['t1', 't2', 't3']);
@@ -115,9 +115,8 @@ describe('chains, scenes and song', () => {
     st().tapSlot('t4', 0);
     st().launchScene(verse.id);
     expect(drums().active).toEqual([0]);
-    expect(st().song.tracks[3].active).toEqual([0]); // lead keeps playing
-    st().saveScene('All', true);
-    expect(st().song.scenes[1].active.t4).toEqual([0]);
+    expect(st().song.tracks[3].active).toEqual([]);
+    expect(st().song.current).toBe(verse.id);
   });
 
   it('edits the song arrangement and leaves song mode when it becomes empty', () => {
@@ -158,5 +157,74 @@ describe('names', () => {
     st().createClip(drone.id, 1, 1);
     expect(drone.name).not.toBe(st().song.tracks[st().song.tracks.length - 1].slots[1]!.name);
     expect(st().song.tracks[st().song.tracks.length - 1].slots[1]!.name).toBe('Clip 2');
+  });
+});
+
+describe('scenes built live', () => {
+  const lead = () => st().song.tracks[3];
+  beforeEach(() => useStore.setState({ song: withCurrentScene(demoSong()), chain: false, songMode: false, past: [], future: [] }));
+
+  it('a song starts with a scene that follows what the tracks play', () => {
+    const scene = st().song.scenes[0];
+    expect(st().song.current).toBe(scene.id);
+    st().setChain(true);
+    st().stopTrack('t1');
+    st().tapSlot('t1', 0); st().tapSlot('t1', 0); st().tapSlot('t1', 0); st().tapSlot('t1', 2);
+    expect(st().song.scenes[0].active.t1).toEqual([0, 0, 0, 2]);
+  });
+
+  it('edits a line: repeat counts, off steps, order, adding a clip at the end', () => {
+    st().stopTrack('t1');
+    st().addStep('t1', 0); st().addStep('t1', 2);
+    st().setStepTimes('t1', 0, 3);
+    expect(drums().active).toEqual([0, 0, 0, 2]);
+    st().toggleStep('t1', 1);
+    expect(drums().active).toEqual([0, 0, 0]);
+    expect(drums().line).toEqual([{ slot: 0, times: 3 }, { slot: 2, times: 1, off: true }]);
+    st().moveStep('t1', 1, -1);
+    expect(drums().line?.map((x) => x.slot)).toEqual([2, 0]);
+    st().toggleStep('t1', 0); st().removeStep('t1', 1);
+    expect(drums().active).toEqual([2]);
+  });
+
+  it('a new scene copies what is heard (not the off steps) and becomes current; the old one is kept', () => {
+    st().stopTrack('t1');
+    st().addStep('t1', 0); st().addStep('t1', 2); st().toggleStep('t1', 1);
+    const first = st().song.current!;
+    st().newScene();
+    const second = st().song.current!;
+    expect(second).not.toBe(first);
+    expect(drums().line).toBeUndefined();
+    expect(st().song.scenes.find((x) => x.id === second)!.active.t1).toEqual([0]);
+    st().tapSlot('t1', 1); // morph: drums switch to B in the new scene only
+    expect(st().song.scenes.find((x) => x.id === first)!.active.t1).toEqual([0]);
+    expect(st().song.scenes.find((x) => x.id === second)!.active.t1).toEqual([1]);
+    st().launchScene(first);
+    expect(drums().active).toEqual([0]);
+  });
+
+  it('editing a clip an earlier scene also plays edits a copy in the current scene', () => {
+    st().newScene();
+    const before = structuredClone(drums().slots[0]);
+    expect(st().toggleHit('t1', 0, 'cr', 0)).toBe(true);
+    const copy = drums().active[0];
+    expect(copy).not.toBe(0);
+    expect(drums().slots[0]).toEqual(before); // the earlier scene's clip is untouched
+    expect(drums().slots[copy]!.kind === 'drums' && (drums().slots[copy] as any).hits.cr[0]).toBe(1);
+    st().toggleHit('t1', copy, 'cr', 4); // later edits go to the copy itself
+    expect(drums().active[0]).toBe(copy);
+    expect(lead().slots.filter(Boolean).length).toBe(1);
+  });
+
+  it('cuts shorter lines at the top of the scene so every track restarts together', async () => {
+    const { generate } = await import('../codegen/generate');
+    st().stopTrack('t1');
+    st().addStep('t1', 0); st().setStepTimes('t1', 0, 3); // drums: 3 bars; keys play a 2-bar clip; bass 1 bar
+    st().tapSlot('t2', 0); st().tapSlot('t2', 0);
+    const code = generate(st().song).code;
+    expect(code).toMatch(/\ndrums: drums_A\.room/); // 3 bars of a 1-bar clip: it loops by itself
+    expect(code).toMatch(/keys: keys_A\.ribbon\(0, 3\)/);
+    st().setSceneFit(st().song.current!, 'cycle');
+    expect(generate(st().song).code).not.toContain('ribbon');
   });
 });

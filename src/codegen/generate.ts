@@ -6,6 +6,7 @@
 import { isStrokeKit, kitHas, kitVoices, voiceBank, voiceOrder } from '../model/kit';
 import { pitchToCode } from '../model/notes';
 import { findScale } from '../model/scales';
+import { currentScene, sceneBars } from '../model/lines';
 import { STEPS_PER_BAR, type Clip, type DrumClip, type MelodicClip, type Note, type Song, type Track } from '../model/types';
 
 export interface CodeToken {
@@ -46,7 +47,7 @@ export interface GeneratedSong {
   tokens: CodeToken[];
 }
 
-const SLOT_LETTERS = 'ABCDEFGH';
+const SLOT_LETTERS = 'ABCDEFGHIJKLMNOP';
 
 class Writer {
   text = '';
@@ -318,6 +319,19 @@ export function songPlan(song: Song, track: Track, label: string): { expr: strin
   return { expr: `arrange(${steps.map((x) => `[${x.bars}, ${x.expr}]`).join(', ')})`, bars };
 }
 
+/**
+ * What a track plays in the current scene. Every track restarts together at the top of the scene (the player
+ * lines them up with its start): a line that does not fit the scene's length a whole number of times is cut there
+ * with `.ribbon(0, bars)`, unless the scene lets shorter tracks keep cycling.
+ */
+function sceneLine(song: Song, track: Track, label: string): { expr: string; bars: number } {
+  const plan = chainExpr(track, label, track.active);
+  const scene = currentScene(song);
+  if (!scene || scene.fit === 'cycle' || !plan.bars) return plan;
+  const bars = sceneBars(song);
+  return bars % plan.bars ? { expr: `${plan.expr}.ribbon(0, ${bars})`, bars } : plan;
+}
+
 function writeTrack(w: Writer, song: Song, track: Track, label: string, opts: GenerateOptions): TrackCode {
   const start = w.text.length;
   w.add(`// @track id=${track.id} name="${track.name.replace(/"/g, "'")}"\n`);
@@ -328,7 +342,7 @@ function writeTrack(w: Writer, song: Song, track: Track, label: string, opts: Ge
     w.add(`  // ${clip.name} · ${clip.bars} bar${clip.bars > 1 ? 's' : ''}${clip.code ? ' · custom' : ''}\n`);
   });
   const custom = !opts.songMode && track.playCode;
-  const plan = custom ? { expr: track.playCode!, bars: 1 } : opts.songMode && song.arrangement.length ? songPlan(song, track, label) : chainExpr(track, label, track.active);
+  const plan = custom ? { expr: track.playCode!, bars: 1 } : opts.songMode && song.arrangement.length ? songPlan(song, track, label) : sceneLine(song, track, label);
   const audible = isAudible(song, track) && plan.expr !== 'silence';
   const shownLabel = `${isAudible(song, track) ? '' : '_'}${label}: `;
   const labelStart = w.text.length;

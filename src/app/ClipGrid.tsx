@@ -11,7 +11,7 @@ import { releaseFingers } from './MelodicPlay';
 import * as recorder from '../engine/recorder';
 import EditableName from './EditableName';
 
-const LETTERS = 'ABCDEFGH';
+const LETTERS = 'ABCDEFGHIJKLMNOP';
 // Thumbnail rows: cymbals and hats on top, snares and hand percussion in the middle, kicks and toms at the bottom.
 const LANE: Record<string, number> = {
   cr: 0, rd: 0, oh: 0, hh: 0, tb: 0, sh: 0, rim: 1, sd: 1, 'sd:1': 1, cp: 1, cb: 1, bd: 2, 'bd:1': 2, lt: 2, mt: 2, ht: 2,

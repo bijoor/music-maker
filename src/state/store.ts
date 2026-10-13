@@ -9,6 +9,7 @@ import { kitHas, type MyKit } from '../model/kit';
 import { loadMyKits, onMyKits } from './myKits';
 import { MAX_SLOTS, STEPS_PER_BAR, type Bars, type Clip, type Fx, type ScaleDef, type Song, type Track } from '../model/types';
 import { setBend as setBendIn, toggleNote as toggleNoteIn, writeNote } from '../model/clipEdit';
+import { currentScene, lineOf, otherScenesUsing, pruneLine, setLine } from '../model/lines';
 import { findScale, scalePitch } from '../model/scales';
 import { deleteSongById, listSongs, loadCurrent, loadNumber, loadSongById, saveNumber, saveSongById } from './persist';
 
@@ -168,7 +169,24 @@ interface State {
   // Chains, scenes, song
   setChain(on: boolean): void;
   saveScene(name: string, includeSilent: boolean): void;
+  /** Start a new scene: a copy of what plays now (without off steps), which becomes the current scene. */
+  newScene(): void;
+  /** Make a scene current: its tracks' lines play from the next bar (tracks it does not name are silent). */
   launchScene(sceneId: string): void;
+  /** Shorter tracks in a scene: repeat and cut at the top ('cut') or keep cycling ('cycle'). */
+  setSceneFit(sceneId: string, fit: 'cut' | 'cycle'): void;
+  /** A track's line in the current scene: repeat count, on/off, order, remove, add a clip at the end. */
+  setStepTimes(trackId: string, index: number, times: number): void;
+  toggleStep(trackId: string, index: number): void;
+  moveStep(trackId: string, index: number, by: number): void;
+  removeStep(trackId: string, index: number): void;
+  addStep(trackId: string, slot: number): void;
+  /**
+   * Bar the current scene started on: every track's line lines up with it (runtime, not saved). null: the scene
+   * was just chosen and starts on the next bar the player launches on (the player fills this in).
+   */
+  sceneOrigin: number | null;
+  setSceneOrigin(bar: number): void;
   updateScene(sceneId: string, includeSilent: boolean): void;
   renameScene(sceneId: string, name: string): void;
   renameTrack(trackId: string, name: string): void;
@@ -193,6 +211,40 @@ const onTrack = (id: string, recipe: (t: Track, song: Song) => void) => (s: Stat
   }),
 });
 
+/**
+ * The slot to edit for a clip: the clip itself, or — when the current scene plays it and an earlier scene does
+ * too — a copy in a free slot that takes its place in the current scene, so the earlier scene keeps sounding as it
+ * was. (When the track has no free slot the clip is edited where it is.)
+ */
+function ownSlot(song: Song, t: Track, slot: number): number {
+  if (!t.active.includes(slot) && !t.line?.some((x) => x.slot === slot)) return slot;
+  if (!otherScenesUsing(song, t.id, slot).length) return slot;
+  let free = t.slots.findIndex((c) => !c);
+  if (free < 0) {
+    if (t.slots.length >= MAX_SLOTS) return slot;
+    t.slots.push(null);
+    free = t.slots.length - 1;
+  }
+  t.slots[free] = { ...JSON.parse(JSON.stringify(t.slots[slot])), id: newId('c') }; // (a draft: copy plainly)
+  setLine(t, lineOf(t).map((x) => (x.slot === slot ? { ...x, slot: free } : x)));
+  const scene = currentScene(song);
+  if (scene) scene.active[t.id] = [...t.active];
+  return free;
+}
+
+/** Apply an immer recipe to one clip, copying it first if an earlier scene also plays it (see ownSlot). */
+const onClip = (id: string, slot: number, recipe: (c: Clip, t: Track, song: Song) => void) => (s: State) => {
+  let used = slot;
+  const song = produce(s.song, (song) => {
+    const t = findTrack(song, id);
+    if (!t?.slots[slot]) return;
+    used = ownSlot(song, t, slot);
+    recipe(t.slots[used]!, t, song);
+  });
+  const follow = used !== slot && s.selected.trackId === id && s.selected.slot === slot;
+  return follow ? { song, selected: { trackId: id, slot: used } } : { song };
+};
+
 const newClip = (t: Track, bars: Bars): Clip => {
   const n = t.slots.filter(Boolean).length + 1;
   return t.kind === 'drums'
@@ -202,7 +254,25 @@ const newClip = (t: Track, bars: Bars): Clip => {
 
 const stored = loadCurrent(() => newId('song'));
 const initialId = stored?.id ?? newId('song');
-const initial = stored?.song ?? demoSong();
+/**
+ * Every song has a scene being built: a song without scenes gets Scene 1 (what plays now); a song whose scenes
+ * include one matching what plays now continues in it. (Otherwise there is none until a scene is chosen.)
+ */
+export function withCurrentScene(song: Song): Song {
+  if (song.current && song.scenes.some((s) => s.id === song.current)) return song;
+  return produce(song, (d) => {
+    const now = captureScene(d, true);
+    const match = d.scenes.find((sc) => d.tracks.every((t) => (sc.active[t.id] ?? []).join() === now[t.id].join()));
+    if (match) { d.current = match.id; return; }
+    if (!d.scenes.length) {
+      const id = newId('s');
+      d.scenes.push({ id, name: 'Scene 1', active: now });
+      d.current = id;
+    }
+  });
+}
+
+const initial = withCurrentScene(stored?.song ?? demoSong());
 
 /** A new song: blank (no tracks at all), or a drum kit, a bass and a piano, all empty. */
 function emptySong(blank = false): Song {
@@ -219,9 +289,10 @@ function emptySong(blank = false): Song {
 
 /** Open a song: save it under its id, clear undo and selection, leave song mode. */
 function switchTo(set: (p: Partial<State>) => void, id: string, song: Song) {
+  song = withCurrentScene(song);
   saveSongById(id, song);
   const first = song.tracks[0]?.slots.findIndex(Boolean) ?? -1;
-  set({ song, songId: id, songMode: false, selected: { trackId: song.tracks[0]?.id ?? '', slot: first >= 0 ? first : null }, page: 0, past: [], future: [], historyGroup: null, panel: null });
+  set({ song, songId: id, songMode: false, sceneOrigin: 0, selected: { trackId: song.tracks[0]?.id ?? '', slot: first >= 0 ? first : null }, page: 0, past: [], future: [], historyGroup: null, panel: null });
 }
 
 /** What every track is playing now; silent tracks are included as [] (the scene then stops them) if asked. */
@@ -265,6 +336,7 @@ export const useStore = create<State>((set, get) => {
   page: 0,
   panel: null,
   recorderKit: null,
+  sceneOrigin: 0,
   myKits: loadMyKits(),
   sargam: false,
   soundOpen: false,
@@ -311,7 +383,7 @@ export const useStore = create<State>((set, get) => {
   renameSong: (name) => set((s) => ({ song: { ...s.song, name: name.trim() || s.song.name } })),
   importSong: (song) => switchTo(set, newId('song'), song),
   resetSong: () => {
-    const song = demoSong();
+    const song = withCurrentScene(demoSong());
     set({ song, songMode: false, selected: { trackId: song.tracks[0].id, slot: 0 }, page: 0, past: [], future: [], historyGroup: null });
   },
 
@@ -404,15 +476,13 @@ export const useStore = create<State>((set, get) => {
     return target;
   },
   clearClip: (trackId, slot) =>
-    edit(onTrack(trackId, (t) => {
-      const c = t.slots[slot];
-      if (c?.kind === 'drums') c.hits = emptyHits(c.bars);
-      else if (c) c.notes = [];
+    edit(onClip(trackId, slot, (c) => {
+      if (c.kind === 'drums') c.hits = emptyHits(c.bars);
+      else c.notes = [];
     })),
   setClipBars: (trackId, slot, bars) =>
-    edit(onTrack(trackId, (t) => {
-      const c = t.slots[slot];
-      if (!c || c.bars === bars) return;
+    edit(onClip(trackId, slot, (c) => {
+      if (c.bars === bars) return;
       const n = bars * STEPS_PER_BAR, old = c.bars * STEPS_PER_BAR;
       // Growing repeats the existing bars; shrinking keeps the first bars.
       if (c.kind === 'drums') {
@@ -427,9 +497,8 @@ export const useStore = create<State>((set, get) => {
     })),
   toggleHit: (trackId, slot, voice, step) => {
     let on = false;
-    edit(onTrack(trackId, (t) => {
-      const c = t.slots[slot];
-      if (c?.kind !== 'drums') return;
+    edit(onClip(trackId, slot, (c) => {
+      if (c.kind !== 'drums') return;
       if (!c.hits[voice]) c.hits[voice] = Array(c.bars * STEPS_PER_BAR).fill(0);
       on = !(c.hits[voice][step] > 0);
       c.hits[voice][step] = on ? 1 : 0;
@@ -437,10 +506,9 @@ export const useStore = create<State>((set, get) => {
     return on;
   },
   applyPreset: (trackId, slot, preset, bar) =>
-    edit(onTrack(trackId, (t) => {
-      const c = t.slots[slot];
+    edit(onClip(trackId, slot, (c, t) => {
       const p = drumPresets(t.bank)[preset];
-      if (c?.kind !== 'drums' || !p) return;
+      if (c.kind !== 'drums' || !p) return;
       const off = bar * STEPS_PER_BAR;
       for (const v in c.hits) if (kitHas(t.bank, v)) for (let i = 0; i < STEPS_PER_BAR; i++) c.hits[v][off + i] = 0;
       for (const v in p) {
@@ -452,22 +520,19 @@ export const useStore = create<State>((set, get) => {
   toggleNote: (trackId, slot, step, pitch) => {
     let on = false;
     const len = get().noteLen;
-    edit(onTrack(trackId, (t) => {
-      const c = t.slots[slot];
-      if (c?.kind === 'melodic') on = toggleNoteIn(c, step, pitch, len, t.poly);
+    edit(onClip(trackId, slot, (c, t) => {
+      if (c.kind === 'melodic') on = toggleNoteIn(c, step, pitch, len, t.poly);
     }));
     return on;
   },
   setBend: (trackId, slot, step, bend, time) =>
-    edit(onTrack(trackId, (t) => {
-      const c = t.slots[slot];
-      if (c?.kind === 'melodic') setBendIn(c, step, bend, time);
+    edit(onClip(trackId, slot, (c) => {
+      if (c.kind === 'melodic') setBendIn(c, step, bend, time);
     })),
   placeChord: (trackId, slot, step, pitches) => {
     const len = get().chordLen;
-    edit(onTrack(trackId, (t) => {
-      const c = t.slots[slot];
-      if (c?.kind === 'melodic') writeNote(c, step, pitches, len);
+    edit(onClip(trackId, slot, (c) => {
+      if (c.kind === 'melodic') writeNote(c, step, pitches, len);
     }));
   },
 
@@ -482,7 +547,7 @@ export const useStore = create<State>((set, get) => {
       const slot = t && s.selected.slot !== null && t.slots[s.selected.slot] ? s.selected.slot : null;
       return { song, selected: { trackId: t?.id ?? '', slot } };
     }),
-  resetClipCode: (trackId, slot) => edit(onTrack(trackId, (t) => { const c = t.slots[slot]; if (c) delete c.code; })),
+  resetClipCode: (trackId, slot) => edit(onClip(trackId, slot, (c) => { delete c.code; })),
   resetPlayCode: (trackId) => edit(onTrack(trackId, (t) => { delete t.playCode; })),
   toggleCode: () => set((s) => ({ panel: s.panel === 'code' ? null : 'code' })),
   setTransport: (transport) => set({ transport }),
@@ -503,21 +568,55 @@ export const useStore = create<State>((set, get) => {
         song.scenes.push({ id: newId('s'), name: name.trim() || `Scene ${song.scenes.length + 1}`, active: captureScene(song, includeSilent) });
       }),
     })),
+  newScene: () =>
+    edit((s) => ({
+      songMode: false,
+      song: produce(s.song, (song) => {
+        // Off steps belong to the scene being left; the new scene starts from what is heard.
+        song.tracks.forEach(pruneLine);
+        const id = newId('s');
+        const names = song.scenes.map((x) => x.name);
+        let n = song.scenes.length + 1;
+        while (names.includes(`Scene ${n}`)) n++;
+        song.scenes.push({ id, name: `Scene ${n}`, active: captureScene(song, true), ...(currentScene(song)?.fit ? { fit: currentScene(song)!.fit } : {}) });
+        song.current = id;
+      }),
+    })),
   launchScene: (sceneId) =>
     set((s) => {
       const scene = s.song.scenes.find((x) => x.id === sceneId);
       if (!scene) return {};
-      // Tracks the scene names switch at the next bar; the others keep playing.
       return {
         songMode: false,
+        // The scene's tracks line up with the bar it starts on (filled in by the player when it launches them).
+        sceneOrigin: null,
         song: produce(s.song, (song) => {
+          song.current = sceneId;
           for (const t of song.tracks) {
-            const act = scene.active[t.id];
-            if (act) t.active = act.filter((i) => t.slots[i]);
+            pruneLine(t);
+            t.active = (scene.active[t.id] ?? []).filter((i) => t.slots[i]);
           }
         }),
       };
     }),
+  setSceneOrigin: (bar) => set({ sceneOrigin: bar }),
+  setSceneFit: (sceneId, fit) =>
+    edit((s) => ({ song: produce(s.song, (song) => { const sc = song.scenes.find((x) => x.id === sceneId); if (sc) { if (fit === 'cycle') sc.fit = fit; else delete sc.fit; } }) })),
+  setStepTimes: (trackId, index, times) =>
+    set(onTrack(trackId, (t) => { const line = lineOf(t); if (line[index]) { line[index] = { ...line[index], times: Math.min(64, Math.max(1, times)) }; setLine(t, line); } })),
+  toggleStep: (trackId, index) =>
+    set(onTrack(trackId, (t) => { const line = lineOf(t); if (line[index]) { line[index] = { ...line[index], off: !line[index].off }; setLine(t, line); } })),
+  moveStep: (trackId, index, by) =>
+    set(onTrack(trackId, (t) => {
+      const line = [...lineOf(t)], to = index + by;
+      if (!line[index] || to < 0 || to >= line.length) return;
+      [line[index], line[to]] = [line[to], line[index]];
+      setLine(t, line);
+    })),
+  removeStep: (trackId, index) =>
+    set(onTrack(trackId, (t) => setLine(t, lineOf(t).filter((_, i) => i !== index)))),
+  addStep: (trackId, slot) =>
+    set(onTrack(trackId, (t) => { if (t.slots[slot]) setLine(t, [...lineOf(t), { slot, times: 1 }]); })),
   updateScene: (sceneId, includeSilent) =>
     edit((s) => ({
       song: produce(s.song, (song) => {
@@ -580,9 +679,8 @@ export const useStore = create<State>((set, get) => {
     set({ touchVelocity: v });
   },
   setNoteVelocity: (trackId, slot, step, vel) =>
-    edit(onTrack(trackId, (t) => {
-      const c = t.slots[slot];
-      const n = c?.kind === 'melodic' ? c.notes.find((x) => x.step === step) : undefined;
+    edit(onClip(trackId, slot, (c) => {
+      const n = c.kind === 'melodic' ? c.notes.find((x) => x.step === step) : undefined;
       if (n) n.vel = Math.round(Math.max(0.05, Math.min(1, vel)) * 100) / 100;
     })),
   setRecordOffset: (ms) => {
@@ -591,16 +689,14 @@ export const useStore = create<State>((set, get) => {
     set({ recordOffsetMs: v });
   },
   recordHit: (trackId, slot, voice, step, group, vel = 1) =>
-    edit(onTrack(trackId, (t) => {
-      const c = t.slots[slot];
-      if (c?.kind !== 'drums') return;
+    edit(onClip(trackId, slot, (c) => {
+      if (c.kind !== 'drums') return;
       if (!c.hits[voice]) c.hits[voice] = Array(c.bars * STEPS_PER_BAR).fill(0);
       c.hits[voice][step] = Math.round(vel * 100) / 100;
     }), group),
   recordNote: (trackId, slot, step, pitches, len, group, bend, vel = 1) =>
-    edit(onTrack(trackId, (t) => {
-      const c = t.slots[slot];
-      if (c?.kind !== 'melodic') return;
+    edit(onClip(trackId, slot, (c, t) => {
+      if (c.kind !== 'melodic') return;
       writeNote(c, step, pitches, len, t.poly, vel);
       if (bend) setBendIn(c, step, bend.bend, bend.time);
     }), group),
@@ -635,3 +731,16 @@ export const selectedClip = (s: State) => {
 
 // The store keeps a copy of the recorded kits so menus and pads update when one is saved or deleted.
 onMyKits((myKits) => useStore.setState({ myKits }));
+
+/**
+ * The current scene follows what tracks play: every change to a track's line is saved into it as it happens (not
+ * as a separate undo step). Not in song mode, where the song order is playing.
+ */
+useStore.subscribe((s, prev) => {
+  if (s.song === prev.song || s.songMode) return;
+  const scene = currentScene(s.song);
+  if (!scene) return;
+  const now = captureScene(s.song, true);
+  if (s.song.tracks.every((t) => (scene.active[t.id] ?? []).join() === now[t.id].join()) && Object.keys(scene.active).length === s.song.tracks.length) return;
+  useStore.setState({ song: produce(s.song, (song) => { const sc = currentScene(song); if (sc) sc.active = now; }) });
+});

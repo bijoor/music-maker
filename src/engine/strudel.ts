@@ -24,7 +24,8 @@ export type HapEvent = {
   track?: string;
 };
 type Listener = (e: HapEvent) => void;
-type Segment = { at: number; raw: any; pat: any; period: number; shift: boolean };
+/** What a track plays from bar `at`; its bar 1 falls on bar `origin` (and every `period` bars from there). */
+type Segment = { at: number; raw: any; pat: any; period: number; shift: boolean; origin: number };
 
 const SAMPLE_BASE = 'https://raw.githubusercontent.com/felixroos/dough-samples/main';
 const listeners = new Set<Listener>();
@@ -141,8 +142,8 @@ const started = () => !!r?.scheduler.started;
 /** Everything before this cycle has already been handed to the audio engine. */
 const horizon = () => (started() ? r.scheduler.lastEnd : 0);
 
-function shifted(track: string, raw: any, at: number, period: number, shift: boolean) {
-  const offset = ((at % period) + period) % period;
+function shifted(track: string, raw: any, origin: number, period: number, shift: boolean) {
+  const offset = ((origin % period) + period) % period;
   const pat = shift && offset ? raw.late(offset) : raw;
   // Tag events with their track so played notes can be mapped back to that track's code.
   return pat.withContext((ctx: any) => ({ ...ctx, track }));
@@ -174,6 +175,11 @@ export type LaunchOptions = {
   shift?: boolean;
   /** Never start before this bar (e.g. after a count-in). */
   notBefore?: number;
+  /**
+   * The bar the clip's bar 1 lines up with (and every `period` bars from there), e.g. the start of the scene, so a
+   * track that joins later plays in step with the others. Default: the bar it launches on.
+   */
+  origin?: number;
 };
 
 /** Start `pattern` on `track` at the next bar line. Returns the cycle (bar) it starts on. */
@@ -184,7 +190,8 @@ export function launch(track: string, pattern: any, opts: LaunchOptions = {}): n
   const segs = tracks.get(track) ?? [];
   // A later launch on the same bar replaces an earlier one.
   while (segs.length && segs[segs.length - 1].at >= at) segs.pop();
-  segs.push({ at, raw: pattern, pat: shifted(track, pattern, at, period, shift), period, shift });
+  const origin = opts.origin ?? at;
+  segs.push({ at, raw: pattern, pat: shifted(track, pattern, origin, period, shift), period, shift, origin });
   tracks.set(track, segs);
   rebuild();
   return at;
@@ -202,7 +209,7 @@ export function edit(track: string, pattern: any, period?: number) {
   const s = segs[segs.length - 1];
   s.raw = pattern;
   if (period) s.period = period;
-  s.pat = shifted(track, pattern, s.at, s.period, s.shift);
+  s.pat = shifted(track, pattern, s.origin, s.period, s.shift);
   rebuild();
   return s.at;
 }
@@ -250,8 +257,8 @@ export function position(track: string, cycle = cycleHeardAt()): { bars: number;
   let cur: Segment | undefined;
   for (const s of tracks.get(track) ?? []) if (s.at <= cycle) cur = s;
   if (!cur || cur.raw === silence) return null;
-  const rel = cur.shift ? cycle - cur.at : cycle;
-  return { bars: ((rel % cur.period) + cur.period) % cur.period, period: cur.period, pass: Math.floor((cycle - cur.at) / cur.period) };
+  const rel = cur.shift ? cycle - cur.origin : cycle;
+  return { bars: ((rel % cur.period) + cur.period) % cur.period, period: cur.period, pass: Math.floor((cycle - cur.origin) / cur.period) };
 }
 
 export const nextBar = () => (started() ? Math.ceil(horizon()) : 0);

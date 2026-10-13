@@ -73,12 +73,17 @@ function recordStep(track: Track, slot: number, timeStamp: number | undefined): 
   const pos = engine.position(track.id, cycle);
   const clip = track.slots[slot];
   if (!pos || !clip) return null;
+  // Where in the line: a line cut at the top of a longer scene repeats within it.
+  const secs = sections(track);
+  const lineBars = secs.reduce((a, x) => a + x.bars, 0);
+  if (!lineBars) return null;
+  const at = pos.bars % lineBars;
   let start = 0;
-  for (const sec of sections(track)) {
-    if (pos.bars < start + sec.bars) {
+  for (const sec of secs) {
+    if (at < start + sec.bars) {
       if (sec.slot !== slot) return null;
       const total = clip.bars * STEPS_PER_BAR;
-      const exact = ((pos.bars - start) % clip.bars) * STEPS_PER_BAR;
+      const exact = ((at - start) % clip.bars) * STEPS_PER_BAR;
       const q = state().quantize;
       return { step: (Math.round(exact / q) * q) % total, cycle, group: `rec:${clip.id}:${pos.pass}` };
     }
@@ -203,10 +208,12 @@ function finishHeld(pointerId: number, timeStamp?: number) {
   const h = held.get(pointerId);
   if (!h) return;
   held.delete(pointerId);
-  const { quantize: q, noteLen } = state();
+  const { quantize: q, noteLen, selected } = state();
   const steps = (heardAt(timeStamp) - h.startCycle) * STEPS_PER_BAR;
   const len = Math.round(steps / q) * q;
-  if (len > Math.max(q, noteLen)) state().recordNote(h.trackId, h.slot, h.step, h.pitches, len, h.group, h.bend, h.vel);
+  // The note went into the selected clip, which may since have become a copy for this scene.
+  const slot = selected.trackId === h.trackId && selected.slot !== null ? selected.slot : h.slot;
+  if (len > Math.max(q, noteLen)) state().recordNote(h.trackId, slot, h.step, h.pitches, len, h.group, h.bend, h.vel);
 }
 
 /**

@@ -53,6 +53,10 @@ The latest build of `main` is also published at <https://bijoor.github.io/music-
 
 Plan: see the project plan document (shared separately).
 
+## Scenes: building a song live
+
+A song is played and built one **scene** (sequence) at a time. There is always a current scene (highlighted in the scenes bar) and it follows what the tracks play, with no saving: start clips, chain them (A ×3 then a break), and they are in the scene. A scene lasts as long as its longest track; shorter tracks repeat and are cut at the top so every track restarts together (`.ribbon(0, bars)` in the code), or keep cycling (scene menu → Shorter tracks). **＋ New scene** starts the next scene as a copy of what is heard; change tracks one by one and the song morphs into it, while the earlier scene keeps its clips: editing a clip that an earlier scene also plays edits a copy for the current scene. Tap any scene to play it from the next bar and carry on building it (or start a new one from it). Steps turned off while building a scene are dropped when another scene is chosen.
+
 ## Track groups
 
 + Track offers groups: **Drums** and **Indian drums**, and **Indian**, **Keys**, **Strings & guitars**, **Wind & brass**, **Bass**, **Synth** and **Drone**. A new track takes its group's colour and name ("Strings", "Strings 2"), instrument (or kit) and keyboard: Indian, Wind and Drone open on scale pads, the others on the piano. Each track keeps its own keyboard (piano: 1 or 2 octaves; scale pads: 1 to 4 rows, smaller pads as rows are added, lowest octave at the bottom; **Wide rows** puts two octaves in each row, for 2, 4 or 6 octaves, with the chord row widened to match); changing it also makes it the group's default for new tracks on this device. On a computer keyboard scale pad rows play from Z X C V … (lowest) up through A S D F … and Q W E R …. A track's instrument menu lists its group's instruments first (all the others below), and recorded kits belong to the group chosen when recording them (Indian drums by default).
