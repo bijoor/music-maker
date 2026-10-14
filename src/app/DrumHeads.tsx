@@ -37,8 +37,12 @@ export default function DrumHeads({ track, switcher }: { track: Track; switcher?
   const edit = (fn: (l: DrumLayout) => void) => { const next = structuredClone(layout); fn(next); change(next); };
 
   const toView = (e: { clientX: number; clientY: number }) => {
-    const r = svg.current!.getBoundingClientRect();
-    return { x: ((e.clientX - r.left) / r.width) * VIEW.w, y: ((e.clientY - r.top) / r.height) * VIEW.h };
+    // Through the drawing's own transform: it keeps its proportions and is centred in its box, so the box's
+    // corners are not the drawing's.
+    const el = svg.current!, m = el.getScreenCTM();
+    if (m) { const p = new DOMPoint(e.clientX, e.clientY).matrixTransform(m.inverse()); return { x: p.x, y: p.y }; }
+    const r = el.getBoundingClientRect(), k = Math.min(r.width / VIEW.w, r.height / VIEW.h);
+    return { x: (e.clientX - r.left - (r.width - VIEW.w * k) / 2) / k, y: (e.clientY - r.top - (r.height - VIEW.h * k) / 2) / k };
   };
   const flash = (h: number, part: Part, seg: number) => {
     const z = svg.current?.querySelector(`[data-zone="${h}:${part}:${seg}"]`);
