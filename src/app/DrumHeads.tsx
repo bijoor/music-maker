@@ -150,10 +150,11 @@ export default function DrumHeads({ track, switcher }: { track: Track; switcher?
                   const list = hd.parts[part];
                   const n = Math.max(1, list.length);
                   return Array.from({ length: n }, (_, i) => {
-                    const t0 = i / n - 0.5 / n, t1 = (i + 1) / n - 0.5 / n;
+                    const turn = hd.turn?.[part] ?? 0;
+                    const t0 = i / n - 0.5 / n + turn, t1 = (i + 1) / n - 0.5 / n + turn;
                     const selected = editing && sel?.head === h && sel.part === part && sel.seg === i;
                     // Label in the middle of the segment; the middle ring's halfway between the syahi and the rim.
-                    let tm = n === 1 ? 0 : (t0 + t1) / 2;
+                    let tm = n === 1 ? turn : (t0 + t1) / 2;
                     if (part === 'middle' && n === 1 && hd.syahi.dy < 0) tm = 0.5;
                     let rl = (rO + rI) / 2;
                     if (part === 'middle') {
@@ -199,6 +200,13 @@ export default function DrumHeads({ track, switcher }: { track: Track; switcher?
                     ))}
                   </div>
                 </div>
+                {selList.length > 1 && (
+                  <label className="shaperow">
+                    <span>Rotate segments · {Math.round((selHead.turn?.[sel.part] ?? 0) * 360)}°</span>
+                    <input type="range" min={-0.5} max={0.5} step={1 / 72} value={selHead.turn?.[sel.part] ?? 0}
+                      onChange={(e) => edit((l) => { const hd = l[sel.head]; hd.turn = { ...hd.turn, [sel.part]: +e.target.value }; })} />
+                  </label>
+                )}
                 <div className="strokepick">
                   <button aria-pressed={!selList[sel.seg]} onClick={() => edit((l) => { l[sel.head].parts[sel.part][sel.seg] = ''; })}>Nothing</button>
                   {kit.map((k) => (

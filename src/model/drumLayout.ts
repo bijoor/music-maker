@@ -17,6 +17,8 @@ export interface Head {
   centre: number;
   /** Strokes (kit voices) of each area's segments; segment 1 is centred on the top, the rest follow clockwise. '' = nothing. */
   parts: Record<Part, string[]>;
+  /** How far each area's segments are turned clockwise from segment 1 centred on the top, as a fraction of a turn. */
+  turn?: Partial<Record<Part, number>>;
 }
 export type DrumLayout = [Head, Head];
 
@@ -123,7 +125,7 @@ export function hitTest(layout: DrumLayout, x: number, y: number, view: View = V
     else if (d >= hd.rim * c.R) { part = 'rim'; frac = d / c.R; band = [hd.rim, 1]; }
     else { part = 'middle'; frac = d / c.R; band = [0, hd.rim]; }
     const n = Math.max(1, hd.parts[part].length);
-    const around = part === 'syahi' || part === 'centre' ? turnOf(sdx, sdy) : turnOf(dx, dy);
+    const around = ((part === 'syahi' || part === 'centre' ? turnOf(sdx, sdy) : turnOf(dx, dy)) - (hd.turn?.[part] ?? 0) + 2) % 1;
     const seg = Math.min(n - 1, Math.floor(((around + 0.5 / n) % 1) * n));
     return { head: h, part, seg, frac, band };
   }
