@@ -113,6 +113,7 @@ export default function ClipEditor() {
         <button className="btn sm" disabled={!state.past.length} onClick={state.undo} aria-label="Undo">↶<span className="wide-only"> Undo</span></button>
         <button className="btn sm" disabled={!state.future.length} onClick={state.redo} aria-label="Redo">↷</button>
         <span className="spacer" />
+        <button className={`btn sm${state.expanded ? ' on' : ''}`} aria-pressed={state.expanded} title={state.expanded ? 'Show the clips again' : 'Hide the clips and give the playing area the screen'} onClick={() => state.setExpanded(!state.expanded)}>{state.expanded ? '⤡ Clips' : '⤢ Expand'}</button>
         <button className={`btn sm${state.soundOpen ? ' on' : ''}`} aria-pressed={state.soundOpen} onClick={() => state.setUi({ soundOpen: !state.soundOpen })}>Sound</button>
         <div className="seg" role="group" aria-label="View">
           <button aria-pressed={view === 'grid'} onClick={() => setView('grid')}>Grid</button>

@@ -57,6 +57,12 @@ interface State {
   pitchSnap: boolean;
   /** Slides: movement smaller than this many pixels counts as the finger standing still (per device). */
   slideStill: number;
+  /** Indian and recorded kits: played as pads or as the drum's heads (per device). */
+  drumView: 'pads' | 'drum';
+  /** Drum view: full volume in the middle of each area, softer toward its edges (per device). */
+  drumSweet: boolean;
+  /** The editor takes the whole screen below the transport (the clips are hidden). */
+  expanded: boolean;
   /** Slide: moving a held finger sideways glides the pitch; off, it plays each key it reaches (per device). */
   glide: boolean;
   /** Length in steps of notes added in the grid, and of chords placed there. */
@@ -162,6 +168,9 @@ interface State {
   setTouchVelocity(v: number): void;
   setPitchSnap(on: boolean): void;
   setSlideStill(px: number): void;
+  setDrumView(v: 'pads' | 'drum'): void;
+  setDrumSweet(on: boolean): void;
+  setExpanded(on: boolean): void;
   setGlide(on: boolean): void;
   /** Set the velocity (0–1) of the note starting at `step`. */
   setNoteVelocity(trackId: string, slot: number, step: number, vel: number): void;
@@ -359,6 +368,9 @@ export const useStore = create<State>((set, get) => {
   touchVelocity: loadNumber('touchVelocity', 1),
   pitchSnap: loadNumber('pitchSnap', 1) === 1,
   slideStill: loadNumber('slideStill', 8),
+  drumView: loadNumber('drumView', 1) === 1 ? 'drum' : 'pads',
+  drumSweet: loadNumber('drumSweet', 0) === 1,
+  expanded: loadNumber('expanded', 0) === 1,
   glide: loadNumber('glide', 0) === 1,
   chain: false,
   songMode: false,
@@ -698,6 +710,9 @@ export const useStore = create<State>((set, get) => {
     saveNumber('glide', on ? 1 : 0);
     set({ glide: on });
   },
+  setDrumView: (v) => { saveNumber('drumView', v === 'drum' ? 1 : 0); set({ drumView: v }); },
+  setDrumSweet: (on) => { saveNumber('drumSweet', on ? 1 : 0); set({ drumSweet: on }); },
+  setExpanded: (on) => { saveNumber('expanded', on ? 1 : 0); set({ expanded: on }); },
   setSlideStill: (px) => {
     saveNumber('slideStill', px);
     set({ slideStill: px });

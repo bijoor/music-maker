@@ -14,6 +14,7 @@ if (import.meta.env.DEV) (window as unknown as { engine: typeof engine }).engine
 export default function App() {
   const message = useStore((s) => s.message);
   const setMessage = useStore((s) => s.setMessage);
+  const expanded = useStore((s) => s.expanded);
   usePendingClear();
   useKeyboard();
   useNoteSafety();
@@ -23,9 +24,10 @@ export default function App() {
     return () => clearTimeout(t);
   }, [message, setMessage]);
   return (
-    <div className="app">
+    <div className={`app${expanded ? ' expanded' : ''}`}>
       <Transport />
-      <ClipGrid />
+      {/* Expanded: the editor takes the space the clips would (for playing on the full screen). */}
+      {!expanded && <ClipGrid />}
       <ClipEditor />
       {message && <div className="toast" role="status">{message}</div>}
     </div>

@@ -424,3 +424,37 @@ select.sm { min-height: 30px; padding: 3px 6px; font-size: 13px; }
 /* The open clip's place in its track's line (under the editor header). */
 .stepstrip { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; padding: 4px 10px; border-bottom: 1px solid var(--line); background: var(--panel-2); }
 .stepstrip select { min-height: 30px; font-size: 13px; }
+
+/* Drum view: an Indian kit as its two heads, filling the space; in edit mode the marking panel sits beside it. */
+.drumview { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 6px; }
+.drumtools { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.drumwork { flex: 1; min-height: 0; display: flex; gap: 10px; }
+.drumheads { flex: 1; min-width: 0; min-height: 0; width: 100%; height: 100%; touch-action: none; }
+.drumview.editing .drumwork { flex-direction: row; }
+.markpanel { flex: 0 0 300px; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; padding: 10px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel-2); }
+.markpanel strong { font-size: 14px; }
+.markpanel .segrow { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 13px; font-weight: 600; }
+.strokepick { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.strokepick button { min-height: 40px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel); font-weight: 600; font-size: 13px; }
+.strokepick button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.shape { display: grid; gap: 6px; }
+.shaperow { display: grid; grid-template-columns: 7.5em minmax(0, 1fr); gap: 8px; align-items: center; font-size: 13px; }
+@media (max-width: 900px) { .drumview.editing .drumwork { flex-direction: column; } .markpanel { flex: 0 0 auto; max-height: 45vh; } }
+.zone { stroke: var(--fg); stroke-opacity: .35; stroke-width: 2; }
+.zone.rim { fill: #8a5a33; }
+.zone.rim.alt { fill: #9c6a40; }
+.zone.middle { fill: #e2d3b4; }
+.zone.middle.alt { fill: #d3bf98; }
+.zone.syahi { fill: #1c1915; }
+.zone.syahi.alt { fill: #3b342c; }
+.zone.centre { fill: #463d33; }
+.zone.empty { fill-opacity: .55; }
+.zone.selected { stroke: var(--accent); stroke-width: 5; stroke-opacity: 1; }
+.zone.hit { filter: brightness(1.35); }
+.zlabel { font-size: 22px; font-weight: 700; text-anchor: middle; dominant-baseline: central; pointer-events: none; fill: #2a2117; }
+.zlabel.rim, .zlabel.syahi, .zlabel.centre { fill: #f3e8d4; }
+.zlabel.rim, .zlabel.centre { font-size: 17px; }
+.headname { font-size: 22px; fill: var(--muted); text-anchor: middle; }
+
+/* Expanded: transport, then the editor on the rest of the screen. */
+.app.expanded { grid-template-rows: auto minmax(0, 1fr); }
