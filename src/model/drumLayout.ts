@@ -8,7 +8,7 @@ export const PARTS: Part[] = ['rim', 'middle', 'syahi', 'centre'];
 
 /** One drum head. Sizes are fractions of the head's radius; the syahi may sit off centre (dx, dy). */
 export interface Head {
-  /** Radius relative to the larger head (1). */
+  /** Radius relative to the larger head (1); no longer used for drawing: both heads are drawn the same size. */
   size: number;
   /** Inner edge of the rim. */
   rim: number;
@@ -80,16 +80,19 @@ export function saveLayout(bank: string, layout: DrumLayout | null) {
 
 // ---------- Geometry (in the drawing's own units) ----------
 
-export const VIEW = { w: 1000, h: 520 };
+/** The drawing's size: 520 high, as wide as the space it fills (at least 700). */
+export interface View { w: number; h: number }
+export const VIEW: View = { w: 1000, h: 520 };
+export const viewFor = (width: number, height: number): View => ({ w: Math.max(700, Math.round((VIEW.h * width) / Math.max(1, height))), h: VIEW.h });
 export interface Circle { cx: number; cy: number; R: number }
 
-/** Where the two heads sit: side by side, bass on the left, centred. */
-export function headCircles(layout: DrumLayout): [Circle, Circle] {
-  const big = 222, gap = 40;
-  const [a, b] = layout;
-  const ra = big * a.size, rb = big * b.size;
-  const x0 = (VIEW.w - (ra * 2 + rb * 2 + gap)) / 2;
-  return [{ cx: x0 + ra, cy: 246, R: ra }, { cx: x0 + ra * 2 + gap + rb, cy: 246, R: rb }];
+/** Room under each head for its name. */
+const NAME_ROOM = 36;
+/** Where the two heads sit: the same size, as big as the space allows, centred in each half (bass on the left). */
+export function headCircles(view: View = VIEW): [Circle, Circle] {
+  const R = Math.min((view.h - NAME_ROOM) / 2 - 6, view.w / 4 - 14);
+  const cy = (view.h - NAME_ROOM) / 2 + 2;
+  return [{ cx: view.w / 4, cy, R }, { cx: (view.w * 3) / 4, cy, R }];
 }
 
 const TAU = Math.PI * 2;
@@ -106,8 +109,8 @@ export interface Hit {
 }
 
 /** Which head, area and segment a point is on, or null. */
-export function hitTest(layout: DrumLayout, x: number, y: number): Hit | null {
-  const cs = headCircles(layout);
+export function hitTest(layout: DrumLayout, x: number, y: number, view: View = VIEW): Hit | null {
+  const cs = headCircles(view);
   for (const h of [0, 1] as const) {
     const hd = layout[h], c = cs[h];
     const dx = x - c.cx, dy = y - c.cy, d = Math.hypot(dx, dy);

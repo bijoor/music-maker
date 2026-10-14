@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useRef, useState, type PointerEvent, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent, type ReactNode } from 'react';
 import { kitVoices, voiceSound } from '../model/kit';
 import type { Track } from '../model/types';
-import { VIEW, headCircles, hitTest, layoutFor, saveLayout, segmentPath, sweetVelocity, DEFAULT_LAYOUTS, generatedLayout, type DrumLayout, type Part } from '../model/drumLayout';
+import { VIEW, viewFor, headCircles, hitTest, layoutFor, saveLayout, segmentPath, sweetVelocity, DEFAULT_LAYOUTS, generatedLayout, type DrumLayout, type Part } from '../model/drumLayout';
 import * as recorder from '../engine/recorder';
 import { useStore } from '../state/store';
 
@@ -41,7 +41,18 @@ export default function DrumHeads({ track, switcher }: { track: Track; switcher?
   const names = HEAD_NAMES[bank] ?? ['Left hand', 'Right hand'];
   const nameOf = (v: string) => kit.find((k) => k.voice === v)?.name ?? v;
   const bends = (v: string) => !!kit.find((k) => k.voice === v)?.bends;
-  const circles = useMemo(() => headCircles(layout), [layout]);
+  // The drawing takes the shape of the space it fills, so the heads can sit apart and be as big as it allows.
+  const [view, setView] = useState(VIEW);
+  useLayoutEffect(() => {
+    const el = touch.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    if (r.width && r.height) setView(viewFor(r.width, r.height));
+    const ro = new ResizeObserver(([e]) => { const { width, height } = e.contentRect; if (width && height) setView(viewFor(width, height)); });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  const circles = useMemo(() => headCircles(view), [view]);
 
   const change = (next: DrumLayout) => { setLayout(next); saveLayout(bank, next); };
   const edit = (fn: (l: DrumLayout) => void) => { const next = structuredClone(layout); fn(next); change(next); };
@@ -51,8 +62,8 @@ export default function DrumHeads({ track, switcher }: { track: Track; switcher?
     // corners are not the drawing's.
     const el = svg.current!, m = el.getScreenCTM();
     if (m) { const p = new DOMPoint(e.clientX, e.clientY).matrixTransform(m.inverse()); return { x: p.x, y: p.y }; }
-    const r = el.getBoundingClientRect(), k = Math.min(r.width / VIEW.w, r.height / VIEW.h);
-    return { x: (e.clientX - r.left - (r.width - VIEW.w * k) / 2) / k, y: (e.clientY - r.top - (r.height - VIEW.h * k) / 2) / k };
+    const r = el.getBoundingClientRect(), k = Math.min(r.width / view.w, r.height / view.h);
+    return { x: (e.clientX - r.left - (r.width - view.w * k) / 2) / k, y: (e.clientY - r.top - (r.height - view.h * k) / 2) / k };
   };
   const flash = (h: number, part: Part, seg: number) => {
     const z = svg.current?.querySelector(`[data-zone="${h}:${part}:${seg}"]`);
@@ -63,7 +74,7 @@ export default function DrumHeads({ track, switcher }: { track: Track; switcher?
   const down = (e: PointerEvent<HTMLDivElement>) => {
     e.preventDefault();
     getSelection()?.removeAllRanges();
-    const p = toView(e), hit = hitTest(layout, p.x, p.y);
+    const p = toView(e), hit = hitTest(layout, p.x, p.y, view);
     if (!hit) return;
     const voice = layout[hit.head].parts[hit.part][hit.seg];
     if (editing) {
@@ -112,7 +123,7 @@ export default function DrumHeads({ track, switcher }: { track: Track; switcher?
       <div className="drumwork">
         {/* Touches are taken by an HTML box: Safari ignores touch-action on SVG. */}
         <div ref={touch} className="drumtouch" onPointerDown={down}>
-        <svg ref={svg} className="drumheads" viewBox={`0 0 ${VIEW.w} ${VIEW.h}`} aria-label={`${bank} drum heads`}>
+        <svg ref={svg} className="drumheads" viewBox={`0 0 ${view.w} ${view.h}`} aria-label={`${bank} drum heads`}>
           {layout.map((hd, h) => {
             const c = circles[h];
             const sx = c.cx + hd.syahi.dx * c.R, sy = c.cy + hd.syahi.dy * c.R, sr = hd.syahi.r * c.R, cr = hd.centre * c.R;
@@ -127,7 +138,7 @@ export default function DrumHeads({ track, switcher }: { track: Track; switcher?
                 {/* The middle ring is the skin between the rim and the syahi: the syahi is cut out of it. */}
                 <defs>
                   <mask id={`skin-${track.id}-${h}`}>
-                    <rect x="0" y="0" width={VIEW.w} height={VIEW.h} fill="#fff" />
+                    <rect x="0" y="0" width={view.w} height={view.h} fill="#fff" />
                     <circle cx={sx} cy={sy} r={sr} fill="#000" />
                   </mask>
                 </defs>
@@ -207,7 +218,7 @@ export default function DrumHeads({ track, switcher }: { track: Track; switcher?
   );
 }
 
-/** Sliders for a head's shape: rim width, syahi size and position, syahi centre, head size. */
+/** Sliders for a head's shape: rim width, syahi size and position, syahi centre. */
 function Shape({ head, onChange }: { head: DrumLayout[number]; onChange(fn: (h: DrumLayout[number]) => void): void }) {
   const row = (label: string, value: number, min: number, max: number, set: (h: DrumLayout[number], v: number) => void) => (
     <label className="shaperow">
@@ -221,7 +232,6 @@ function Shape({ head, onChange }: { head: DrumLayout[number]; onChange(fn: (h: 
       {row('Syahi size', head.syahi.r, 0.15, 0.7, (h, v) => { h.syahi.r = v; h.centre = Math.min(h.centre, v - 0.05); })}
       {row('Syahi up / down', -head.syahi.dy, -0.45, 0.45, (h, v) => { h.syahi.dy = -v; })}
       {row('Syahi centre', head.centre, 0, 0.3, (h, v) => { h.centre = Math.min(v, h.syahi.r - 0.05); if (!h.parts.centre.length && h.centre > 0) h.parts.centre = ['']; })}
-      {row('Drum size', head.size, 0.6, 1, (h, v) => { h.size = v; })}
     </div>
   );
 }
