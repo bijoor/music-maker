@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type PointerEvent, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type PointerEvent, type ReactNode } from 'react';
 import { kitVoices, voiceSound } from '../model/kit';
 import type { Track } from '../model/types';
 import { VIEW, headCircles, hitTest, layoutFor, saveLayout, segmentPath, sweetVelocity, DEFAULT_LAYOUTS, generatedLayout, type DrumLayout, type Part } from '../model/drumLayout';
@@ -27,6 +27,16 @@ export default function DrumHeads({ track, switcher }: { track: Track; switcher?
   if (layoutBank !== bank) { setLayoutBank(bank); setLayout(layoutFor(bank)); }
   const [sel, setSel] = useState<{ head: 0 | 1; part: Part; seg: number } | null>(null);
   const svg = useRef<SVGSVGElement>(null);
+  const touch = useRef<HTMLDivElement>(null);
+  // iPad Safari holds a touch back (deciding between a scroll, a zoom and a tap) unless it is told not to: this
+  // stops that wait so a stroke sounds at once.
+  useEffect(() => {
+    const el = touch.current;
+    if (!el) return;
+    const stop = (e: TouchEvent) => e.preventDefault();
+    el.addEventListener('touchstart', stop, { passive: false });
+    return () => el.removeEventListener('touchstart', stop);
+  }, []);
   const kit = kitVoices(bank);
   const names = HEAD_NAMES[bank] ?? ['Left hand', 'Right hand'];
   const nameOf = (v: string) => kit.find((k) => k.voice === v)?.name ?? v;
@@ -50,7 +60,7 @@ export default function DrumHeads({ track, switcher }: { track: Track; switcher?
     setTimeout(() => z?.classList.remove('hit'), 140);
   };
 
-  const down = (e: PointerEvent<SVGSVGElement>) => {
+  const down = (e: PointerEvent<HTMLDivElement>) => {
     e.preventDefault();
     getSelection()?.removeAllRanges();
     const p = toView(e), hit = hitTest(layout, p.x, p.y);
@@ -62,8 +72,8 @@ export default function DrumHeads({ track, switcher }: { track: Track; switcher?
       return;
     }
     if (!voice) return;
-    flash(hit.head, hit.part, hit.seg);
     const sound = recorder.drum(track.id, voice, voiceSound(bank, voice), e.timeStamp, drumSweet ? sweetVelocity(hit) : 1);
+    flash(hit.head, hit.part, hit.seg);
     if (!bends(voice)) return;
     // Bends: sliding toward the centre of the head raises the pitch, like pressing it with the heel of the hand.
     const id = e.pointerId, c = circles[hit.head];
@@ -100,7 +110,9 @@ export default function DrumHeads({ track, switcher }: { track: Track; switcher?
         {editing && <span className="muted-text">Tap an area to mark it</span>}
       </div>
       <div className="drumwork">
-        <svg ref={svg} className="drumheads" viewBox={`0 0 ${VIEW.w} ${VIEW.h}`} onPointerDown={down} aria-label={`${bank} drum heads`}>
+        {/* Touches are taken by an HTML box: Safari ignores touch-action on SVG. */}
+        <div ref={touch} className="drumtouch" onPointerDown={down}>
+        <svg ref={svg} className="drumheads" viewBox={`0 0 ${VIEW.w} ${VIEW.h}`} aria-label={`${bank} drum heads`}>
           {layout.map((hd, h) => {
             const c = circles[h];
             const sx = c.cx + hd.syahi.dx * c.R, sy = c.cy + hd.syahi.dy * c.R, sr = hd.syahi.r * c.R, cr = hd.centre * c.R;
@@ -156,6 +168,7 @@ export default function DrumHeads({ track, switcher }: { track: Track; switcher?
             );
           })}
         </svg>
+        </div>
         {editing && (
           <div className="markpanel">
             {sel && selHead ? (
