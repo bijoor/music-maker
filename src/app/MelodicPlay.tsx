@@ -10,9 +10,13 @@ import { slideVelocity, strikeVelocity } from './strike';
 import { keyboardOf } from '../model/groups';
 import { anchors, keyAt, keyLine, pitchAlong, slideTo, startSlide, stickyKey } from './glide';
 
-/** A sliding finger that stops for this long settles onto the key under it, easing over SETTLE_EASE seconds. */
-const SETTLE_AFTER_MS = 100;
-const SETTLE_EASE = 0.08;
+/**
+ * A sliding finger that stops for this long settles onto the key under it, easing over SETTLE_EASE seconds; a
+ * finger that lifts mid-slide lands on its key at once (LIFT_EASE), so a note never ends between keys.
+ */
+const SETTLE_AFTER_MS = 60;
+const SETTLE_EASE = 0.05;
+const LIFT_EASE = 0.02;
 
 const BLACK = [1, 3, 6, 8, 10];
 
@@ -97,6 +101,9 @@ export default function MelodicPlay({ track }: { track: Track }) {
     const end = (timeStamp?: number) => {
       fingers.delete(id);
       clearTimeout(settle);
+      // Lifting mid-slide: land on the key's note before letting go (it may ring on under the sustain pedal).
+      const { glide, pitchSnap } = useStore.getState();
+      if (glide && pitchSnap && current) recorder.glide(id, current.pitch, current.pitch, timeStamp, LIFT_EASE);
       recorder.release(id, timeStamp);
       lit.classList.remove('down');
       removeEventListener('pointermove', move);
