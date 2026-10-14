@@ -1,4 +1,26 @@
+import { useEffect, useState } from 'react';
 import PanelFrame from './PanelFrame';
+import { latencyStats } from '../engine/strudel';
+
+const ms = (v: number | null) => (v == null ? '—' : `${Math.round(v)} ms`);
+/** What delays a stroke, measured on this device: play some drum strokes, then look here. */
+function Latency() {
+  const [s, setS] = useState(latencyStats);
+  useEffect(() => { const t = setInterval(() => setS(latencyStats()), 500); return () => clearInterval(t); }, []);
+  const total = (s.input ?? 0) + s.lead + (s.base ?? 0) + (s.output ?? 0);
+  return (
+    <section className="latency">
+      <h3>Latency on this device</h3>
+      <p className="muted-text">Play some drum strokes, then read these (averages of the last 20).</p>
+      <ul>
+        <li>Touch to app: {ms(s.input)}</li>
+        <li>Engine starting the sound: {ms(s.engine)} (must stay under the {ms(s.lead)} head start)</li>
+        <li>Audio buffer: {ms(s.base)} · output: {ms(s.output)}</li>
+        <li>About {ms(total)} from touch to sound, plus any Bluetooth delay · {s.rate} Hz, {s.state}</li>
+      </ul>
+    </section>
+  );
+}
 
 const SOURCES: { name: string; url: string; what: string; license: string }[] = [
   { name: 'Strudel', url: 'https://strudel.cc', what: 'The music engine, synths and the code language', license: 'AGPL-3.0' },
@@ -17,6 +39,7 @@ export default function About() {
   return (
     <PanelFrame title="About and sound credits">
       <div className="about">
+        <Latency />
         <p>Music Maker writes <a href="https://strudel.cc" target="_blank" rel="noreferrer">Strudel</a> code as you play. Its source is on <a href="https://github.com/bijoor/music-maker" target="_blank" rel="noreferrer">GitHub</a> under the AGPL-3.0.</p>
         <p className="muted-text">Sounds are loaded from these collections the first time they are used (then kept for offline use); the tabla strokes are part of the app. The tabla strokes were chosen by ear and named by bol for this app; some differ from the recordings' original labels.</p>
         <ul>

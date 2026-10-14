@@ -123,6 +123,7 @@ const velocityValue = (vel: number) => (vel < 1 ? { velocity: vel } : {});
 export function drum(trackId: string, voice: string, sound: Record<string, unknown>, timeStamp?: number, vel = 1, heads: Head[] = []): engine.HeldNote {
   // Like a hand on a real drum, a new stroke stops the one still ringing on the same head. Without this, long
   // bass strokes (Ghe, Gha ring for seconds) pile up when played quickly, and the device turns its volume down.
+  if (timeStamp !== undefined) engine.noteInputDelay(performance.now() - timeStamp);
   for (const h of heads) ringing.get(`${trackId}:${h}`)?.stop(DAMP_FADE);
   const hit = player.hold(trackId, { ...sound, ...velocityValue(vel) }, 1);
   for (const h of heads) ringing.set(`${trackId}:${h}`, hit);

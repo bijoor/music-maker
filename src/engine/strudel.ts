@@ -301,6 +301,24 @@ function sampleUrl(value: Record<string, unknown>): string | null {
  */
 const LEAD = 0.015;
 
+// Latency figures for the About panel: how long a touch waits before the app sees it, how long the engine takes
+// to start the sound, and the audio output's own delay as the browser reports it.
+const recent = { input: [] as number[], engine: [] as number[] };
+const keep = (list: number[], ms: number) => { list.push(ms); if (list.length > 20) list.shift(); };
+/** A touch reached the app `ms` after it happened. */
+export const noteInputDelay = (ms: number) => { if (ms >= 0 && ms < 2000) keep(recent.input, ms); };
+const avg = (l: number[]) => (l.length ? l.reduce((a, b) => a + b, 0) / l.length : null);
+export function latencyStats() {
+  const ac = getAudioContext() as AudioContext & { outputLatency?: number };
+  return {
+    input: avg(recent.input), engine: avg(recent.engine), lead: LEAD * 1000,
+    base: ac.baseLatency != null ? ac.baseLatency * 1000 : null,
+    output: ac.outputLatency ? ac.outputLatency * 1000 : null,
+    rate: ac.sampleRate, state: ac.state,
+  };
+}
+const startedAt = new Map<string, number>();
+
 export function trigger(value: Record<string, unknown>, duration = 0.25) {
   const ac = getAudioContext();
   // Pass the tempo too: tempo-synced effects such as delay then match the pattern.
@@ -329,6 +347,8 @@ function wrapSound(s: string) {
     ...entry,
     onTrigger: async (t: number, value: Record<string, unknown>, ...rest: unknown[]) => {
       let voice = await onTrigger(t, value, ...rest);
+      const began = startedAt.get(String(value.holdId));
+      if (began !== undefined) { startedAt.delete(String(value.holdId)); keep(recent.engine, performance.now() - began); }
       const take = holders.get(String(value.holdId));
       if (take && voice?.node) {
         // A held note gets a volume control of its own after the instrument's envelope, so a sliding finger
@@ -411,6 +431,8 @@ export function hold(value: Record<string, unknown>, max = 30): HeldNote {
     if (ratio !== 1) setLevel(v);
     if (released) releaseVoice(v);
   });
+  startedAt.set(id, performance.now());
+  setTimeout(() => startedAt.delete(id), 5000);
   void trigger({ ...value, holdId: id }, max);
   const note: HeldNote = {
     stop(fade) {
