@@ -83,7 +83,10 @@ export default function DrumHeads({ track, switcher }: { track: Track; switcher?
       return;
     }
     if (!voice) return;
-    const sound = recorder.drum(track.id, voice, voiceSound(bank, voice), e.timeStamp, drumSweet ? sweetVelocity(hit) : 1);
+    // Stops what is ringing on the head struck (a two-hand bol such as Dha: on both heads).
+    const both = kit.find((k) => k.voice === voice)?.hand === 'both';
+    const heads: recorder.Head[] = both ? ['left', 'right'] : [hit.head === 0 ? 'left' : 'right'];
+    const sound = recorder.drum(track.id, voice, voiceSound(bank, voice), e.timeStamp, drumSweet ? sweetVelocity(hit) : 1, heads);
     flash(hit.head, hit.part, hit.seg);
     if (!bends(voice)) return;
     // Bends: sliding toward the centre of the head raises the pitch, like pressing it with the heel of the hand.

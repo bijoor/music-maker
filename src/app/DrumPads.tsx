@@ -25,7 +25,7 @@ export default function DrumPads({ track }: { track: Track }) {
     const el = e.currentTarget, id = e.pointerId, r = el.getBoundingClientRect();
     getSelection()?.removeAllRanges(); // no text stays selected while playing
     const vel0 = strikeVelocity2D(e.clientX, e.clientY, el), x0 = e.clientX, y0 = e.clientY;
-    const sound = recorder.drum(track.id, k.voice, voiceSound(track.bank, k.voice), e.timeStamp, vel0);
+    const sound = recorder.drum(track.id, k.voice, voiceSound(track.bank, k.voice), e.timeStamp, vel0, recorder.headsOf(k.hand));
     el.classList.add('down');
     setTimeout(() => el.classList.remove('down'), 150);
     if (el.hasPointerCapture?.(id)) el.releasePointerCapture(id);

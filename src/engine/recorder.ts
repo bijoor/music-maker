@@ -106,14 +106,26 @@ function needClip(track: Track): number | null {
 }
 
 /** Sound fields for a velocity: none at full strength, so values stay as the generated code plays them. */
+/** A drum head of an Indian kit: left (bass) or right (treble). */
+export type Head = 'left' | 'right';
+/** The heads a stroke is played on, from the hand that plays it (both hands: both heads). */
+export const headsOf = (hand?: string): Head[] => (hand === 'both' ? ['left', 'right'] : hand === 'left' || hand === 'right' ? [hand] : []);
+/** The stroke last played on each head (by track), so the next one can stop it. */
+const ringing = new Map<string, engine.HeldNote>();
+/** How quickly a stroke stops when the next one is played on its head (seconds). */
+const DAMP_FADE = 0.05;
 const velocityValue = (vel: number) => (vel < 1 ? { velocity: vel } : {});
 
 /**
  * A drum pad struck at velocity `vel` (0–1). `timeStamp` is the pointer event's timestamp. Returns the sounding
  * hit, whose volume a finger still on the pad can swell or fade (it rings out on its own either way).
  */
-export function drum(trackId: string, voice: string, sound: Record<string, unknown>, timeStamp?: number, vel = 1): engine.HeldNote {
+export function drum(trackId: string, voice: string, sound: Record<string, unknown>, timeStamp?: number, vel = 1, heads: Head[] = []): engine.HeldNote {
+  // Like a hand on a real drum, a new stroke stops the one still ringing on the same head. Without this, long
+  // bass strokes (Ghe, Gha ring for seconds) pile up when played quickly, and the device turns its volume down.
+  for (const h of heads) ringing.get(`${trackId}:${h}`)?.stop(DAMP_FADE);
   const hit = player.hold(trackId, { ...sound, ...velocityValue(vel) }, 1);
+  for (const h of heads) ringing.set(`${trackId}:${h}`, hit);
   record(trackId, voice, timeStamp, vel);
   return hit;
 }
