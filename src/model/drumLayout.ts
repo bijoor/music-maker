@@ -25,8 +25,8 @@ const head = (size: number, rim: number, syahi: Head['syahi'], centre: number, p
 /** Default layouts for the Indian kits. */
 export const DEFAULT_LAYOUTS: Record<string, DrumLayout> = {
   Tabla: [
-    head(1, 0.86, { dx: 0, dy: -0.4, r: 0.34 }, 0, { rim: ['tabla_ge'], middle: ['tabla_ghe', 'tabla_gha'], syahi: ['tabla_ke', 'tabla_kat'], centre: [] }),
-    head(0.78, 0.8, { dx: 0, dy: 0, r: 0.5 }, 0.18, { rim: ['tabla_na', 'tabla_ta'], middle: ['tabla_tin', ''], syahi: ['tabla_te', 'tabla_tak', 'tabla_te2'], centre: ['tabla_tun'] }),
+    head(1, 0.79, { dx: 0, dy: -0.32, r: 0.28 }, 0, { rim: ['tabla_ge', 'tabla_gha'], middle: ['tabla_ghe', 'tabla_gha'], syahi: ['tabla_ke', 'tabla_kat'], centre: [] }),
+    head(0.78, 0.72, { dx: 0, dy: 0, r: 0.55 }, 0.18, { rim: ['tabla_tak', 'tabla_ta', 'tabla_na'], middle: ['tabla_tak', 'tabla_te', 'tabla_te2'], syahi: ['tabla_tun', 'tabla_te', 'tabla_te2'], centre: ['tabla_tin'] }),
   ],
   Mridangam: [
     head(1, 0.84, { dx: 0, dy: 0, r: 0.4 }, 0, { rim: ['thom'], middle: ['gumki'], syahi: ['tha', 'ki'], centre: [] }),
