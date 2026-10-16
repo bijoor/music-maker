@@ -5,6 +5,7 @@ import { fxValues, generate, sections, type GeneratedSong } from '../codegen/gen
 import type { Song, Track } from '../model/types';
 import { kitVoices, voiceSound } from '../model/kit';
 import { findScale, scalePitch } from '../model/scales';
+import { keyboardOf } from '../model/groups';
 import { useStore } from '../state/store';
 import * as engine from './strudel';
 
@@ -157,28 +158,45 @@ export function playhead(trackId: string): { slot: number; step: number } | null
  * Play a drum or note immediately (pads, keys, grid taps) exactly as the clip will play it: the same sound,
  * the same effect controls as the generated code, and a length of `steps` sixteenth notes at the song's tempo.
  */
-/** The sounds a track can play from its pads or keys (melodic: the keyboard's range, scale pitches included). */
+/**
+ * The sounds a track can play from its pads or keys (melodic: every key its keyboard can show — all its rows, an
+ * octave below for bends, and the top note — scale pitches included).
+ */
 function trackSounds(song: Song, track: Track): engine.SoundRef[] {
   if (track.kind === 'drums') {
     return kitVoices(track.bank).map(({ voice }) => voiceSound(track.bank, voice) as engine.SoundRef);
   }
   const scale = findScale(song), notes: number[] = [];
-  for (let o = track.octave - 1; o <= track.octave + 2; o++) {
+  const kb = keyboardOf(track);
+  const span = Math.max(2, kb.layout === 'pads' ? kb.octaves * (kb.perRow ?? 1) : Math.min(2, kb.octaves));
+  for (let o = track.octave - 1; o <= track.octave + span; o++) {
     for (let i = 0; i < 12; i++) notes.push((o + 1) * 12 + i);
     for (const d of scale.degrees) notes.push(scalePitch(scale, song.key.tonic, d, o));
   }
   return [{ s: track.sound ?? 'piano', notes }];
 }
 
-/** Load every track's sounds ahead of play, so a newly chosen instrument sounds on its first note. */
-export function warm(song = useStore.getState().song) {
+/**
+ * Load sounds ahead of play, so every key and pad sounds the moment it is pressed (each sound's silent lead-in is
+ * cut as it loads): one track's, or every track's. Loads are cached, so this is cheap to repeat.
+ */
+export function warm(song = useStore.getState().song, trackId?: string) {
   if (!engine.isReady()) return;
-  song.tracks.forEach((t) => engine.preload(trackSounds(song, t)));
+  song.tracks.forEach((t) => { if (!trackId || t.id === trackId) engine.preload(trackSounds(song, t)); });
 }
-// Re-warm when a track's instrument, kit or octave (or the scale) changes.
-const soundKey = (song: Song) => JSON.stringify([song.key, song.customScales, song.tracks.map((t) => [t.kind, t.sound, t.bank, t.octave])]);
+/** Start the engine if needed (from a tap, which may unlock audio) and load a track's sounds first, then the rest. */
+export function warmTrack(trackId: string) {
+  const go = () => { warm(undefined, trackId); warm(); };
+  if (engine.isReady()) { go(); return; }
+  engine.unlockAudio();
+  engine.initEngine().then(go);
+}
+// Load again when a track's instrument, kit, octave or keyboard (or the scale) changes, and load a track's sounds
+// when it is added or selected. Store updates run inside the tap that made them, so the engine may start here.
+const soundKey = (song: Song) => JSON.stringify([song.key, song.customScales, song.tracks.map((t) => [t.kind, t.sound, t.bank, t.octave, keyboardOf(t)])]);
 let warmedKey = '';
-useStore.subscribe((st) => {
+useStore.subscribe((st, prev) => {
+  if (st.selected?.trackId && st.selected.trackId !== prev.selected?.trackId) warmTrack(st.selected.trackId);
   const k = soundKey(st.song);
   if (k !== warmedKey && engine.isReady()) { warmedKey = k; warm(st.song); }
 });
