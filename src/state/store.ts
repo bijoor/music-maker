@@ -64,6 +64,8 @@ interface State {
   drumForce: boolean;
   /** Indian and recorded kits: a finger left resting after a stroke damps it (per device). */
   drumDamp: boolean;
+  /** Open and closed strokes: how long (ms) a finger must rest before the closed stroke takes over (per device). */
+  closedAfter: number;
   /** The editor takes the whole screen below the transport (the clips are hidden). */
   expanded: boolean;
   /** Slide: moving a held finger sideways glides the pitch; off, it plays each key it reaches (per device). */
@@ -175,6 +177,7 @@ interface State {
   setDrumDepth(on: boolean): void;
   setDrumForce(on: boolean): void;
   setDrumDamp(on: boolean): void;
+  setClosedAfter(ms: number): void;
   setExpanded(on: boolean): void;
   setGlide(on: boolean): void;
   /** Set the velocity (0–1) of the note starting at `step`. */
@@ -377,6 +380,7 @@ export const useStore = create<State>((set, get) => {
   drumDepth: loadNumber('drumDepth', 0) === 1,
   drumForce: loadNumber('drumForce', 0) === 1,
   drumDamp: loadNumber('drumDamp', 1) === 1,
+  closedAfter: loadNumber('closedAfter', 40),
   expanded: loadNumber('expanded', 0) === 1,
   glide: loadNumber('glide', 0) === 1,
   chain: false,
@@ -719,6 +723,7 @@ export const useStore = create<State>((set, get) => {
   },
   setDrumView: (v) => { saveNumber('drumView', v === 'drum' ? 1 : 0); set({ drumView: v }); },
   setDrumDepth: (on) => { saveNumber('drumDepth', on ? 1 : 0); set({ drumDepth: on }); },
+  setClosedAfter: (ms) => { saveNumber('closedAfter', ms); set({ closedAfter: ms }); },
   setDrumDamp: (on) => { saveNumber('drumDamp', on ? 1 : 0); set({ drumDamp: on }); },
   setDrumForce: (on) => { saveNumber('drumForce', on ? 1 : 0); set({ drumForce: on }); },
   setExpanded: (on) => { saveNumber('expanded', on ? 1 : 0); set({ expanded: on }); },

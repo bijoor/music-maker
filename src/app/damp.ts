@@ -14,7 +14,7 @@ const STILL_PX = 8;
  * Wait to see whether a finger rests or lifts: `rest` runs if it is still down (and has not slid) after HOLD_MS,
  * `lift` if it comes up (or slides) first.
  */
-export function onRest(pointerId: number, x0: number, y0: number, rest: () => void, lift: () => void = () => {}) {
+export function onRest(pointerId: number, x0: number, y0: number, rest: () => void, lift: () => void = () => {}, after = HOLD_MS) {
   let moved = false, settled = false;
   const finish = (rested: boolean) => {
     if (settled) return;
@@ -27,7 +27,7 @@ export function onRest(pointerId: number, x0: number, y0: number, rest: () => vo
   };
   const move = (ev: PointerEvent) => { if (ev.pointerId === pointerId && Math.hypot(ev.clientX - x0, ev.clientY - y0) > STILL_PX) { moved = true; finish(false); } };
   const up = (ev: PointerEvent) => { if (ev.pointerId === pointerId) finish(false); };
-  const timer = setTimeout(() => finish(!moved), HOLD_MS);
+  const timer = setTimeout(() => finish(!moved), after);
   addEventListener('pointermove', move);
   addEventListener('pointerup', up);
   addEventListener('pointercancel', up);

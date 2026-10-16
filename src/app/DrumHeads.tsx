@@ -23,7 +23,7 @@ const BEND_PER_RADIUS = 7;
  */
 export default function DrumHeads({ track, switcher }: { track: Track; switcher?: ReactNode }) {
   const bank = track.bank!;
-  const { drumDepth, setDrumDepth, drumForce, setDrumForce, drumDamp, setDrumDamp } = useStore();
+  const { drumDepth, setDrumDepth, drumForce, setDrumForce, drumDamp, setDrumDamp, closedAfter, setClosedAfter } = useStore();
   // Tap force needs the motion sensor, which iPad allows only from a tap: after a reload it waits for one.
   const [forceLive, setForceLive] = useState(tapForceListening);
   // The last tap's force, shown without re-drawing the drum on every stroke.
@@ -125,7 +125,7 @@ export default function DrumHeads({ track, switcher }: { track: Track; switcher?
         sound.stop(SWAP_FADE);
         current = recorder.drum(track.id, closed, voiceSound(bank, closed), e.timeStamp, vel, heads, false);
         recorder.recordDrum(track.id, closed, e.timeStamp, vel);
-      }, () => recorder.recordDrum(track.id, voice, e.timeStamp, vel));
+      }, () => recorder.recordDrum(track.id, voice, e.timeStamp, vel), closedAfter);
       return;
     }
     if (!bends(voice)) {
@@ -292,6 +292,16 @@ export default function DrumHeads({ track, switcher }: { track: Track; switcher?
                     <button aria-pressed={pick === 'closed'} onClick={() => setPick('closed')}>Rests (closed)</button>
                   </div>
                 </div>
+                {pick === 'closed' && (
+                  <div className="segrow">
+                    <span>Closed after resting</span>
+                    <div className="seg" role="group" aria-label="Closed stroke after">
+                      {[20, 30, 40, 60, 80].map((ms) => (
+                        <button key={ms} aria-pressed={closedAfter === ms} onClick={() => setClosedAfter(ms)}>{ms} ms</button>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 <div className="strokepick">
                   <button aria-pressed={!(pick === 'open' ? selList[sel.seg] : selClosed)} onClick={() => edit((l) => setStroke(l, ''))}>{pick === 'open' ? 'Nothing' : 'Same as open'}</button>
                   {kit.map((k) => (
