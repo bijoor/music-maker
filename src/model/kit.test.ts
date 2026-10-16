@@ -80,10 +80,19 @@ describe('Indian kits', () => {
 
 describe('pad order', () => {
   it('swaps pads and the keys that play them', async () => {
-    const { swapPads, resetPadOrder, orderedVoices } = await import('./padOrder');
-    swapPads('Tabla', 'tabla_ge', 'tabla_kat');
-    expect(orderedVoices('Tabla')[0].voice).toBe('tabla_kat');
+    const { swapSpots, setSpot, resetPadOrder, padSpots } = await import('./padOrder');
+    const spots = padSpots('Tabla');
+    // Every hand has the same rows; spots left over are empty.
+    expect(spots.left.length / 2).toBe(spots.right.length / 2);
+    expect(spots.both.length).toBe(spots.left.length / 2);
+    swapSpots('Tabla', { hand: 'left', i: 0 }, { hand: 'left', i: 4 });
+    expect(padSpots('Tabla').left[0]).toBe('tabla_kat');
     expect(drumKey('Tabla', 'f')).toBe('tabla_kat');
+    // A second pad for a stroke, in an empty spot, with a key of its own.
+    const empty = padSpots('Tabla').left.indexOf('');
+    setSpot('Tabla', { hand: 'left', i: empty }, 'tabla_ge');
+    expect(drumKey('Tabla', 'fdsarewqvcxz'[empty])).toBe('tabla_ge');
+    expect(drumKey('Tabla', 'r')).toBe('tabla_ge');
     resetPadOrder('Tabla');
     expect(drumKey('Tabla', 'f')).toBe('tabla_ge');
   });
