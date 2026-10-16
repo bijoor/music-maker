@@ -8,6 +8,7 @@
 import { evalScope, evaluate as evaluateCode, repl, Pattern, TimeSpan, silence, stack } from '@strudel/core';
 import { transpiler } from '@strudel/transpiler';
 import { webaudioOutput } from '@strudel/webaudio';
+import { trimOnDecode } from '../audio/trim';
 import { getFontBufferSource, registerSoundfonts } from '@strudel/soundfonts';
 import { getAudioContext, getLoadedBuffer, getSampleInfo, initAudio, loadBuffer, registerSynthSounds, samples, superdough, soundMap } from 'superdough';
 
@@ -99,6 +100,7 @@ export function initEngine(): Promise<void> {
     unlockAudio();
     ready = (async () => {
       const ac = getAudioContext();
+      trimOnDecode(ac);
       await ac.resume();
       await evalScope(import('@strudel/core'), import('@strudel/mini'), import('@strudel/webaudio'), import('@strudel/soundfonts'));
       await initAudio();
