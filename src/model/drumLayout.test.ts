@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_LAYOUTS, headCircles, hitTest, VIEW, type DrumLayout } from './drumLayout';
+import { DEFAULT_LAYOUTS, depthVelocity, headCircles, hitTest, VIEW, type DrumLayout } from './drumLayout';
 
 const tabla = (): DrumLayout => structuredClone(DEFAULT_LAYOUTS.Tabla);
 /** A point on a head at a fraction of its radius, a fraction of a turn clockwise from the top. */
@@ -29,5 +29,16 @@ describe('drum layout hit test', () => {
 
   it('misses outside the heads', () => {
     expect(hitTest(tabla(), 2, 2)).toBeNull();
+  });
+});
+
+describe('velocity by depth', () => {
+  it('rises across the area toward its loud side', () => {
+    const l = tabla();
+    const inner = at(l, 1, 0.73, 0)!, outer = at(l, 1, 0.99, 0)!;
+    expect(inner.part).toBe('rim');
+    expect(depthVelocity(outer)).toBeGreaterThan(0.9);
+    expect(depthVelocity(inner)).toBeLessThan(0.35);
+    expect(depthVelocity(inner, 'in')).toBeGreaterThan(0.9);
   });
 });

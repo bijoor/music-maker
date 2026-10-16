@@ -59,8 +59,9 @@ interface State {
   slideStill: number;
   /** Indian and recorded kits: played as pads or as the drum's heads (per device). */
   drumView: 'pads' | 'drum';
-  /** Drum view: full volume in the middle of each area, softer toward its edges (per device). */
-  drumSweet: boolean;
+  /** Drum view: velocity by depth across each area, and by tap force from the motion sensor (per device). */
+  drumDepth: boolean;
+  drumForce: boolean;
   /** The editor takes the whole screen below the transport (the clips are hidden). */
   expanded: boolean;
   /** Slide: moving a held finger sideways glides the pitch; off, it plays each key it reaches (per device). */
@@ -169,7 +170,8 @@ interface State {
   setPitchSnap(on: boolean): void;
   setSlideStill(px: number): void;
   setDrumView(v: 'pads' | 'drum'): void;
-  setDrumSweet(on: boolean): void;
+  setDrumDepth(on: boolean): void;
+  setDrumForce(on: boolean): void;
   setExpanded(on: boolean): void;
   setGlide(on: boolean): void;
   /** Set the velocity (0–1) of the note starting at `step`. */
@@ -369,7 +371,8 @@ export const useStore = create<State>((set, get) => {
   pitchSnap: loadNumber('pitchSnap', 1) === 1,
   slideStill: loadNumber('slideStill', 8),
   drumView: loadNumber('drumView', 1) === 1 ? 'drum' : 'pads',
-  drumSweet: loadNumber('drumSweet', 0) === 1,
+  drumDepth: loadNumber('drumDepth', 0) === 1,
+  drumForce: loadNumber('drumForce', 0) === 1,
   expanded: loadNumber('expanded', 0) === 1,
   glide: loadNumber('glide', 0) === 1,
   chain: false,
@@ -711,7 +714,8 @@ export const useStore = create<State>((set, get) => {
     set({ glide: on });
   },
   setDrumView: (v) => { saveNumber('drumView', v === 'drum' ? 1 : 0); set({ drumView: v }); },
-  setDrumSweet: (on) => { saveNumber('drumSweet', on ? 1 : 0); set({ drumSweet: on }); },
+  setDrumDepth: (on) => { saveNumber('drumDepth', on ? 1 : 0); set({ drumDepth: on }); },
+  setDrumForce: (on) => { saveNumber('drumForce', on ? 1 : 0); set({ drumForce: on }); },
   setExpanded: (on) => { saveNumber('expanded', on ? 1 : 0); set({ expanded: on }); },
   setSlideStill: (px) => {
     saveNumber('slideStill', px);

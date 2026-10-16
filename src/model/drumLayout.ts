@@ -19,6 +19,8 @@ export interface Head {
   parts: Record<Part, string[]>;
   /** How far each area's segments are turned clockwise from segment 1 centred on the top, as a fraction of a turn. */
   turn?: Partial<Record<Part, number>>;
+  /** Velocity by depth: which side of each area plays loudest ('out', the default: its outer edge). */
+  loud?: Partial<Record<Part, 'in' | 'out'>>;
 }
 export type DrumLayout = [Head, Head];
 
@@ -144,10 +146,11 @@ export function segmentPath(cx: number, cy: number, rOut: number, rIn: number, t
   return `M ${p(rOut, t0)} A ${rOut} ${rOut} 0 ${big} 1 ${p(rOut, t1)} L ${p(rIn, t1)} A ${rIn} ${rIn} 0 ${big} 0 ${p(rIn, t0)} Z`;
 }
 
-/** Velocity for a hit with a sweet spot: full at the middle of the area's band, softer toward its edges. */
-export function sweetVelocity(hit: Hit): number {
-  const [a, b] = hit.band, mid = (a + b) / 2, half = Math.max(0.01, (b - a) / 2);
-  return Math.max(0.3, 1 - 0.7 * Math.min(1, Math.abs(hit.frac - mid) / half));
+/** Velocity by depth: from 0.25 at one side of the area's band to full at the other (`loud` side). */
+export function depthVelocity(hit: Hit, loud: 'in' | 'out' = 'out'): number {
+  const [a, b] = hit.band;
+  const t = Math.max(0, Math.min(1, (hit.frac - a) / Math.max(0.01, b - a)));
+  return 0.25 + 0.75 * (loud === 'out' ? t : 1 - t);
 }
 
 /** Two strokes on the two heads that together make a recorded bol (tabla: Na or Ta + Ge = Dha, Tin + Ge = Dhin). */

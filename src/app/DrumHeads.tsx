@@ -1,8 +1,9 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent, type ReactNode } from 'react';
 import { kitVoices, voiceSound } from '../model/kit';
 import type { Track } from '../model/types';
-import { VIEW, viewFor, headCircles, hitTest, layoutFor, saveLayout, segmentPath, sweetVelocity, DEFAULT_LAYOUTS, generatedLayout, type DrumLayout, type Part } from '../model/drumLayout';
+import { VIEW, viewFor, headCircles, hitTest, layoutFor, saveLayout, segmentPath, depthVelocity, DEFAULT_LAYOUTS, generatedLayout, type DrumLayout, type Part } from '../model/drumLayout';
 import * as recorder from '../engine/recorder';
+import { disableTapForce, enableTapForce, tapForceListening, tapForceSensed, tapVelocity } from './tapForce';
 import { useStore } from '../state/store';
 
 const HEAD_NAMES: Record<string, [string, string]> = {
@@ -20,7 +21,19 @@ const BEND_PER_RADIUS = 7;
  */
 export default function DrumHeads({ track, switcher }: { track: Track; switcher?: ReactNode }) {
   const bank = track.bank!;
-  const { drumSweet, setDrumSweet } = useStore();
+  const { drumDepth, setDrumDepth, drumForce, setDrumForce } = useStore();
+  // Tap force needs the motion sensor, which iPad allows only from a tap: after a reload it waits for one.
+  const [forceLive, setForceLive] = useState(tapForceListening);
+  // The last tap's force, shown without re-drawing the drum on every stroke.
+  const forceText = useRef<HTMLSpanElement>(null);
+  const showForce = (v: number) => { if (forceText.current) forceText.current.textContent = `Last tap ${Math.round(v * 100)}%`; };
+  const toggleForce = async () => {
+    if (drumForce && forceLive) { disableTapForce(); setForceLive(false); setDrumForce(false); return; }
+    const ok = await enableTapForce();
+    setForceLive(ok);
+    setDrumForce(ok);
+    if (!ok) useStore.getState().setMessage('Tap force needs the motion sensor: allow Motion & Orientation access when asked (on iPad)');
+  };
   const [editing, setEditing] = useState(false);
   const [layout, setLayout] = useState<DrumLayout>(() => layoutFor(bank));
   const [layoutBank, setLayoutBank] = useState(bank);
@@ -86,7 +99,18 @@ export default function DrumHeads({ track, switcher }: { track: Track; switcher?
     // Stops what is ringing on the head struck (a two-hand bol such as Dha: on both heads).
     const both = kit.find((k) => k.voice === voice)?.hand === 'both';
     const heads: recorder.Head[] = both ? ['left', 'right'] : [hit.head === 0 ? 'left' : 'right'];
-    const sound = recorder.drum(track.id, voice, voiceSound(bank, voice), e.timeStamp, drumSweet ? sweetVelocity(hit) : 1, heads);
+    // Velocity: by depth across the area, by how hard the tap jolted the iPad, or both.
+    const depth = drumDepth ? depthVelocity(hit, layout[hit.head].loud?.[hit.part]) : 1;
+    let later: ((v: number) => void) | null = null;
+    const force = drumForce && forceLive ? tapVelocity(e.timeStamp, (v) => later?.(v)) : null;
+    const vel = Math.max(0.12, depth * (force ?? 1));
+    const sound = recorder.drum(track.id, voice, voiceSound(bank, voice), e.timeStamp, vel, heads);
+    if (force === null && drumForce && forceLive && !tapForceSensed() && forceText.current) forceText.current.textContent = 'No motion sensor here';
+    if (force !== null) {
+      showForce(force);
+      // A bigger jolt read just after the touch: set the stroke's volume to match.
+      later = (v) => { sound.level(Math.max(0.12, depth * v) / vel); showForce(v); };
+    }
     flash(hit.head, hit.part, hit.seg);
     if (!bends(voice)) return;
     // Bends: sliding toward the centre of the head raises the pitch, like pressing it with the heel of the hand.
@@ -119,7 +143,15 @@ export default function DrumHeads({ track, switcher }: { track: Track; switcher?
           {editing ? 'Done editing' : 'Edit layout'}
         </button>
         {!editing && (
-          <button className={`btn sm${drumSweet ? ' on' : ''}`} aria-pressed={drumSweet} title="Full volume in the middle of each area, softer toward its edges" onClick={() => setDrumSweet(!drumSweet)}>Sweet spot</button>
+          <>
+            <button className={`btn sm${drumDepth ? ' on' : ''}`} aria-pressed={drumDepth} title="Softer at one side of each area, louder at the other (set the loud side in Edit layout)" onClick={() => setDrumDepth(!drumDepth)}>Depth</button>
+            <button className={`btn sm${drumForce && forceLive ? ' on' : ''}`} aria-pressed={drumForce && forceLive} title="Harder taps play louder, read from the iPad's motion sensor" onClick={toggleForce}>
+              {drumForce && !forceLive ? 'Tap force · tap to allow' : 'Tap force'}
+            </button>
+            {drumForce && forceLive && (
+              <span ref={forceText} className="muted-text">Tap the drum</span>
+            )}
+          </>
         )}
         {editing && <span className="muted-text">Tap an area to mark it</span>}
       </div>
@@ -207,6 +239,17 @@ export default function DrumHeads({ track, switcher }: { track: Track; switcher?
                       onChange={(e) => edit((l) => { const hd = l[sel.head]; hd.turn = { ...hd.turn, [sel.part]: +e.target.value }; })} />
                   </label>
                 )}
+                <div className="segrow">
+                  <span>Louder toward (Depth)</span>
+                  <div className="seg" role="group" aria-label="Louder toward">
+                    {(['out', 'in'] as const).map((d) => (
+                      <button key={d} aria-pressed={(selHead.loud?.[sel.part] ?? 'out') === d}
+                        onClick={() => edit((l) => { const hd = l[sel.head]; hd.loud = { ...hd.loud, [sel.part]: d }; })}>
+                        {d === 'out' ? 'Outside' : 'Inside'}
+                      </button>
+                    ))}
+                  </div>
+                </div>
                 <div className="strokepick">
                   <button aria-pressed={!selList[sel.seg]} onClick={() => edit((l) => { l[sel.head].parts[sel.part][sel.seg] = ''; })}>Nothing</button>
                   {kit.map((k) => (
