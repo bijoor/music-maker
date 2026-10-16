@@ -14,6 +14,8 @@ const HEAD_NAMES: Record<string, [string, string]> = {
 };
 const PART_NAMES: Record<Part, string> = { rim: 'Rim', middle: 'Middle ring', syahi: 'Syahi', centre: 'Syahi centre' };
 /** Semitones a bass stroke rises over the head's radius as the finger slides toward the centre (capped at 5). */
+/** Closed-stroke delay limits (ms). */
+const clampMs = (ms: number) => Math.max(1, Math.min(300, Math.round(ms)));
 const BEND_PER_RADIUS = 7;
 
 /**
@@ -151,6 +153,8 @@ export default function DrumHeads({ track, switcher }: { track: Track; switcher?
     addEventListener('pointercancel', up);
   };
 
+  // The number being typed (shown as typed until it is a valid value and the field is left).
+  const [msText, setMsText] = useState<string | null>(null);
   const hasClosed = layout.some((hd) => Object.values(hd.closed ?? {}).some((list) => list?.some(Boolean)));
   const selHead = sel ? layout[sel.head] : null;
   const selList = sel && selHead ? selHead.parts[sel.part] : [];
@@ -177,10 +181,15 @@ export default function DrumHeads({ track, switcher }: { track: Track; switcher?
           <>
             <button className={`btn sm${drumDamp ? ' on' : ''}`} aria-pressed={drumDamp} title="Lift at once and a stroke rings; leave the finger resting and it is damped" onClick={() => setDrumDamp(!drumDamp)}>Hold damps</button>
             {hasClosed && (
-              <label className="closedafter" title="How long a finger must rest before the closed stroke takes over: shorter follows sooner, but quick taps count as resting more often">
-                <span>Closed after {closedAfter} ms</span>
-                <input type="range" min={10} max={150} step={5} value={closedAfter} onChange={(e) => setClosedAfter(+e.target.value)} />
-              </label>
+              <div className="closedafter" title="How long a finger must rest before the closed stroke takes over: shorter follows sooner, but quick taps count as resting more often">
+                <span>Closed after</span>
+                <button className="btn sm" aria-label="1 ms shorter" onClick={() => setClosedAfter(clampMs(closedAfter - 1))}>−</button>
+                <input type="number" inputMode="numeric" min={1} max={300} step={1} value={msText ?? closedAfter} aria-label="Closed after, milliseconds"
+                  onChange={(e) => { setMsText(e.target.value); const v = parseInt(e.target.value, 10); if (v >= 1 && v <= 300) setClosedAfter(v); }}
+                  onBlur={() => setMsText(null)} />
+                <span>ms</span>
+                <button className="btn sm" aria-label="1 ms longer" onClick={() => setClosedAfter(clampMs(closedAfter + 1))}>+</button>
+              </div>
             )}
             <button className={`btn sm${drumDepth ? ' on' : ''}`} aria-pressed={drumDepth} title="Softer at one side of each area, louder at the other (set the loud side in Edit layout)" onClick={() => setDrumDepth(!drumDepth)}>Depth</button>
             <button className={`btn sm${drumForce && forceLive ? ' on' : ''}`} aria-pressed={drumForce && forceLive} title="Harder taps play louder, read from the iPad's motion sensor" onClick={toggleForce}>
