@@ -1,45 +1,45 @@
 {
  "_base": "https://bijoor.github.io/music-maker/samples/",
  "tabla_na": [
-  "tabla/na.mp3"
+  "tabla/na.wav"
  ],
  "tabla_ta": [
-  "tabla/ta.mp3"
+  "tabla/ta.wav"
  ],
  "tabla_tin": [
-  "tabla/tin.mp3"
+  "tabla/tin.wav"
  ],
  "tabla_tun": [
-  "tabla/tun.mp3"
+  "tabla/tun.wav"
  ],
  "tabla_te": [
-  "tabla/te.mp3"
+  "tabla/te.wav"
  ],
  "tabla_te2": [
-  "tabla/te2.mp3"
+  "tabla/te2.wav"
  ],
  "tabla_tak": [
-  "tabla/tak.mp3"
+  "tabla/tak.wav"
  ],
  "tabla_dha": [
-  "tabla/dha.mp3"
+  "tabla/dha.wav"
  ],
  "tabla_dhin": [
-  "tabla/dhin.mp3"
+  "tabla/dhin.wav"
  ],
  "tabla_ge": [
-  "tabla/ge.mp3"
+  "tabla/ge.wav"
  ],
  "tabla_ghe": [
-  "tabla/ghe.mp3"
+  "tabla/ghe.wav"
  ],
  "tabla_gha": [
-  "tabla/gha.mp3"
+  "tabla/gha.wav"
  ],
  "tabla_ke": [
-  "tabla/ke.mp3"
+  "tabla/ke.wav"
  ],
  "tabla_kat": [
-  "tabla/kat.mp3"
+  "tabla/kat.wav"
  ]
 }

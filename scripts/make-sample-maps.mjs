@@ -3,7 +3,8 @@
 // - public/samples/tonejs.json: tonejs-instruments (samples CC-BY 3.0), recorded note by note
 // - public/samples/tabla.json:  tabla strokes from Freesound, saved in public/samples/tabla/
 // Files are served from jsDelivr's GitHub mirror (fast, cacheable by the installed app).
-import { writeFileSync, mkdirSync } from 'node:fs';
+import { writeFileSync, mkdirSync, unlinkSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 
 const list = async (repo, path) => {
   const res = await fetch(`https://api.github.com/repos/${repo}/contents/${path}`);
@@ -47,8 +48,12 @@ const tabla = { _base: 'https://bijoor.github.io/music-maker/samples/' };
 for (const [name, [set, id]] of Object.entries(TABLA)) {
   const res = await fetch(`https://cdn.freesound.org/previews/${Math.floor(id / 1000)}/${id}_${FREESOUND_USER[set]}-hq.mp3`);
   if (!res.ok) throw new Error(`freesound ${id}: ${res.status}`);
-  writeFileSync(`public/samples/tabla/${name.slice(6)}.mp3`, Buffer.from(await res.arrayBuffer()));
-  tabla[name] = [`tabla/${name.slice(6)}.mp3`];
+  // Kept as WAV: an MP3 starts with ~25 ms of encoder silence that Safari plays, so strokes would sound late.
+  const mp3 = `public/samples/tabla/${name.slice(6)}.mp3`;
+  writeFileSync(mp3, Buffer.from(await res.arrayBuffer()));
+  execFileSync('ffmpeg', ['-v', 'error', '-y', '-i', mp3, '-c:a', 'pcm_s16le', mp3.replace(/\.mp3$/, '.wav')]);
+  unlinkSync(mp3);
+  tabla[name] = [`tabla/${name.slice(6)}.wav`];
 }
 
 mkdirSync('public/samples', { recursive: true });
