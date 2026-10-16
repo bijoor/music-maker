@@ -3,8 +3,8 @@ import { kitVoices, voiceSound } from '../model/kit';
 import type { Track } from '../model/types';
 import { VIEW, viewFor, headCircles, hitTest, layoutFor, saveLayout, segmentPath, depthVelocity, DEFAULT_LAYOUTS, generatedLayout, type DrumLayout, type Part } from '../model/drumLayout';
 import * as recorder from '../engine/recorder';
-import { setSampleLevel } from '../engine/strudel';
-import { setStrokeLevel, strokeLevel } from '../model/strokeLevels';
+import StrokeLevel from './StrokeLevel';
+import { dampOnHold } from './damp';
 import { disableTapForce, enableTapForce, tapForceListening, tapForceSensed, tapVelocity } from './tapForce';
 import { useStore } from '../state/store';
 
@@ -23,7 +23,7 @@ const BEND_PER_RADIUS = 7;
  */
 export default function DrumHeads({ track, switcher }: { track: Track; switcher?: ReactNode }) {
   const bank = track.bank!;
-  const { drumDepth, setDrumDepth, drumForce, setDrumForce } = useStore();
+  const { drumDepth, setDrumDepth, drumForce, setDrumForce, drumDamp, setDrumDamp } = useStore();
   // Tap force needs the motion sensor, which iPad allows only from a tap: after a reload it waits for one.
   const [forceLive, setForceLive] = useState(tapForceListening);
   // The last tap's force, shown without re-drawing the drum on every stroke.
@@ -40,7 +40,6 @@ export default function DrumHeads({ track, switcher }: { track: Track; switcher?
   const [layout, setLayout] = useState<DrumLayout>(() => layoutFor(bank));
   const [layoutBank, setLayoutBank] = useState(bank);
   if (layoutBank !== bank) { setLayoutBank(bank); setLayout(layoutFor(bank)); }
-  const [, setLevelTick] = useState(0);
   const [sel, setSel] = useState<{ head: 0 | 1; part: Part; seg: number } | null>(null);
   const svg = useRef<SVGSVGElement>(null);
   const touch = useRef<HTMLDivElement>(null);
@@ -115,7 +114,10 @@ export default function DrumHeads({ track, switcher }: { track: Track; switcher?
       later = (v) => { sound.level(Math.max(0.12, depth * v) / vel); showForce(v); };
     }
     flash(hit.head, hit.part, hit.seg);
-    if (!bends(voice)) return;
+    if (!bends(voice)) {
+      if (drumDamp) dampOnHold(sound, e.pointerId, e.clientX, e.clientY);
+      return;
+    }
     // Bends: sliding toward the centre of the head raises the pitch, like pressing it with the heel of the hand.
     const id = e.pointerId, c = circles[hit.head];
     const d0 = Math.hypot(p.x - c.cx, p.y - c.cy);
@@ -147,6 +149,7 @@ export default function DrumHeads({ track, switcher }: { track: Track; switcher?
         </button>
         {!editing && (
           <>
+            <button className={`btn sm${drumDamp ? ' on' : ''}`} aria-pressed={drumDamp} title="Lift at once and a stroke rings; leave the finger resting and it is damped" onClick={() => setDrumDamp(!drumDamp)}>Hold damps</button>
             <button className={`btn sm${drumDepth ? ' on' : ''}`} aria-pressed={drumDepth} title="Softer at one side of each area, louder at the other (set the loud side in Edit layout)" onClick={() => setDrumDepth(!drumDepth)}>Depth</button>
             <button className={`btn sm${drumForce && forceLive ? ' on' : ''}`} aria-pressed={drumForce && forceLive} title="Harder taps play louder, read from the iPad's motion sensor" onClick={toggleForce}>
               {drumForce && !forceLive ? 'Tap force · tap to allow' : 'Tap force'}
@@ -262,17 +265,7 @@ export default function DrumHeads({ track, switcher }: { track: Track; switcher?
                     }}>{k.name}{k.bends ? ' ↗' : ''}</button>
                   ))}
                 </div>
-                {selList[sel.seg] && (() => {
-                  const v = selList[sel.seg], level = strokeLevel(bank, v);
-                  return (
-                    <label className="shaperow">
-                      <span>{nameOf(v)} level · {level > 0 ? `${Math.round(20 * Math.log10(level))} dB` : 'off'} (everywhere it plays)</span>
-                      <input type="range" min={-24} max={6} step={1} value={Math.round(20 * Math.log10(Math.max(level, 0.063)))}
-                        onChange={(e) => { const l = 10 ** (+e.target.value / 20); setStrokeLevel(bank, v, l); setSampleLevel(voiceSound(bank, v), l); setLevelTick((n) => n + 1); }}
-                        onPointerUp={() => recorder.drum(track.id, v, voiceSound(bank, v), undefined, 1)} />
-                    </label>
-                  );
-                })()}
+                {selList[sel.seg] && <StrokeLevel trackId={track.id} bank={bank} voice={selList[sel.seg]} name={nameOf(selList[sel.seg])} />}
                 <Shape head={selHead} onChange={(fn) => edit((l) => fn(l[sel.head]))} />
               </>
             ) : (

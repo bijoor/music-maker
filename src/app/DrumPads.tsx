@@ -1,4 +1,4 @@
-import type { PointerEvent } from 'react';
+import { useState, type PointerEvent } from 'react';
 import { handName, kitVoices, voiceSound, type Hand, type KitVoice } from '../model/kit';
 import type { Track } from '../model/types';
 import * as recorder from '../engine/recorder';
@@ -8,6 +8,8 @@ import { slideVelocity2D, strikeVelocity2D } from './strike';
 import { useStore } from '../state/store';
 import { hasDrumView } from '../model/drumLayout';
 import DrumHeads from './DrumHeads';
+import StrokeLevel from './StrokeLevel';
+import { dampOnHold } from './damp';
 
 /** Finger-sized pads: large main pads (kick and snare double width), smaller pads for less frequent sounds. Indian kits show their strokes. */
 /** Semitones a bending pad (KitVoice.bends) rises over the pad's height when the finger slides up. */
@@ -15,7 +17,10 @@ const MAX_BEND = 5;
 
 export default function DrumPads({ track }: { track: Track }) {
   const kit = kitVoices(track.bank);
-  const { drumView, setDrumView } = useStore();
+  const { drumView, setDrumView, drumDamp, setDrumDamp } = useStore();
+  // Levels: the last pad played gets a level slider under the pads.
+  const [levels, setLevels] = useState(false);
+  const [levelVoice, setLevelVoice] = useState<string | null>(null);
   const drumable = hasDrumView(track.bank);
   // Where the pad is struck sets the velocity (soft top-left, full bottom-right); keeping the finger down and
   // sliding any way then swells or fades the hit while it rings (right and down louder). On a bending pad (the
@@ -26,6 +31,8 @@ export default function DrumPads({ track }: { track: Track }) {
     getSelection()?.removeAllRanges(); // no text stays selected while playing
     const vel0 = strikeVelocity2D(e.clientX, e.clientY, el), x0 = e.clientX, y0 = e.clientY;
     const sound = recorder.drum(track.id, k.voice, voiceSound(track.bank, k.voice), e.timeStamp, vel0, recorder.headsOf(k.hand));
+    if (levels) setLevelVoice(k.voice);
+    if (drumable && drumDamp && !k.bends) dampOnHold(sound, id, e.clientX, e.clientY);
     el.classList.add('down');
     setTimeout(() => el.classList.remove('down'), 150);
     if (el.hasPointerCapture?.(id)) el.releasePointerCapture(id);
@@ -77,7 +84,14 @@ export default function DrumPads({ track }: { track: Track }) {
   return (
     <div className="padview">
       <StepStrip />
-      {switcher && <div className="drumtools">{switcher}</div>}
+      <div className="drumtools">
+        {switcher}
+        {drumable && <button className={`btn sm${drumDamp ? ' on' : ''}`} aria-pressed={drumDamp} title="Lift at once and a stroke rings; leave the finger resting and it is damped" onClick={() => setDrumDamp(!drumDamp)}>Hold damps</button>}
+        <button className={`btn sm${levels ? ' on' : ''}`} aria-pressed={levels} title="Set each sound's base level: tap a pad, then use the slider" onClick={() => setLevels(!levels)}>Levels</button>
+        {levels && (levelVoice && kit.some((k) => k.voice === levelVoice)
+          ? <div className="padlevel"><StrokeLevel trackId={track.id} bank={track.bank} voice={levelVoice} name={kit.find((k) => k.voice === levelVoice)!.name} /></div>
+          : <span className="muted-text">Tap a pad to set its level</span>)}
+      </div>
       {kit.some((k) => k.hand) ? (
         // Indian kits: laid out as the drums sit, left hand | both hands | right hand.
         <div className="kit hands">

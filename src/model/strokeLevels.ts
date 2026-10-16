@@ -10,7 +10,7 @@ function stored(): Levels {
 
 /** A stroke's base level: the one set on this device, else the kit's default. */
 export function strokeLevel(bank: string | undefined, voice: string): number {
-  const own = bank ? stored()[bank]?.[voice] : undefined;
+  const own = stored()[bank ?? 'RolandTR909']?.[voice];
   if (own !== undefined) return own;
   const db = DEFAULT_LEVELS_DB[voice];
   return db === undefined ? 1 : 10 ** (db / 20);

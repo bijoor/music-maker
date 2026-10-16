@@ -459,3 +459,5 @@ select.sm { min-height: 30px; padding: 3px 6px; font-size: 13px; }
 
 /* Expanded: transport, then the editor on the rest of the screen. */
 .app.expanded { grid-template-rows: auto minmax(0, 1fr); }
+.padlevel { flex: 1; min-width: 220px; max-width: 460px; }
+.padlevel .shaperow { margin: 0; grid-template-columns: auto minmax(120px, 1fr); }
