@@ -465,3 +465,5 @@ select.sm { min-height: 30px; padding: 3px 6px; font-size: 13px; }
 .closedafter input { width: 4.2em; padding: 4px 6px; font: inherit; text-align: right; border: 1px solid var(--line); border-radius: 8px; background: var(--panel-2); color: inherit; }
 .pad.picked { outline: 3px solid var(--accent); outline-offset: 2px; }
 .pad.empty { background: transparent; border-style: dashed; opacity: .6; }
+.padwork > .kit { flex: 1; min-width: 0; }
+@media (max-width: 900px) { .padwork { flex-direction: column; } }

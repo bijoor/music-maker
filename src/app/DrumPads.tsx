@@ -9,7 +9,7 @@ import { useStore } from '../state/store';
 import { hasDrumView } from '../model/drumLayout';
 import DrumHeads from './DrumHeads';
 import StrokeLevel from './StrokeLevel';
-import { HANDS, padSpots, resetPadOrder, setSpot, swapSpots, type Spot } from '../model/padOrder';
+import { HANDS, padSpots, resetPadOrder, setSpot, type Spot } from '../model/padOrder';
 import { dampOnHold } from './damp';
 
 /** Finger-sized pads: large main pads (kick and snare double width), smaller pads for less frequent sounds. Indian kits show their strokes. */
@@ -22,24 +22,20 @@ export default function DrumPads({ track }: { track: Track }) {
   // Levels: the last pad played gets a level slider under the pads.
   const [levels, setLevels] = useState(false);
   const [levelVoice, setLevelVoice] = useState<string | null>(null);
-  // Arrange (Indian kits): Swap two pads, Copy a pad's stroke onto other spots (a stroke can have several pads,
-  // and empty spots get one), or Clear a pad.
+  // Arrange (Indian kits): tap a pad (or an empty spot), then choose the stroke it plays — a stroke can have several
+  // pads, and Nothing empties a pad.
   const [arranging, setArranging] = useState(false);
-  const [tool, setTool] = useState<'swap' | 'copy' | 'clear'>('swap');
   const [picked, setPicked] = useState<Spot | null>(null);
   const [, setOrderTick] = useState(0);
   const same = (a: Spot | null, b: Spot) => !!a && a.hand === b.hand && a.i === b.i;
-  const arrange = (at: Spot) => {
-    const bank = track.bank!, spots = padSpots(bank);
-    const changed = () => setOrderTick((n) => n + 1);
-    if (tool === 'clear') { setSpot(bank, at, ''); changed(); return; }
-    if (!picked) { if (spots[at.hand][at.i]) setPicked(at); return; }
-    if (same(picked, at)) { setPicked(null); return; }
-    if (tool === 'swap') { swapSpots(bank, picked, at); setPicked(null); }
-    else setSpot(bank, at, spots[picked.hand][picked.i]); // the source stays picked, to copy it to more spots
-    changed();
+  const arrange = (at: Spot) => setPicked(same(picked, at) ? null : at);
+  const assign = (voice: string) => {
+    if (!picked) return;
+    setSpot(track.bank!, picked, voice);
+    setOrderTick((n) => n + 1);
+    if (voice) recorder.drum(track.id, voice, voiceSound(track.bank, voice), undefined, 1, [], false);
   };
-  const hint = (tool === 'clear' ? 'Tap a pad to empty it' : !picked ? (tool === 'swap' ? 'Tap a pad to move' : 'Tap the pad to copy') : tool === 'swap' ? 'Now tap where it goes' : 'Tap spots to give them this stroke');
+  const pickedVoice = picked ? padSpots(track.bank!)[picked.hand][picked.i] : '';
   const drumable = hasDrumView(track.bank);
   // Where the pad is struck sets the velocity (soft top-left, full bottom-right); keeping the finger down and
   // sliding any way then swells or fades the hit while it rings (right and down louder). On a bending pad (the
@@ -89,7 +85,7 @@ export default function DrumPads({ track }: { track: Track }) {
     const k = voice ? kit.find((x) => x.voice === voice) : undefined;
     if (k) return pad(k, at);
     return (
-      <button key={`${at.hand}${at.i}`} className="pad empty" aria-label="Empty pad" onPointerDown={() => arranging && arrange(at)}>
+      <button key={`${at.hand}${at.i}`} className={`pad empty${same(picked, at) ? ' picked' : ''}`} aria-label="Empty pad" onPointerDown={() => arranging && arrange(at)}>
         <span className="muted-text">{arranging ? '＋' : ''}</span>
       </button>
     );
@@ -119,14 +115,6 @@ export default function DrumPads({ track }: { track: Track }) {
         {kit.some((k) => k.hand) && (
           <button className={`btn sm${arranging ? ' on' : ''}`} aria-pressed={arranging} title="Move pads, give a stroke more pads, or empty a pad" onClick={() => { setArranging(!arranging); setPicked(null); }}>{arranging ? 'Done arranging' : 'Arrange'}</button>
         )}
-        {arranging && (
-          <div className="seg" role="group" aria-label="Arrange">
-            {(['swap', 'copy', 'clear'] as const).map((t) => (
-              <button key={t} aria-pressed={tool === t} onClick={() => { setTool(t); setPicked(null); }}>{t === 'swap' ? 'Swap' : t === 'copy' ? 'Copy' : 'Clear'}</button>
-            ))}
-          </div>
-        )}
-        {arranging && <span className="muted-text">{hint}</span>}
         {arranging && <button className="btn sm" onClick={() => { resetPadOrder(track.bank!); setPicked(null); setOrderTick((n) => n + 1); }}>Reset order</button>}
         <button className={`btn sm${levels ? ' on' : ''}`} aria-pressed={levels} title="Set each sound's base level: tap a pad, then use the slider" onClick={() => setLevels(!levels)}>Levels</button>
         {levels && (levelVoice && kit.some((k) => k.voice === levelVoice)
@@ -135,13 +123,33 @@ export default function DrumPads({ track }: { track: Track }) {
       </div>
       {kit.some((k) => k.hand) ? (
         // Indian kits: laid out as the drums sit, left hand | both hands | right hand.
-        <div className="kit hands">
-          {HANDS.map((h: Hand) => (
-            <section key={h} className={`hand ${h}`} aria-label={handName(track.bank, h)}>
-              <h3>{handName(track.bank, h)}</h3>
-              <div className="hand-pads">{padSpots(track.bank!)[h].map((v, i) => spot(v, { hand: h, i }))}</div>
-            </section>
-          ))}
+        // Arranging: the strokes to choose from sit beside the pads (as Edit layout does on the drum).
+        <div className="drumwork padwork">
+          <div className="kit hands">
+            {HANDS.map((h: Hand) => (
+              <section key={h} className={`hand ${h}`} aria-label={handName(track.bank, h)}>
+                <h3>{handName(track.bank, h)}</h3>
+                <div className="hand-pads">{padSpots(track.bank!)[h].map((v, i) => spot(v, { hand: h, i }))}</div>
+              </section>
+            ))}
+          </div>
+          {arranging && (
+            <aside className="markpanel">
+              {picked ? (
+                <>
+                  <strong>{handName(track.bank, picked.hand)} · pad {picked.i + 1}</strong>
+                  <div className="strokepick" role="group" aria-label="Stroke for this pad">
+                    <button aria-pressed={!pickedVoice} onClick={() => assign('')}>Nothing</button>
+                    {kit.map((k) => (
+                      <button key={k.voice} aria-pressed={pickedVoice === k.voice} onClick={() => assign(k.voice)}>{k.name}</button>
+                    ))}
+                  </div>
+                </>
+              ) : (
+                <p className="muted-text">Tap a pad (or an empty spot), then choose the stroke it plays. A stroke can have more than one pad; Nothing empties a pad.</p>
+              )}
+            </aside>
+          )}
         </div>
       ) : (
         <div className="kit">
