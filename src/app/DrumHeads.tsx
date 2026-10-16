@@ -151,6 +151,7 @@ export default function DrumHeads({ track, switcher }: { track: Track; switcher?
     addEventListener('pointercancel', up);
   };
 
+  const hasClosed = layout.some((hd) => Object.values(hd.closed ?? {}).some((list) => list?.some(Boolean)));
   const selHead = sel ? layout[sel.head] : null;
   const selList = sel && selHead ? selHead.parts[sel.part] : [];
   const selClosed = sel && selHead ? selHead.closed?.[sel.part]?.[sel.seg] ?? '' : '';
@@ -175,6 +176,12 @@ export default function DrumHeads({ track, switcher }: { track: Track; switcher?
         {!editing && (
           <>
             <button className={`btn sm${drumDamp ? ' on' : ''}`} aria-pressed={drumDamp} title="Lift at once and a stroke rings; leave the finger resting and it is damped" onClick={() => setDrumDamp(!drumDamp)}>Hold damps</button>
+            {hasClosed && (
+              <label className="closedafter" title="How long a finger must rest before the closed stroke takes over: shorter follows sooner, but quick taps count as resting more often">
+                <span>Closed after {closedAfter} ms</span>
+                <input type="range" min={10} max={150} step={5} value={closedAfter} onChange={(e) => setClosedAfter(+e.target.value)} />
+              </label>
+            )}
             <button className={`btn sm${drumDepth ? ' on' : ''}`} aria-pressed={drumDepth} title="Softer at one side of each area, louder at the other (set the loud side in Edit layout)" onClick={() => setDrumDepth(!drumDepth)}>Depth</button>
             <button className={`btn sm${drumForce && forceLive ? ' on' : ''}`} aria-pressed={drumForce && forceLive} title="Harder taps play louder, read from the iPad's motion sensor" onClick={toggleForce}>
               {drumForce && !forceLive ? 'Tap force · tap to allow' : 'Tap force'}
@@ -292,16 +299,6 @@ export default function DrumHeads({ track, switcher }: { track: Track; switcher?
                     <button aria-pressed={pick === 'closed'} onClick={() => setPick('closed')}>Rests (closed)</button>
                   </div>
                 </div>
-                {pick === 'closed' && (
-                  <div className="segrow">
-                    <span>Closed after resting</span>
-                    <div className="seg" role="group" aria-label="Closed stroke after">
-                      {[20, 30, 40, 60, 80].map((ms) => (
-                        <button key={ms} aria-pressed={closedAfter === ms} onClick={() => setClosedAfter(ms)}>{ms} ms</button>
-                      ))}
-                    </div>
-                  </div>
-                )}
                 <div className="strokepick">
                   <button aria-pressed={!(pick === 'open' ? selList[sel.seg] : selClosed)} onClick={() => edit((l) => setStroke(l, ''))}>{pick === 'open' ? 'Nothing' : 'Same as open'}</button>
                   {kit.map((k) => (

@@ -461,3 +461,5 @@ select.sm { min-height: 30px; padding: 3px 6px; font-size: 13px; }
 .app.expanded { grid-template-rows: auto minmax(0, 1fr); }
 .padlevel { flex: 1; min-width: 220px; max-width: 460px; }
 .padlevel .shaperow { margin: 0; grid-template-columns: auto minmax(120px, 1fr); }
+.closedafter { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; white-space: nowrap; }
+.closedafter input { width: 140px; }
