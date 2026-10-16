@@ -65,7 +65,7 @@ export default function ClipGrid() {
         <select id="newlen" className="sm" value={newLen} onChange={(e) => setNewLen(+e.target.value as Bars)}>
           {[1, 2, 4].map((n) => <option key={n} value={n}>{n} bar{n > 1 ? 's' : ''}</option>)}
         </select>
-        <span className="muted-text hint">{songMode ? 'Song mode: the song order plays. Change a step or tap a scene to take over.' : mode === 'record' ? 'Record: ＋ adds a new clip to a track’s line; play pads or keys into it.' : 'Each track plays its clips in turn: − / + sets how many times, tap a clip to edit it, ＋ adds a new one.'}</span>
+        <span className="muted-text hint">{songMode ? 'Song mode: the song order plays. Change a step or tap a scene to take over.' : mode === 'record' ? 'Record: ＋ adds a new clip to a track in this scene; play pads or keys into it.' : 'Each track plays its clips in turn: − / + sets how many times, tap a clip to edit it, ＋ adds a new one.'}</span>
         <span className="spacer" />
         <button className="btn sm" title="Stop every track, and silence any note still sounding" onClick={() => { stopAllTracks(); releaseFingers(); recorder.releaseAll(); }}>Stop all</button>
       </div>
@@ -120,7 +120,7 @@ function TrackRow({ track: t, audible, queued, songMode, selectedSlot, onStepTap
       <div className="thd" onClick={(e) => { if (!(e.target as HTMLElement).closest('input,button')) onSelect(); }}>
         <span className="c" />
         <span className="n">
-          <strong><EditableName value={t.name} label={`track ${t.name}`} onRename={onRename} />{t.playCode && <span className="custom"> · custom line</span>}</strong>
+          <strong><EditableName value={t.name} label={`track ${t.name}`} onRename={onRename} />{t.playCode && <span className="custom"> · custom code</span>}</strong>
           <input className="vol" type="range" min={0} max={1.5} step={0.01} value={t.fx.gain} aria-label={`${t.name} volume`} onChange={(e) => onGain(+e.target.value)} />
         </span>
         <span className="ms">

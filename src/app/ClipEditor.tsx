@@ -130,7 +130,7 @@ export default function ClipEditor() {
                   <button role="menuitem" onClick={() => { deleteClip(track.id, slot); setMenu(false); }}>Delete clip</button>
                 </>
               )}
-              {track.playCode && <button role="menuitem" onClick={() => { state.resetPlayCode(track.id); setMenu(false); }}>Reset the hand-written play line</button>}
+              {track.playCode && <button role="menuitem" onClick={() => { state.resetPlayCode(track.id); setMenu(false); }}>Reset the hand-written play code</button>}
               <button role="menuitem" onClick={() => { if (confirmRemove) { removeTrack(track.id); setMenu(false); setConfirmRemove(false); } else setConfirmRemove(true); }}>{confirmRemove ? `Tap again to remove ${track.name} and its clips` : `Remove the ${track.name} track`}</button>
             </div>
           )}
@@ -176,12 +176,12 @@ function StepStrip({ track, slot }: { track: Track; slot: number }) {
   const index = line.findIndex((x) => x.slot === slot);
   if (index < 0) return null;
   return (
-    <div className="stepstrip" role="group" aria-label="This clip in the track’s line">
+    <div className="stepstrip" role="group" aria-label="This clip in the scene">
       <span className="muted-text">Step {index + 1} of {line.length}</span>
       <button className="btn sm" aria-label="Play it earlier" disabled={index === 0} onClick={() => moveStep(track.id, index, -1)}>◀</button>
       <button className="btn sm" aria-label="Play it later" disabled={index === line.length - 1} onClick={() => moveStep(track.id, index, 1)}>▶</button>
       <button className="btn sm" title="Empty this clip to play new notes into it; an earlier scene that plays it keeps its notes" onClick={() => clearClip(track.id, slot)}>Clear notes</button>
-      <button className="btn sm" onClick={() => removeStep(track.id, index)}>Remove from the line</button>
+      <button className="btn sm" onClick={() => removeStep(track.id, index)}>Remove from scene</button>
       {track.slots.filter(Boolean).length > 1 && (
         <select aria-label="Play another clip here" value="" onChange={(e) => e.target.value && setStepClip(track.id, index, +e.target.value)}>
           <option value="">Play another clip here…</option>
