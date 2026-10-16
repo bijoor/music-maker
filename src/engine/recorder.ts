@@ -120,16 +120,19 @@ const velocityValue = (vel: number) => (vel < 1 ? { velocity: vel } : {});
  * A drum pad struck at velocity `vel` (0–1). `timeStamp` is the pointer event's timestamp. Returns the sounding
  * hit, whose volume a finger still on the pad can swell or fade (it rings out on its own either way).
  */
-export function drum(trackId: string, voice: string, sound: Record<string, unknown>, timeStamp?: number, vel = 1, heads: Head[] = []): engine.HeldNote {
+export function drum(trackId: string, voice: string, sound: Record<string, unknown>, timeStamp?: number, vel = 1, heads: Head[] = [], write = true): engine.HeldNote {
   // Like a hand on a real drum, a new stroke stops the one still ringing on the same head. Without this, long
   // bass strokes (Ghe, Gha ring for seconds) pile up when played quickly, and the device turns its volume down.
   if (timeStamp !== undefined) engine.noteInputDelay(performance.now() - timeStamp);
   for (const h of heads) ringing.get(`${trackId}:${h}`)?.stop(DAMP_FADE);
   const hit = player.hold(trackId, { ...sound, ...velocityValue(vel) }, 1);
   for (const h of heads) ringing.set(`${trackId}:${h}`, hit);
-  record(trackId, voice, timeStamp, vel);
+  if (write) record(trackId, voice, timeStamp, vel);
   return hit;
 }
+
+/** Write a stroke into the selected clip later than it was played (once it is known which stroke it was). */
+export const recordDrum = (trackId: string, voice: string, timeStamp: number | undefined, vel = 1) => record(trackId, voice, timeStamp, vel);
 
 /** Write a drum hit into the selected clip (Edit: at the cursor; Record: at the step it was heard). */
 function record(trackId: string, voice: string, timeStamp: number | undefined, vel: number) {
