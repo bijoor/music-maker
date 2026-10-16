@@ -10,7 +10,8 @@
 // Mridangam and tabla: left-hand strokes on F D S A / R E W Q / V C X Z, right-hand strokes on J K L ; / U I O P /
 // M , . /, strokes for both hands on G H T Y B N.
 
-import { kitVoices, type Hand } from '../model/kit';
+import { orderedVoices, padOrderVersion } from '../model/padOrder';
+import type { Hand } from '../model/kit';
 
 /**
  * The drum kit's keys, spread like a drummer's limbs: Space kicks, the snares and hats under the fingers, toms on
@@ -28,7 +29,7 @@ function layout(bank?: string) {
   const keys: Record<string, string> = {}, hints: Record<string, string> = {};
   const used: Record<Hand, number> = { left: 0, both: 0, right: 0 };
   const label = (key: string) => (key === ' ' ? 'Space' : key.toUpperCase());
-  for (const k of kitVoices(bank)) {
+  for (const k of orderedVoices(bank)) {
     if (k.hand) {
       const key = HAND_KEYS[k.hand][used[k.hand]++];
       if (key) { keys[key] = k.voice; hints[k.voice] = label(key); }
@@ -42,7 +43,7 @@ function layout(bank?: string) {
 }
 const layouts = new Map<string, ReturnType<typeof layout>>();
 const kitLayout = (bank?: string) => {
-  const id = bank ?? '';
+  const id = `${bank ?? ''}:${padOrderVersion()}`;
   if (!layouts.has(id)) layouts.set(id, layout(bank));
   return layouts.get(id)!;
 };

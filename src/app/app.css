@@ -463,3 +463,4 @@ select.sm { min-height: 30px; padding: 3px 6px; font-size: 13px; }
 .padlevel .shaperow { margin: 0; grid-template-columns: auto minmax(120px, 1fr); }
 .closedafter { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; white-space: nowrap; }
 .closedafter input { width: 4.2em; padding: 4px 6px; font: inherit; text-align: right; border: 1px solid var(--line); border-radius: 8px; background: var(--panel-2); color: inherit; }
+.pad.picked { outline: 3px solid var(--accent); outline-offset: 2px; }

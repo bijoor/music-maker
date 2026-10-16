@@ -9,6 +9,7 @@ import { useStore } from '../state/store';
 import { hasDrumView } from '../model/drumLayout';
 import DrumHeads from './DrumHeads';
 import StrokeLevel from './StrokeLevel';
+import { orderedVoices, resetPadOrder, swapPads } from '../model/padOrder';
 import { dampOnHold } from './damp';
 
 /** Finger-sized pads: large main pads (kick and snare double width), smaller pads for less frequent sounds. Indian kits show their strokes. */
@@ -21,6 +22,17 @@ export default function DrumPads({ track }: { track: Track }) {
   // Levels: the last pad played gets a level slider under the pads.
   const [levels, setLevels] = useState(false);
   const [levelVoice, setLevelVoice] = useState<string | null>(null);
+  // Arrange: tap a pad, then another of the same hand, to swap their places.
+  const [arranging, setArranging] = useState(false);
+  const [picked, setPicked] = useState<string | null>(null);
+  const [, setOrderTick] = useState(0);
+  const arrange = (k: KitVoice) => {
+    const first = picked ? kit.find((x) => x.voice === picked) : undefined;
+    if (!first || first.voice === k.voice || first.hand !== k.hand) { setPicked(first?.voice === k.voice ? null : k.voice); return; }
+    swapPads(track.bank!, first.voice, k.voice);
+    setPicked(null);
+    setOrderTick((n) => n + 1);
+  };
   const drumable = hasDrumView(track.bank);
   // Where the pad is struck sets the velocity (soft top-left, full bottom-right); keeping the finger down and
   // sliding any way then swells or fades the hit while it rings (right and down louder). On a bending pad (the
@@ -56,9 +68,9 @@ export default function DrumPads({ track }: { track: Track }) {
   const pad = (k: KitVoice) => (
     <button
       key={k.voice}
-      className={`pad${k.span === 2 ? ' wide' : k.span === 4 ? ' full' : ''}${k.main ? '' : ' aux'}`}
+      className={`pad${k.span === 2 ? ' wide' : k.span === 4 ? ' full' : ''}${k.main ? '' : ' aux'}${picked === k.voice ? ' picked' : ''}`}
       data-voice={k.voice}
-      onPointerDown={(e) => hit(k, e)}
+      onPointerDown={(e) => (arranging ? arrange(k) : hit(k, e))}
     >
       <strong>{k.name}</strong>
       <code>{k.voice}</code>
@@ -87,6 +99,11 @@ export default function DrumPads({ track }: { track: Track }) {
       <div className="drumtools">
         {switcher}
         {drumable && <button className={`btn sm${drumDamp ? ' on' : ''}`} aria-pressed={drumDamp} title="Lift at once and a stroke rings; leave the finger resting and it is damped" onClick={() => setDrumDamp(!drumDamp)}>Hold damps</button>}
+        {kit.some((k) => k.hand) && (
+          <button className={`btn sm${arranging ? ' on' : ''}`} aria-pressed={arranging} title="Tap a pad, then another of the same hand, to swap their places" onClick={() => { setArranging(!arranging); setPicked(null); }}>{arranging ? 'Done arranging' : 'Arrange'}</button>
+        )}
+        {arranging && <span className="muted-text">{picked ? 'Now tap the pad to swap it with' : 'Tap a pad to move'}</span>}
+        {arranging && <button className="btn sm" onClick={() => { resetPadOrder(track.bank!); setPicked(null); setOrderTick((n) => n + 1); }}>Reset order</button>}
         <button className={`btn sm${levels ? ' on' : ''}`} aria-pressed={levels} title="Set each sound's base level: tap a pad, then use the slider" onClick={() => setLevels(!levels)}>Levels</button>
         {levels && (levelVoice && kit.some((k) => k.voice === levelVoice)
           ? <div className="padlevel"><StrokeLevel trackId={track.id} bank={track.bank} voice={levelVoice} name={kit.find((k) => k.voice === levelVoice)!.name} /></div>
@@ -98,7 +115,7 @@ export default function DrumPads({ track }: { track: Track }) {
           {(['left', 'both', 'right'] as Hand[]).map((h) => (
             <section key={h} className={`hand ${h}`} aria-label={handName(track.bank, h)}>
               <h3>{handName(track.bank, h)}</h3>
-              <div className="hand-pads">{kit.filter((k) => k.hand === h).map(pad)}</div>
+              <div className="hand-pads">{orderedVoices(track.bank).filter((k) => k.hand === h).map(pad)}</div>
             </section>
           ))}
         </div>

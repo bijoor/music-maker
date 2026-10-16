@@ -70,9 +70,21 @@ describe('Indian kits', () => {
       .toEqual(['bd', 'bd:1', 'sd', 'sd:1', 'rim', 'hh', 'oh', 'ht', 'mt', 'lt', 'cr', 'rd', 'cp', 'cb', 'sh', 'tb']);
     expect(drumHint('RolandTR909', 'bd')).toBe('Space');
     expect(drumHint('RolandTR909', 'oh')).toBe('L');
-    // Indian kits: left hand from F outwards, right hand from J, both hands in the middle.
-    expect(['f', 'd', 'r', 'j', 'k', 'o', 'g', 'h'].map((k) => drumKey('Tabla', k))).toEqual(['tabla_ge', 'tabla_ghe', 'tabla_kat', 'tabla_na', 'tabla_ta', 'tabla_tak', 'tabla_dha', 'tabla_dhin']);
+    // Indian kits: left hand from F outwards, right hand from J, both hands in the middle, each hand in pad order
+    // (by default the drum layout's, from the rim inward).
+    expect(['f', 'd', 'r', 'j', 'k', 'o', 'g', 'h'].map((k) => drumKey('Tabla', k))).toEqual(['tabla_ge', 'tabla_gha', 'tabla_kat', 'tabla_tak', 'tabla_ta', 'tabla_na', 'tabla_dha', 'tabla_dhin']);
     expect(drumHint('Tabla', 'tabla_ge')).toBe('F');
     expect(['f', 'a', 'j', 'p', 'g', '1'].map((k) => drumKey('Mridangam', k))).toEqual(['thom', 'ki', 'nam', 'ka', 'dhum', undefined]);
+  });
+});
+
+describe('pad order', () => {
+  it('swaps pads and the keys that play them', async () => {
+    const { swapPads, resetPadOrder, orderedVoices } = await import('./padOrder');
+    swapPads('Tabla', 'tabla_ge', 'tabla_kat');
+    expect(orderedVoices('Tabla')[0].voice).toBe('tabla_kat');
+    expect(drumKey('Tabla', 'f')).toBe('tabla_kat');
+    resetPadOrder('Tabla');
+    expect(drumKey('Tabla', 'f')).toBe('tabla_ge');
   });
 });
