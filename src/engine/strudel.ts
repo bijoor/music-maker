@@ -10,7 +10,7 @@ import { transpiler } from '@strudel/transpiler';
 import { webaudioOutput } from '@strudel/webaudio';
 import { trimOnDecode } from '../audio/trim';
 import { getFontBufferSource, registerSoundfonts } from '@strudel/soundfonts';
-import { getAudioContext, getLoadedBuffer, getSampleInfo, initAudio, loadBuffer, registerSynthSounds, samples, superdough, soundMap } from 'superdough';
+import { getAudioContext, getSuperdoughAudioController, getLoadedBuffer, getSampleInfo, initAudio, loadBuffer, registerSynthSounds, samples, superdough, soundMap } from 'superdough';
 
 export type Location = { start: number; end: number };
 export type HapEvent = {
@@ -104,6 +104,7 @@ export function initEngine(): Promise<void> {
       await ac.resume();
       await evalScope(import('@strudel/core'), import('@strudel/mini'), import('@strudel/webaudio'), import('@strudel/soundfonts'));
       await initAudio();
+      addLimiter(ac as AudioContext);
       registerSynthSounds();
       registerSoundfonts();
       await Promise.all([
@@ -289,6 +290,35 @@ function sampleUrl(value: Record<string, unknown>): string | null {
   } catch {
     return null; // let superdough report it
   }
+}
+
+// Base levels: a sample's decoded audio is scaled in place, so a level applies wherever the sound plays (pads,
+// drum heads and clips alike) without changing the code.
+const applied = new WeakMap<AudioBuffer, number>();
+/** Set the level (1 = as recorded) of the sample a value plays; loads it if needed. */
+export function setSampleLevel(value: Record<string, unknown>, level: number) {
+  const url = sampleUrl(value);
+  if (!url || !loaded) return;
+  loadBuffer(url, getAudioContext()).then((buf: AudioBuffer) => {
+    const was = applied.get(buf) ?? 1;
+    if (Math.abs(was - level) < 1e-4) return;
+    const k = level / was;
+    for (let c = 0; c < buf.numberOfChannels; c++) { const d = buf.getChannelData(c); for (let i = 0; i < d.length; i++) d[i] *= k; }
+    applied.set(buf, level);
+  }, () => {});
+}
+
+// Headroom: a limiter before the speakers catches peaks (both hands striking loud strokes together), so the
+// device's own protection never turns the whole output down for seconds at a time.
+function addLimiter(ac: AudioContext) {
+  const limiter = new DynamicsCompressorNode(ac, { threshold: -8, knee: 6, ratio: 20, attack: 0.002, release: 0.12 });
+  const master = new GainNode(ac, { gain: 0.9 });
+  limiter.connect(master).connect(ac.destination);
+  const out = (getSuperdoughAudioController() as unknown as { output: { destinationGain: GainNode | null; initializeAudio(): void } }).output;
+  const rewire = () => { if (out.destinationGain) { out.destinationGain.disconnect(); out.destinationGain.connect(limiter); } };
+  const init = out.initializeAudio.bind(out);
+  out.initializeAudio = () => { init(); rewire(); };
+  rewire();
 }
 
 /**

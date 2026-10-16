@@ -3,6 +3,8 @@ import { kitVoices, voiceSound } from '../model/kit';
 import type { Track } from '../model/types';
 import { VIEW, viewFor, headCircles, hitTest, layoutFor, saveLayout, segmentPath, depthVelocity, DEFAULT_LAYOUTS, generatedLayout, type DrumLayout, type Part } from '../model/drumLayout';
 import * as recorder from '../engine/recorder';
+import { setSampleLevel } from '../engine/strudel';
+import { setStrokeLevel, strokeLevel } from '../model/strokeLevels';
 import { disableTapForce, enableTapForce, tapForceListening, tapForceSensed, tapVelocity } from './tapForce';
 import { useStore } from '../state/store';
 
@@ -38,6 +40,7 @@ export default function DrumHeads({ track, switcher }: { track: Track; switcher?
   const [layout, setLayout] = useState<DrumLayout>(() => layoutFor(bank));
   const [layoutBank, setLayoutBank] = useState(bank);
   if (layoutBank !== bank) { setLayoutBank(bank); setLayout(layoutFor(bank)); }
+  const [, setLevelTick] = useState(0);
   const [sel, setSel] = useState<{ head: 0 | 1; part: Part; seg: number } | null>(null);
   const svg = useRef<SVGSVGElement>(null);
   const touch = useRef<HTMLDivElement>(null);
@@ -259,6 +262,17 @@ export default function DrumHeads({ track, switcher }: { track: Track; switcher?
                     }}>{k.name}{k.bends ? ' ↗' : ''}</button>
                   ))}
                 </div>
+                {selList[sel.seg] && (() => {
+                  const v = selList[sel.seg], level = strokeLevel(bank, v);
+                  return (
+                    <label className="shaperow">
+                      <span>{nameOf(v)} level · {level > 0 ? `${Math.round(20 * Math.log10(level))} dB` : 'off'} (everywhere it plays)</span>
+                      <input type="range" min={-24} max={6} step={1} value={Math.round(20 * Math.log10(Math.max(level, 0.063)))}
+                        onChange={(e) => { const l = 10 ** (+e.target.value / 20); setStrokeLevel(bank, v, l); setSampleLevel(voiceSound(bank, v), l); setLevelTick((n) => n + 1); }}
+                        onPointerUp={() => recorder.drum(track.id, v, voiceSound(bank, v), undefined, 1)} />
+                    </label>
+                  );
+                })()}
                 <Shape head={selHead} onChange={(fn) => edit((l) => fn(l[sel.head]))} />
               </>
             ) : (

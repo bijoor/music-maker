@@ -6,6 +6,7 @@ import type { Song, Track } from '../model/types';
 import { kitVoices, voiceSound } from '../model/kit';
 import { findScale, scalePitch } from '../model/scales';
 import { keyboardOf } from '../model/groups';
+import { strokeLevel } from '../model/strokeLevels';
 import { useStore } from '../state/store';
 import * as engine from './strudel';
 
@@ -182,7 +183,12 @@ function trackSounds(song: Song, track: Track): engine.SoundRef[] {
  */
 export function warm(song = useStore.getState().song, trackId?: string) {
   if (!engine.isReady()) return;
-  song.tracks.forEach((t) => { if (!trackId || t.id === trackId) engine.preload(trackSounds(song, t)); });
+  song.tracks.forEach((t) => {
+    if (trackId && t.id !== trackId) return;
+    engine.preload(trackSounds(song, t));
+    // Each stroke at its base level.
+    if (t.kind === 'drums') kitVoices(t.bank).forEach(({ voice }) => engine.setSampleLevel(voiceSound(t.bank, voice), strokeLevel(t.bank, voice)));
+  });
 }
 /** Start the engine if needed (from a tap, which may unlock audio) and load a track's sounds first, then the rest. */
 export function warmTrack(trackId: string) {

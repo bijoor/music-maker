@@ -159,6 +159,12 @@ export const voiceOrder = (voice: string) => {
 };
 
 /** The value that plays a pad: `bd:1` → { s: 'bd', n: 1, bank }. */
+/**
+ * Default base levels (dB) for strokes that are much louder than the rest of their kit: the tabla's bayan strokes
+ * ring long and loud, about 12 dB above the dayan's.
+ */
+export const DEFAULT_LEVELS_DB: Record<string, number> = { tabla_ge: -5, tabla_ghe: -8, tabla_gha: -8 };
+
 export function voiceSound(bank: string | undefined, voice: string): Record<string, unknown> {
   const [s, n] = voice.split(':');
   const b = voiceBank(bank ?? 'RolandTR909', voice);
