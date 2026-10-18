@@ -22,12 +22,18 @@ export function leadIn(channels: Float32Array[], sampleRate: number): number {
   return Number.isFinite(cut) && cut >= MIN_CUT_S * sampleRate ? cut : 0;
 }
 
-/** Cut a decoded sound's lead-in in place (its length stays; the end is padded with silence). */
-export function trimLeadIn(buffer: AudioBuffer): AudioBuffer {
-  const channels = Array.from({ length: buffer.numberOfChannels }, (_, c) => buffer.getChannelData(c));
+/**
+ * A decoded sound without its lead-in, as a new buffer. The audio is only read and written with copyFromChannel /
+ * copyToChannel: a buffer whose channel data has been handed out (getChannelData) may be copied by Safari every
+ * time it starts playing, which on fast rhythms ate memory until the app was closed.
+ */
+export function trimLeadIn(buffer: AudioBuffer, ac: BaseAudioContext): AudioBuffer {
+  const channels = Array.from({ length: buffer.numberOfChannels }, (_, c) => { const a = new Float32Array(buffer.length); buffer.copyFromChannel(a, c); return a; });
   const cut = leadIn(channels, buffer.sampleRate);
-  if (cut) for (const ch of channels) { ch.copyWithin(0, cut); ch.fill(0, ch.length - cut); }
-  return buffer;
+  if (!cut) return buffer;
+  const out = ac.createBuffer(buffer.numberOfChannels, buffer.length - cut, buffer.sampleRate);
+  channels.forEach((ch, c) => out.copyToChannel(ch.subarray(cut), c));
+  return out;
 }
 
 /** Make every sound this audio context decodes start without its lead-in (both the promise and callback forms). */
@@ -38,7 +44,7 @@ export function trimOnDecode(ac: BaseAudioContext) {
   const decode = ac.decodeAudioData.bind(ac);
   ac.decodeAudioData = ((data: ArrayBuffer, ok?: DecodeSuccessCallback | null, fail?: DecodeErrorCallback | null) =>
     decode(data).then(
-      (b) => { const t = trimLeadIn(b); ok?.(t); return t; },
+      (b) => { const t = trimLeadIn(b, ac); ok?.(t); return t; },
       (err) => { fail?.(err); throw err; },
     )) as BaseAudioContext['decodeAudioData'];
 }

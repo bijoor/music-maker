@@ -303,7 +303,9 @@ export function setSampleLevel(value: Record<string, unknown>, level: number) {
     const was = applied.get(buf) ?? 1;
     if (Math.abs(was - level) < 1e-4) return;
     const k = level / was;
-    for (let c = 0; c < buf.numberOfChannels; c++) { const d = buf.getChannelData(c); for (let i = 0; i < d.length; i++) d[i] *= k; }
+    // copyFromChannel / copyToChannel, never getChannelData (see trimLeadIn: Safari would copy the sound on every play).
+    const d = new Float32Array(buf.length);
+    for (let c = 0; c < buf.numberOfChannels; c++) { buf.copyFromChannel(d, c); for (let i = 0; i < d.length; i++) d[i] *= k; buf.copyToChannel(d, c); }
     applied.set(buf, level);
   }, () => {});
 }
@@ -346,10 +348,18 @@ export function latencyStats() {
     input: avg(recent.input), engine: avg(recent.engine), lead: LEAD * 1000,
     base: ac.baseLatency != null ? ac.baseLatency * 1000 : null,
     output: ac.outputLatency ? ac.outputLatency * 1000 : null,
-    rate: ac.sampleRate, state: ac.state,
+    rate: ac.sampleRate, state: ac.state, voices: voicesNow, held: live.size + holders.size,
   };
 }
 const startedAt = new Map<string, number>();
+/** Sounds playing right now (played from pads and keys), for the About panel: it should fall back to 0 when quiet. */
+let voicesNow = 0;
+function countVoice(v: { nodes?: { source?: AudioScheduledSourceNode | AudioScheduledSourceNode[] } }) {
+  const src = [v.nodes?.source ?? []].flat()[0];
+  if (!src) return;
+  voicesNow++;
+  src.addEventListener('ended', () => { voicesNow--; }, { once: true });
+}
 
 export function trigger(value: Record<string, unknown>, duration = 0.25) {
   const ac = getAudioContext();
@@ -379,6 +389,7 @@ function wrapSound(s: string) {
     ...entry,
     onTrigger: async (t: number, value: Record<string, unknown>, ...rest: unknown[]) => {
       let voice = await onTrigger(t, value, ...rest);
+      if (voice) countVoice(voice);
       const began = startedAt.get(String(value.holdId));
       if (began !== undefined) { startedAt.delete(String(value.holdId)); keep(recent.engine, performance.now() - began); }
       const take = holders.get(String(value.holdId));
@@ -464,7 +475,8 @@ export function hold(value: Record<string, unknown>, max = 30): HeldNote {
     if (released) releaseVoice(v);
   });
   startedAt.set(id, performance.now());
-  setTimeout(() => startedAt.delete(id), 5000);
+  // A voice that never arrives (a sound skipped by the engine) must not stay in these maps.
+  setTimeout(() => { startedAt.delete(id); holders.delete(id); }, 5000);
   void trigger({ ...value, holdId: id }, max);
   const note: HeldNote = {
     stop(fade) {

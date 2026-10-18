@@ -22,9 +22,20 @@ const compiled = new Map<string, unknown>();
 let queue: Promise<void> = Promise.resolve();
 let latest: GeneratedSong | null = null;
 
+/** Compiled patterns kept for reuse (most recent last). Recording changes the code with every stroke, so the cache
+ * is capped: unbounded, it grew with every note played and slowly exhausted the device's memory. */
+const COMPILED_MAX = 40;
 async function compileCached(code: string) {
-  if (!compiled.has(code)) compiled.set(code, await engine.compile(code));
-  return compiled.get(code);
+  if (compiled.has(code)) {
+    const p = compiled.get(code);
+    compiled.delete(code);
+    compiled.set(code, p);
+    return p;
+  }
+  const p = await engine.compile(code);
+  compiled.set(code, p);
+  while (compiled.size > COMPILED_MAX) compiled.delete(compiled.keys().next().value!);
+  return p;
 }
 
 // Clicks for the count-in and the metronome, on their own engine tracks (not part of the song).
