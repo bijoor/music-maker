@@ -487,3 +487,4 @@ select.sm { min-height: 30px; padding: 3px 6px; font-size: 13px; }
 /* Playing areas: no scrolling, zooming or gestures start here (see usePlayTouches). */
 .padgrid, .kit, .drumtouch, .tappads, .kb, .spads, .chords { touch-action: none; }
 html { touch-action: manipulation; }
+.taplog li.off { color: #e5534b; }

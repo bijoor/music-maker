@@ -15,6 +15,8 @@ const PADS = [
   { name: 'Ge', voice: 'tabla_ge', hand: 'left' as const },
 ];
 interface Entry { t: number; pad: number; what: string; gap?: number }
+/** Touches that landed off both pads (pad -1), with where. */
+const OFF = -1;
 interface Counts { touches: number; presses: number; strokes: number }
 
 export default function TapTest() {
@@ -25,6 +27,7 @@ export default function TapTest() {
   const t0 = useRef(performance.now());
   const startedAt = useRef(engine.latencyStats().taps.started);
   const best = useRef(0);
+  const offPads = useRef(0);
   const [, redraw] = useState(0);
   // Copy log: the text goes to the clipboard, or into a box to copy by hand if the browser does not allow it.
   const [copyText, setCopyText] = useState<string | null>(null);
@@ -74,6 +77,21 @@ export default function TapTest() {
       });
       on('pointercancel', (e) => add(i, 'press cancelled', e.timeStamp));
     });
+    // Touches anywhere else on the screen, so a tap that just missed a pad shows up (with where it landed).
+    const anywhere = (e: TouchEvent) => {
+      for (const t of Array.from(e.changedTouches)) {
+        if (pads.current.some((el) => el?.contains(t.target as Node))) continue;
+        offPads.current++;
+        const near = pads.current.map((el) => el?.getBoundingClientRect()).map((r, i) => {
+          if (!r) return null;
+          const dx = Math.max(r.left - t.clientX, 0, t.clientX - r.right), dy = Math.max(r.top - t.clientY, 0, t.clientY - r.bottom);
+          return { i, d: Math.round(Math.hypot(dx, dy)), side: dy > dx ? (t.clientY > r.bottom ? 'below' : 'above') : t.clientX > r.right ? 'right of' : 'left of' };
+        }).filter(Boolean).sort((a, b) => a!.d - b!.d)[0];
+        add(OFF, near ? `touch off the pads, ${near.d}px ${near.side} ${PADS[near.i].name}` : 'touch off the pads', e.timeStamp);
+      }
+    };
+    addEventListener('touchstart', anywhere, { capture: true, passive: true });
+    offs.push(() => removeEventListener('touchstart', anywhere, { capture: true }));
     // Redraw a few times a second (not on every tap, so the test itself does not slow playing down).
     const timer = setInterval(() => {
       const now = performance.now(), recent = presses.current.filter((t) => t > now - 1000).length;
@@ -87,10 +105,10 @@ export default function TapTest() {
     const now = performance.now(), rate = presses.current.filter((t) => t > now - 1000).length;
     const lines = [
       `Tap test · ${appRef.current ? 'app’s stroke handling' : 'engine only'} · fastest ${best.current} taps/s (last second ${rate})`,
-      `Touches ${total.touches} → presses ${total.presses} → strokes ${total.strokes} → sounds started ${started}`,
+      `Touches ${total.touches} → presses ${total.presses} → strokes ${total.strokes} → sounds started ${started} · touches off the pads ${offPads.current}`,
       ...PADS.map((p, i) => `${p.name}: touches ${counts.current[i].touches}, presses ${counts.current[i].presses}, strokes ${counts.current[i].strokes}`),
       'Log (oldest first):',
-      ...[...log.current].reverse().map((e) => `${(e.t / 1000).toFixed(3)}s ${PADS[e.pad].name} ${e.what}${e.gap !== undefined ? ` +${Math.round(e.gap)}ms` : ''}`),
+      ...[...log.current].reverse().map((e) => `${(e.t / 1000).toFixed(3)}s ${e.pad === OFF ? '—' : PADS[e.pad].name} ${e.what}${e.gap !== undefined ? ` +${Math.round(e.gap)}ms` : ''}`),
     ];
     return lines.join('\n');
   };
@@ -110,6 +128,7 @@ export default function TapTest() {
     counts.current = PADS.map(() => ({ touches: 0, presses: 0, strokes: 0 }));
     presses.current = [];
     best.current = 0;
+    offPads.current = 0;
     t0.current = performance.now();
     startedAt.current = engine.latencyStats().taps.started;
     redraw((n) => n + 1);
@@ -139,14 +158,14 @@ export default function TapTest() {
         </div>
         <div className="tapstats">
           <p><strong>{rate}</strong> taps in the last second (fastest {best.current}/s) · last gaps {gaps.map((g) => `${Math.round(g)}`).join(', ') || '—'} ms</p>
-          <p>Touches {total.touches} → presses {total.presses} → strokes {total.strokes} → sounds started {started}{total.touches > total.presses ? ` · ${total.touches - total.presses} touches never became presses` : ''}{total.strokes > started ? ` · ${total.strokes - started} strokes did not start a sound` : ''}</p>
+          <p>Touches {total.touches} → presses {total.presses} → strokes {total.strokes} → sounds started {started}{offPads.current ? ` · ${offPads.current} touches landed off the pads` : ''}{total.touches > total.presses ? ` · ${total.touches - total.presses} touches never became presses` : ''}{total.strokes > started ? ` · ${total.strokes - started} strokes did not start a sound` : ''}</p>
           {copyText !== null && (
             <textarea className="tapcopy" readOnly value={copyText} ref={(el) => { el?.focus(); el?.select(); }} aria-label="Log to copy" />
           )}
           <ol className="taplog">
             {log.current.map((e, k) => (
-              <li key={k} className={e.what.startsWith('touch ') ? 'touch' : e.what === 'press' ? 'press' : ''}>
-                <code>{(e.t / 1000).toFixed(3)}s</code> {PADS[e.pad].name} {e.what}{e.gap !== undefined ? ` · ${Math.round(e.gap)} ms after the last press` : ''}
+              <li key={k} className={e.pad === OFF ? 'off' : e.what.startsWith('touch ') ? 'touch' : e.what === 'press' ? 'press' : ''}>
+                <code>{(e.t / 1000).toFixed(3)}s</code> {e.pad === OFF ? '—' : PADS[e.pad].name} {e.what}{e.gap !== undefined ? ` · ${Math.round(e.gap)} ms after the last press` : ''}
               </li>
             ))}
           </ol>
