@@ -11,6 +11,7 @@ import DrumHeads from './DrumHeads';
 import StrokeLevel from './StrokeLevel';
 import { MAX_COLS, MAX_ROWS, padGrid, resetPadOrder, resizeGrid, setCell } from '../model/padOrder';
 import { dampOnHold } from './damp';
+import { noteBetween } from '../engine/strudel';
 
 /** Finger-sized pads: large main pads (kick and snare double width), smaller pads for less frequent sounds. Indian kits show their strokes. */
 /** Semitones a bending pad (KitVoice.bends) rises over the pad's height when the finger slides up. */
@@ -42,8 +43,8 @@ export default function DrumPads({ track }: { track: Track }) {
   // sliding any way then swells or fades the hit while it rings (right and down louder). On a bending pad (the
   // tabla's Ge or the mridangam's Thom, like pressing into the bass head), sliding up raises the pitch instead and
   // only left/right changes the volume.
-  const hit = (k: KitVoice, e: PointerEvent<HTMLElement>) => {
-    const el = e.currentTarget, id = e.pointerId, r = el.getBoundingClientRect();
+  const hit = (k: KitVoice, e: PointerEvent<HTMLElement>, el: HTMLElement = e.currentTarget) => {
+    const id = e.pointerId, r = el.getBoundingClientRect();
     getSelection()?.removeAllRanges(); // no text stays selected while playing
     const vel0 = strikeVelocity2D(e.clientX, e.clientY, el), x0 = e.clientX, y0 = e.clientY;
     const sound = recorder.drum(track.id, k.voice, voiceSound(track.bank, k.voice), e.timeStamp, vel0, recorder.headsOf(k.hand));
@@ -81,6 +82,20 @@ export default function DrumPads({ track }: { track: Track }) {
       <span className="kbd-hint">{cell !== undefined ? cellHint(track.bank, cell) : drumHint(track.bank, k.voice)}</span>
     </button>
   );
+  // A finger landing between pads (fast playing lands on gaps and edges) plays the nearest pad instead of nothing.
+  const between = (e: PointerEvent<HTMLElement>) => {
+    if (arranging || (e.target as Element).closest('.pad')) return;
+    let best: HTMLElement | null = null, bestD = Infinity;
+    e.currentTarget.querySelectorAll<HTMLElement>('.pad:not(.empty)').forEach((p) => {
+      const r = p.getBoundingClientRect();
+      const d = Math.hypot(Math.max(r.left - e.clientX, 0, e.clientX - r.right), Math.max(r.top - e.clientY, 0, e.clientY - r.bottom));
+      if (d < bestD) { bestD = d; best = p; }
+    });
+    const k = best && kit.find((x) => x.voice === (best as HTMLElement).dataset.voice);
+    if (!best || !k || bestD > 40) return;
+    noteBetween();
+    hit(k, e, best);
+  };
   /** A cell of an Indian kit's pad grid: its stroke's pad, or an empty pad (filled from Arrange). */
   const cell = (voice: string, i: number) => {
     const k = voice ? kit.find((x) => x.voice === voice) : undefined;
@@ -136,7 +151,7 @@ export default function DrumPads({ track }: { track: Track }) {
         // Indian kits: a grid of pads, each playing the stroke chosen for it (by default left hand | both | right).
         // Arranging: the strokes to choose from sit beside the pads (as Edit layout does on the drum).
         <div className="drumwork padwork">
-          <div className="padgrid" style={{ gridTemplateColumns: `repeat(${grid.cols}, minmax(0, 1fr))`, gridTemplateRows: `repeat(${grid.rows}, minmax(0, 1fr))` }}>
+          <div className="padgrid" onPointerDown={between} style={{ gridTemplateColumns: `repeat(${grid.cols}, minmax(0, 1fr))`, gridTemplateRows: `repeat(${grid.rows}, minmax(0, 1fr))` }}>
             {grid.cells.map(cell)}
           </div>
           {arranging && (
@@ -158,7 +173,7 @@ export default function DrumPads({ track }: { track: Track }) {
           )}
         </div>
       ) : (
-        <div className="kit">
+        <div className="kit" onPointerDown={between}>
           <div className="kit-main">{kit.filter((k) => k.main).map((k) => pad(k))}</div>
           <div className="kit-aux">{kit.filter((k) => !k.main).map((k) => pad(k))}</div>
         </div>

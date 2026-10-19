@@ -5,6 +5,7 @@ import { VIEW, viewFor, headCircles, hitTest, layoutFor, saveLayout, segmentPath
 import * as recorder from '../engine/recorder';
 import StrokeLevel from './StrokeLevel';
 import { dampOnHold } from './damp';
+import { noteMissed } from '../engine/strudel';
 import { disableTapForce, enableTapForce, tapForceListening, tapForceSensed, tapVelocity } from './tapForce';
 import { useStore } from '../state/store';
 
@@ -14,6 +15,8 @@ const HEAD_NAMES: Record<string, [string, string]> = {
 };
 const PART_NAMES: Record<Part, string> = { rim: 'Rim', middle: 'Middle ring', syahi: 'Syahi', centre: 'Syahi centre' };
 /** Semitones a bass stroke rises over the head's radius as the finger slides toward the centre (capped at 5). */
+/** Taps this far outside a drum's edge (a fraction of its radius) still play its rim. */
+const EDGE_SLACK = 0.15;
 const BEND_PER_RADIUS = 7;
 
 /**
@@ -89,15 +92,15 @@ export default function DrumHeads({ track, switcher }: { track: Track; switcher?
   const down = (e: PointerEvent<HTMLDivElement>) => {
     e.preventDefault();
     getSelection()?.removeAllRanges();
-    const p = toView(e), hit = hitTest(layout, p.x, p.y, view);
-    if (!hit) return;
+    const p = toView(e), hit = hitTest(layout, p.x, p.y, view, editing ? 0 : EDGE_SLACK);
+    if (!hit) { if (!editing) noteMissed('drum'); return; }
     const voice = layout[hit.head].parts[hit.part][hit.seg];
     if (editing) {
       setSel({ head: hit.head, part: hit.part, seg: hit.seg });
       if (voice) recorder.drum(track.id, voice, voiceSound(bank, voice), undefined, 1);
       return;
     }
-    if (!voice) return;
+    if (!voice) { noteMissed('empty'); return; }
     // Stops what is ringing on the head struck (a two-hand bol such as Dha: on both heads).
     const both = kit.find((k) => k.voice === voice)?.hand === 'both';
     const heads: recorder.Head[] = both ? ['left', 'right'] : [hit.head === 0 ? 'left' : 'right'];

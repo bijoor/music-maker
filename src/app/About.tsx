@@ -25,7 +25,8 @@ function Latency() {
       <ul>
         <li>Touches the screen reported: {s.taps.touches}</li>
         <li>Presses reaching the app: {s.taps.presses}</li>
-        <li>Strokes played: {s.taps.strokes} (softest velocity {Math.round(s.taps.softest * 100)}%)</li>
+        <li>Strokes played: {s.taps.strokes} (softest velocity {Math.round(s.taps.softest * 100)}%) · of these, taps between pads played on the nearest: {s.taps.between}</li>
+        <li>Drum view taps that played nothing: {s.taps.offDrum} off both drums · {s.taps.empty} on a segment set to Nothing</li>
         <li>Sounds the engine started: {s.taps.started}</li>
       </ul>
       <button className="btn sm" onClick={() => { resetTaps(); setS(latencyStats()); }}>Reset counts</button>

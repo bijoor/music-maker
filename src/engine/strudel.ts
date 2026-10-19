@@ -344,7 +344,7 @@ export const noteInputDelay = (ms: number) => { if (ms >= 0 && ms < 2000) keep(r
 const avg = (l: number[]) => (l.length ? l.reduce((a, b) => a + b, 0) / l.length : null);
 // Following a tap the whole way, to find where strokes go missing: touches the screen reported, presses that reached
 // the page, strokes played from pads and keys, and sounds the engine actually started (with the softest velocity).
-const taps = { touches: 0, presses: 0, strokes: 0, started: 0, softest: 1 };
+const taps = { touches: 0, presses: 0, strokes: 0, started: 0, softest: 1, between: 0, offDrum: 0, empty: 0 };
 let tapsWatched = false;
 function watchTaps() {
   if (tapsWatched) return;
@@ -355,7 +355,11 @@ function watchTaps() {
 /** A stroke was played from a pad or key, at this velocity. */
 export function noteStroke(vel: number) { watchTaps(); taps.strokes++; taps.softest = Math.min(taps.softest, vel); }
 if (typeof addEventListener === 'function') watchTaps();
-export function resetTaps() { watchTaps(); Object.assign(taps, { touches: 0, presses: 0, strokes: 0, started: 0, softest: 1 }); }
+/** A tap on the drum view played nothing: off both drums, or on a segment set to Nothing. */
+export function noteMissed(why: 'drum' | 'empty') { if (why === 'drum') taps.offDrum++; else taps.empty++; }
+/** A tap landed between pads and played the nearest one. */
+export function noteBetween() { taps.between++; }
+export function resetTaps() { watchTaps(); Object.assign(taps, { touches: 0, presses: 0, strokes: 0, started: 0, softest: 1, between: 0, offDrum: 0, empty: 0 }); }
 
 export function latencyStats() {
   watchTaps();

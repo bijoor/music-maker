@@ -27,6 +27,13 @@ describe('drum layout hit test', () => {
     expect(at(l, 1, 0.4, 0.01)).toMatchObject({ part: 'syahi', seg: 0 });
   });
 
+  it('lets a tap just outside a head play its rim', () => {
+    const l = tabla(), c = headCircles(VIEW)[1];
+    expect(hitTest(l, c.cx, c.cy - c.R * 1.08)).toBeNull();
+    expect(hitTest(l, c.cx, c.cy - c.R * 1.08, VIEW, 0.15)).toMatchObject({ head: 1, part: 'rim', seg: 0 });
+    expect(hitTest(l, c.cx, c.cy - c.R * 1.3, VIEW, 0.15)).toBeNull();
+  });
+
   it('misses outside the heads', () => {
     expect(hitTest(tabla(), 2, 2)).toBeNull();
   });

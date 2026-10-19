@@ -112,13 +112,18 @@ export interface Hit {
   band: [number, number];
 }
 
-/** Which head, area and segment a point is on, or null. */
-export function hitTest(layout: DrumLayout, x: number, y: number, view: View = VIEW): Hit | null {
+/**
+ * Which head, area and segment a point is on, or null. With `slack`, a point just outside a head (within that
+ * fraction of its radius) counts as its rim there: fast playing near the edge slips past it.
+ */
+export function hitTest(layout: DrumLayout, x: number, y: number, view: View = VIEW, slack = 0): Hit | null {
   const cs = headCircles(view);
   for (const h of [0, 1] as const) {
     const hd = layout[h], c = cs[h];
-    const dx = x - c.cx, dy = y - c.cy, d = Math.hypot(dx, dy);
-    if (d > c.R) continue;
+    const dx = x - c.cx, dy = y - c.cy;
+    let d = Math.hypot(dx, dy);
+    if (d > c.R * (1 + slack)) continue;
+    d = Math.min(d, c.R);
     const sx = c.cx + hd.syahi.dx * c.R, sy = c.cy + hd.syahi.dy * c.R, sr = hd.syahi.r * c.R;
     const sdx = x - sx, sdy = y - sy, sd = Math.hypot(sdx, sdy);
     let part: Part, frac: number, band: [number, number];
