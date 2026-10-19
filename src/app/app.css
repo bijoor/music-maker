@@ -468,3 +468,17 @@ select.sm { min-height: 30px; padding: 3px 6px; font-size: 13px; }
 .padgrid { flex: 1; min-width: 0; min-height: 0; display: grid; gap: 8px; }
 .stepper { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; }
 .stepper strong { min-width: 1.4em; text-align: center; }
+
+/* Tap test */
+.taptest { display: flex; flex-direction: column; gap: 10px; height: 100%; min-height: 0; }
+.tappads { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; flex: 0 0 42%; min-height: 160px; }
+.tappad { display: grid; place-content: center; text-align: center; gap: 6px; border-radius: 18px; border: 1px solid var(--line); background: var(--panel-2); touch-action: none; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+.tappad strong { font-size: 28px; }
+.tappad span { font-size: 12px; color: var(--muted); }
+.tappad.down { background: var(--accent); color: var(--accent-ink); }
+.tapstats { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
+.tapstats p { margin: 0; }
+.taplog { flex: 1; min-height: 0; overflow-y: auto; margin: 0; padding-left: 0; list-style: none; font-size: 12px; }
+.taplog li { padding: 1px 0; color: var(--muted); }
+.taplog li.press { color: inherit; }
+.taplog li.touch { color: var(--accent); }

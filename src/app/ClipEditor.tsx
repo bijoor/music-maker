@@ -7,6 +7,7 @@ import type { Bars, Track } from '../model/types';
 import DrumGrid from './DrumGrid';
 import Calibrate from './Calibrate';
 import About from './About';
+import TapTest from './TapTest';
 import SampleRecorder from './SampleRecorder';
 import EditableName from './EditableName';
 import { lineOf } from '../model/lines';
@@ -37,6 +38,7 @@ export default function ClipEditor() {
   if (state.panel === 'calibrate') return <Calibrate />;
   if (state.panel === 'songs') return <SongsPanel />;
   if (state.panel === 'about') return <About />;
+  if (state.panel === 'taptest') return <TapTest />;
   if (state.panel === 'recorder') return <SampleRecorder key={state.recorderKit ?? 'new'} />;
   if (!track) return <section className="card editor empty-editor"><p className="muted-text">Add a track to start.</p></section>;
   const slot = selected.slot;

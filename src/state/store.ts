@@ -17,7 +17,7 @@ export type TransportState = 'stopped' | 'loading' | 'playing';
 export type EditorView = 'grid' | 'play';
 export type Mode = 'perform' | 'record' | 'edit';
 /** What the bottom area shows instead of the clip editor (no pop-up dialogs). */
-export type Panel = 'code' | 'song' | 'scale' | 'calibrate' | 'songs' | 'about' | 'recorder';
+export type Panel = 'code' | 'song' | 'scale' | 'calibrate' | 'songs' | 'about' | 'recorder' | 'taptest';
 
 interface Selection {
   trackId: string;

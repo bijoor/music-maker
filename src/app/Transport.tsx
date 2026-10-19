@@ -100,6 +100,7 @@ export default function Transport() {
               Slide steadiness: {slideStill <= 4 ? 'fine (4 px)' : slideStill <= 8 ? 'normal (8 px)' : 'steady (14 px)'}
             </button>
             <button role="menuitem" onClick={() => { openRecorder(null); setMore(false); }}>Record a drum kit from an instrument…</button>
+            <button role="menuitem" onClick={() => { setPanel('taptest'); setMore(false); }}>Tap test</button>
             <button role="menuitem" onClick={() => { setPanel('about'); setMore(false); }}>About and sound credits</button>
             <a role="menuitem" className="menulink" href="#lab" onClick={() => setMore(false)}>Phase 0 tests</a>
           </div>
