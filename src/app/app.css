@@ -482,3 +482,4 @@ select.sm { min-height: 30px; padding: 3px 6px; font-size: 13px; }
 .taplog li { padding: 1px 0; color: var(--muted); }
 .taplog li.press { color: inherit; }
 .taplog li.touch { color: var(--accent); }
+.tapcopy { width: 100%; min-height: 120px; font: 12px ui-monospace, monospace; background: var(--panel-2); color: inherit; border: 1px solid var(--line); border-radius: 8px; padding: 6px; }

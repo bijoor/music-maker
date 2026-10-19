@@ -26,6 +26,9 @@ export default function TapTest() {
   const startedAt = useRef(engine.latencyStats().taps.started);
   const best = useRef(0);
   const [, redraw] = useState(0);
+  // Copy log: the text goes to the clipboard, or into a box to copy by hand if the browser does not allow it.
+  const [copyText, setCopyText] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
   // App path: the drums' own stroke handling (a new stroke stops older ones on the same head) on the selected
   // drum track; off, the engine alone.
   const [appPath, setAppPath] = useState(false);
@@ -47,7 +50,7 @@ export default function TapTest() {
         if (presses.current.length > 200) presses.current.shift();
       }
       log.current.unshift({ t: t - t0.current, pad, what, gap });
-      if (log.current.length > 80) log.current.pop();
+      if (log.current.length > 500) log.current.pop();
     };
     const offs: (() => void)[] = [];
     pads.current.forEach((el, i) => {
@@ -80,6 +83,28 @@ export default function TapTest() {
     return () => { offs.forEach((off) => off()); clearInterval(timer); };
   }, []);
 
+  const report = () => {
+    const now = performance.now(), rate = presses.current.filter((t) => t > now - 1000).length;
+    const lines = [
+      `Tap test · ${appRef.current ? 'app’s stroke handling' : 'engine only'} · fastest ${best.current} taps/s (last second ${rate})`,
+      `Touches ${total.touches} → presses ${total.presses} → strokes ${total.strokes} → sounds started ${started}`,
+      ...PADS.map((p, i) => `${p.name}: touches ${counts.current[i].touches}, presses ${counts.current[i].presses}, strokes ${counts.current[i].strokes}`),
+      'Log (oldest first):',
+      ...[...log.current].reverse().map((e) => `${(e.t / 1000).toFixed(3)}s ${PADS[e.pad].name} ${e.what}${e.gap !== undefined ? ` +${Math.round(e.gap)}ms` : ''}`),
+    ];
+    return lines.join('\n');
+  };
+  const copy = async () => {
+    const text = report();
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopyText(null);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      setCopyText(text);
+    }
+  };
   const reset = () => {
     log.current = [];
     counts.current = PADS.map(() => ({ touches: 0, presses: 0, strokes: 0 }));
@@ -99,6 +124,7 @@ export default function TapTest() {
     <PanelFrame title="Tap test" actions={
       <>
         <button className={`btn sm${appPath ? ' on' : ''}`} aria-pressed={appPath} disabled={!track} title={track ? 'Play through the drums’ own stroke handling on the selected drum track' : 'Select a drum track to use its stroke handling'} onClick={() => setAppPath(!appPath)}>App’s stroke handling</button>
+        <button className="btn sm" onClick={copy}>{copied ? 'Copied' : 'Copy log'}</button>
         <button className="btn sm" onClick={reset}>Reset</button>
       </>
     }>
@@ -114,6 +140,9 @@ export default function TapTest() {
         <div className="tapstats">
           <p><strong>{rate}</strong> taps in the last second (fastest {best.current}/s) · last gaps {gaps.map((g) => `${Math.round(g)}`).join(', ') || '—'} ms</p>
           <p>Touches {total.touches} → presses {total.presses} → strokes {total.strokes} → sounds started {started}{total.touches > total.presses ? ` · ${total.touches - total.presses} touches never became presses` : ''}{total.strokes > started ? ` · ${total.strokes - started} strokes did not start a sound` : ''}</p>
+          {copyText !== null && (
+            <textarea className="tapcopy" readOnly value={copyText} ref={(el) => { el?.focus(); el?.select(); }} aria-label="Log to copy" />
+          )}
           <ol className="taplog">
             {log.current.map((e, k) => (
               <li key={k} className={e.what.startsWith('touch ') ? 'touch' : e.what === 'press' ? 'press' : ''}>
