@@ -138,7 +138,9 @@ export const onHap = (fn: Listener) => {
 /** Turn a Strudel expression (e.g. `s("bd*4").bank("RolandTR909")`) into a pattern. Locations are relative to `code`. */
 export async function compile(code: string): Promise<any> {
   const { pattern } = await evaluateCode(code, transpiler, {});
-  return pattern;
+  // An empty clip with no effects evaluates to `silence` itself, which this engine reads as a stopped track (no
+  // position, so nothing could be recorded into it): give it a pattern of its own that plays nothing.
+  return pattern === silence ? silence.fmap((v: unknown) => v) : pattern;
 }
 
 const started = () => !!r?.scheduler.started;
