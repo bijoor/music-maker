@@ -342,13 +342,29 @@ const keep = (list: number[], ms: number) => { list.push(ms); if (list.length > 
 /** A touch reached the app `ms` after it happened. */
 export const noteInputDelay = (ms: number) => { if (ms >= 0 && ms < 2000) keep(recent.input, ms); };
 const avg = (l: number[]) => (l.length ? l.reduce((a, b) => a + b, 0) / l.length : null);
+// Following a tap the whole way, to find where strokes go missing: touches the screen reported, presses that reached
+// the page, strokes played from pads and keys, and sounds the engine actually started (with the softest velocity).
+const taps = { touches: 0, presses: 0, strokes: 0, started: 0, softest: 1 };
+let tapsWatched = false;
+function watchTaps() {
+  if (tapsWatched) return;
+  tapsWatched = true;
+  addEventListener('touchstart', (e) => { taps.touches += e.changedTouches.length; }, { capture: true, passive: true });
+  addEventListener('pointerdown', (e) => { if (e.pointerType !== 'mouse') taps.presses++; }, { capture: true, passive: true });
+}
+/** A stroke was played from a pad or key, at this velocity. */
+export function noteStroke(vel: number) { watchTaps(); taps.strokes++; taps.softest = Math.min(taps.softest, vel); }
+if (typeof addEventListener === 'function') watchTaps();
+export function resetTaps() { watchTaps(); Object.assign(taps, { touches: 0, presses: 0, strokes: 0, started: 0, softest: 1 }); }
+
 export function latencyStats() {
+  watchTaps();
   const ac = getAudioContext() as AudioContext & { outputLatency?: number };
   return {
     input: avg(recent.input), engine: avg(recent.engine), lead: LEAD * 1000,
     base: ac.baseLatency != null ? ac.baseLatency * 1000 : null,
     output: ac.outputLatency ? ac.outputLatency * 1000 : null,
-    rate: ac.sampleRate, state: ac.state, voices: voicesNow, held: live.size + holders.size, dropped,
+    rate: ac.sampleRate, state: ac.state, voices: voicesNow, held: live.size + holders.size, dropped, taps: { ...taps },
   };
 }
 const startedAt = new Map<string, number>();
@@ -360,6 +376,7 @@ function countVoice(v: { nodes?: { source?: AudioScheduledSourceNode | AudioSche
   const src = [v.nodes?.source ?? []].flat()[0];
   if (!src) return;
   voicesNow++;
+  taps.started++;
   src.addEventListener('ended', () => { voicesNow--; }, { once: true });
 }
 

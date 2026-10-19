@@ -129,6 +129,7 @@ export function drum(trackId: string, voice: string, sound: Record<string, unkno
   // Like a hand on a real drum, a new stroke stops the one still ringing on the same head. Without this, long
   // bass strokes (Ghe, Gha ring for seconds) pile up when played quickly, and the device turns its volume down.
   if (timeStamp !== undefined) engine.noteInputDelay(performance.now() - timeStamp);
+  engine.noteStroke(vel);
   const now = performance.now();
   for (const h of heads) {
     const key = `${trackId}:${h}`;

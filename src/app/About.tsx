@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import PanelFrame from './PanelFrame';
-import { latencyStats } from '../engine/strudel';
+import { latencyStats, resetTaps } from '../engine/strudel';
 
 const ms = (v: number | null) => (v == null ? '—' : `${Math.round(v)} ms`);
 /** What delays a stroke, measured on this device: play some drum strokes, then look here. */
@@ -20,6 +20,15 @@ function Latency() {
         <li>Sounds playing now: {s.voices} · notes tracked: {s.held} (both should fall back near 0 when you stop playing)</li>
         <li>Presses the engine was too late for (played again at once): {s.dropped}</li>
       </ul>
+      <h3>Where taps go</h3>
+      <p className="muted-text">Tap Reset, go back and play a counted number of taps (say 20, fast), then come back here. Each number should match the one above it (the taps to get back here count as touches and presses too): where one falls short, that is where taps are lost.</p>
+      <ul>
+        <li>Touches the screen reported: {s.taps.touches}</li>
+        <li>Presses reaching the app: {s.taps.presses}</li>
+        <li>Strokes played: {s.taps.strokes} (softest velocity {Math.round(s.taps.softest * 100)}%)</li>
+        <li>Sounds the engine started: {s.taps.started}</li>
+      </ul>
+      <button className="btn sm" onClick={() => { resetTaps(); setS(latencyStats()); }}>Reset counts</button>
     </section>
   );
 }
