@@ -1,3 +1,4 @@
+import { usePlayTouches } from './usePlayTouches';
 import { useEffect } from 'react';
 import './app.css';
 import { useStore } from '../state/store';
@@ -18,6 +19,7 @@ export default function App() {
   usePendingClear();
   useKeyboard();
   useNoteSafety();
+  usePlayTouches();
   useEffect(() => {
     if (!message) return;
     const t = setTimeout(() => setMessage(null), 2200);
