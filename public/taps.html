@@ -38,7 +38,20 @@
 <script>
   const NAMES = ['Na', 'Ge'], FILES = ['samples/tabla/na.wav', 'samples/tabla/ge.wav'];
   let ac = null, buffers = [], soundOn = true;
-  let t0 = performance.now(), log = [], touches = [0, 0], presses = [0, 0], off = 0, lastPress = null;
+  let t0 = performance.now(), log = [], touches = [0, 0], presses = [0, 0], off = 0, lastPress = null, hidden = 0;
+  // iOS can drop a finger's touchstart when another finger lifts at the same moment (a known WebKit bug). Such a
+  // finger may still be listed in e.touches of later events: any listed finger never announced is a hidden touch.
+  const known = new Set();
+  function findHidden(e, why) {
+    for (const t of e.touches) {
+      if (known.has(t.identifier)) continue;
+      known.add(t.identifier);
+      const pad = padOf(document.elementFromPoint(t.clientX, t.clientY));
+      hidden++;
+      if (pad) { const i = +pad.dataset.pad; touches[i]++; play(i); }
+      log.push(at(e) + ' ' + (pad ? NAMES[+pad.dataset.pad] : '—') + ' HIDDEN TOUCH FOUND (in ' + why + ', its touchstart never came)');
+    }
+  }
 
   function audio() {
     if (!ac) {
@@ -61,6 +74,7 @@
   document.addEventListener('touchstart', (e) => {
     audio();
     for (const t of e.changedTouches) {
+      known.add(t.identifier);
       const pad = padOf(t.target);
       if (!pad) { off++; log.push(at(e) + ' — touch off the pads'); continue; }
       const i = +pad.dataset.pad;
@@ -68,10 +82,14 @@
       play(i);
       log.push(at(e) + ' ' + NAMES[i] + ' touch');
     }
+    findHidden(e, 'another touchstart');
     if (padOf(e.target)) e.preventDefault();
   }, { capture: true, passive: false });
+  document.addEventListener('touchmove', (e) => findHidden(e, 'touchmove'), { capture: true, passive: true });
   document.addEventListener('touchend', (e) => {
-    for (const t of e.changedTouches) { const pad = padOf(t.target); if (pad) log.push(at(e) + ' ' + NAMES[+pad.dataset.pad] + ' lift'); }
+    findHidden(e, 'touchend');
+    for (const t of e.changedTouches) {
+      if (!known.has(t.identifier)) { known.add(t.identifier); hidden++; const pad = padOf(t.target); log.push(at(e) + ' ' + (pad ? NAMES[+pad.dataset.pad] : '—') + ' HIDDEN TOUCH FOUND (its own lift, touchstart never came)'); } const pad = padOf(t.target); if (pad) log.push(at(e) + ' ' + NAMES[+pad.dataset.pad] + ' lift'); }
   }, { capture: true, passive: true });
   document.addEventListener('touchcancel', (e) => { log.push(at(e) + ' touch cancelled ×' + e.changedTouches.length); }, { capture: true, passive: true });
   document.addEventListener('pointerdown', (e) => {
@@ -90,14 +108,14 @@
   function report() {
     return [
       'Bare tap test · sound ' + (soundOn ? 'on' : 'off'),
-      'Touches ' + (touches[0] + touches[1]) + ' (Na ' + touches[0] + ', Ge ' + touches[1] + ') · presses ' + (presses[0] + presses[1]) + ' (Na ' + presses[0] + ', Ge ' + presses[1] + ') · touches off the pads ' + off,
+      'Touches ' + (touches[0] + touches[1]) + ' (Na ' + touches[0] + ', Ge ' + touches[1] + ') · presses ' + (presses[0] + presses[1]) + ' (Na ' + presses[0] + ', Ge ' + presses[1] + ') · touches off the pads ' + off + ' · hidden touches found ' + hidden,
       'Log (oldest first):',
       ...log,
     ].join('\n');
   }
   const out = document.getElementById('out');
   document.getElementById('show').onclick = () => { out.textContent = report(); out.style.display = 'block'; };
-  document.getElementById('reset').onclick = () => { t0 = performance.now(); log = []; touches = [0, 0]; presses = [0, 0]; off = 0; lastPress = null; out.style.display = 'none'; };
+  document.getElementById('reset').onclick = () => { t0 = performance.now(); log = []; touches = [0, 0]; presses = [0, 0]; off = 0; lastPress = null; hidden = 0; known.clear(); out.style.display = 'none'; };
   document.getElementById('sound').onclick = (e) => { soundOn = !soundOn; e.target.setAttribute('aria-pressed', soundOn); e.target.textContent = soundOn ? 'Sound on' : 'Sound off'; };
   document.getElementById('copy').onclick = async (e) => {
     const text = report();
