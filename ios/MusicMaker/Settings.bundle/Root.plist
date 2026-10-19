@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>StringsTable</key>
+	<string>Root</string>
+	<key>PreferenceSpecifiers</key>
+	<array>
+		<dict>
+			<key>Type</key>
+			<string>PSGroupSpecifier</string>
+			<key>Title</key>
+			<string>Touch handling</string>
+			<key>FooterText</key>
+			<string>Changes apply the next time the app opens (swipe it away first). "Leave as is" behaves like Safari, for comparing.</string>
+		</dict>
+		<dict>
+			<key>Type</key>
+			<string>PSMultiValueSpecifier</string>
+			<key>Title</key>
+			<string>WebKit gestures</string>
+			<key>Key</key>
+			<string>gestures</string>
+			<key>DefaultValue</key>
+			<string>drumming</string>
+			<key>Titles</key>
+			<array>
+				<string>Leave as is</string>
+				<string>Off for drumming</string>
+				<string>All off (raw touches only)</string>
+			</array>
+			<key>Values</key>
+			<array>
+				<string>webkit</string>
+				<string>drumming</string>
+				<string>all</string>
+			</array>
+		</dict>
+		<dict>
+			<key>Type</key>
+			<string>PSToggleSwitchSpecifier</string>
+			<key>Title</key>
+			<string>Send native touches to the page</string>
+			<key>Key</key>
+			<string>relay</string>
+			<key>DefaultValue</key>
+			<true/>
+		</dict>
+		<dict>
+			<key>Type</key>
+			<string>PSGroupSpecifier</string>
+			<key>Title</key>
+			<string>Web app</string>
+			<key>FooterText</key>
+			<string>Built in: the copy built into this app (works offline). Published: bijoor.github.io/music-maker. Custom: e.g. a dev server, http://192.168.1.20:5173/</string>
+		</dict>
+		<dict>
+			<key>Type</key>
+			<string>PSMultiValueSpecifier</string>
+			<key>Title</key>
+			<string>Load from</string>
+			<key>Key</key>
+			<string>source</string>
+			<key>DefaultValue</key>
+			<string>bundled</string>
+			<key>Titles</key>
+			<array>
+				<string>Built in</string>
+				<string>Published site</string>
+				<string>Custom address</string>
+			</array>
+			<key>Values</key>
+			<array>
+				<string>bundled</string>
+				<string>published</string>
+				<string>custom</string>
+			</array>
+		</dict>
+		<dict>
+			<key>Type</key>
+			<string>PSTextFieldSpecifier</string>
+			<key>Title</key>
+			<string>Custom address</string>
+			<key>Key</key>
+			<string>customURL</string>
+			<key>DefaultValue</key>
+			<string></string>
+			<key>KeyboardType</key>
+			<string>URL</string>
+			<key>AutocapitalizationType</key>
+			<string>None</string>
+			<key>AutocorrectionType</key>
+			<string>No</string>
+		</dict>
+	</array>
+</dict>
+</plist>

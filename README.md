@@ -23,6 +23,21 @@ runs the code generator tests: generated code is compiled with Strudel and must 
 
 The latest build of `main` is also published at <https://bijoor.github.io/music-maker/>.
 
+## iPad app (native wrapper, prototype)
+
+Safari and the Home Screen app lose about 1 in 6 taps when two pads are played alternately faster than ~8 taps a second: the page never gets those touches (the bare tap test, `taps.html`, shows it with no app code at all). `ios/` is a small Swift app that shows the same web app in a WKWebView with WebKit's own gesture recognizers switched off, so touches reach the page directly. The web build and the GitHub Pages deploy are unchanged; the app builds its own copy of `dist/` into itself.
+
+Build and run (Xcode 16 or later, Node for the web build):
+
+```bash
+open ios/MusicMaker.xcodeproj
+```
+
+- **Simulator**: pick an iPad simulator and Run. Xcode builds the web app (`npm run build`) and copies it in.
+- **Your iPad**: connect it (or pair it over Wi-Fi), turn on Developer Mode (Settings → Privacy & Security), choose it as the run destination, then in the MusicMaker target → Signing & Capabilities pick your Team. If the bundle id `io.github.bijoor.musicmaker` is taken, change `MM_BUNDLE_ID_PREFIX` in Build Settings. With a free Apple ID the app runs for 7 days before it has to be run from Xcode again; a paid developer account gives a year (or use TestFlight).
+
+In the app, More → Tap test → Bare test page opens the bare tap test, which there also counts the touches the iPad reported natively, so lost taps show as "not delivered by WebKit". Settings → Music Maker+ chooses how many WebKit gestures to switch off (or none, to compare with Safari) and whether the app loads its built-in copy, the published site or a dev server (`npm run dev -- --host`). What is switched off and why: [ios/README.md](ios/README.md).
+
 ## Phase 0 checks
 
 | # | Check | How it is measured |

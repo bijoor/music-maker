@@ -27,8 +27,10 @@
     <button id="show">Show results</button>
     <button id="copy">Copy log</button>
     <button id="reset">Reset</button>
+    <button id="source" hidden>Play from web touches</button>
     <a class="muted" href="./">Back to the app</a>
   </div>
+  <p class="muted" id="native" style="margin:0" hidden></p>
   <p class="muted" style="margin:0">Tap Reset, play the two pads alternately from slow to fast, then Show results. Nothing on screen changes while you play.</p>
   <div class="pads" id="pads">
     <div class="pad" data-pad="0">Na</div>
@@ -38,6 +40,10 @@
 <script>
   const NAMES = ['Na', 'Ge'], FILES = ['samples/tabla/na.wav', 'samples/tabla/ge.wav'];
   let ac = null, buffers = [], soundOn = true;
+  // In the native iPad app (ios/) every touch the iPad reports also arrives as a 'nativetouch' event, whether or
+  // not WebKit delivers it: counting both shows where taps are lost, and playing from them skips WebKit entirely.
+  const native = window.musicMakerNative || null;
+  let fromNative = false, nativeStarts = [0, 0];
   let t0 = performance.now(), log = [], touches = [0, 0], presses = [0, 0], off = 0, lastPress = null, hidden = 0;
   // iOS can drop a finger's touchstart when another finger lifts at the same moment (a known WebKit bug). Such a
   // finger may still be listed in e.touches of later events: any listed finger never announced is a hidden touch.
@@ -48,7 +54,7 @@
       known.add(t.identifier);
       const pad = padOf(document.elementFromPoint(t.clientX, t.clientY));
       hidden++;
-      if (pad) { const i = +pad.dataset.pad; touches[i]++; play(i); }
+      if (pad) { const i = +pad.dataset.pad; touches[i]++; if (!fromNative) play(i); }
       log.push(at(e) + ' ' + (pad ? NAMES[+pad.dataset.pad] : '—') + ' HIDDEN TOUCH FOUND (in ' + why + ', its touchstart never came)');
     }
   }
@@ -79,7 +85,7 @@
       if (!pad) { off++; log.push(at(e) + ' — touch off the pads'); continue; }
       const i = +pad.dataset.pad;
       touches[i]++;
-      play(i);
+      if (!fromNative) play(i);
       log.push(at(e) + ' ' + NAMES[i] + ' touch');
     }
     findHidden(e, 'another touchstart');
@@ -102,21 +108,43 @@
     log.push(at(e) + ' ' + NAMES[i] + ' press' + gap);
   }, { capture: true, passive: true });
   for (const type of ['gesturestart', 'gesturechange', 'gestureend']) document.addEventListener(type, (e) => e.preventDefault(), { passive: false });
+  window.addEventListener('nativetouch', (e) => {
+    for (const t of e.detail) {
+      if (t.phase !== 'start') continue;
+      const pad = padOf(document.elementFromPoint(t.x, t.y));
+      if (!pad) continue;
+      const i = +pad.dataset.pad;
+      nativeStarts[i]++;
+      if (fromNative) { audio(); play(i); }
+      log.push(((performance.now() - t0) / 1000).toFixed(3) + 's ' + NAMES[i] + ' native touch #' + t.id);
+    }
+  });
   // Mouse (desktop): play from the pointer instead.
   document.addEventListener('mousedown', (e) => { const pad = padOf(e.target); if (pad) { audio(); play(+pad.dataset.pad); } });
 
   function report() {
     return [
       'Bare tap test · sound ' + (soundOn ? 'on' : 'off'),
+      ...(native ? ['iPad app · WebKit gestures ' + native.gestures + ' · playing from ' + (fromNative ? 'native' : 'web') + ' touches',
+        'Native touches on the pads ' + (nativeStarts[0] + nativeStarts[1]) + ' (Na ' + nativeStarts[0] + ', Ge ' + nativeStarts[1] + ') · not delivered by WebKit ' + Math.max(0, nativeStarts[0] + nativeStarts[1] - touches[0] - touches[1])] : []),
       'Touches ' + (touches[0] + touches[1]) + ' (Na ' + touches[0] + ', Ge ' + touches[1] + ') · presses ' + (presses[0] + presses[1]) + ' (Na ' + presses[0] + ', Ge ' + presses[1] + ') · touches off the pads ' + off + ' · hidden touches found ' + hidden,
       'Log (oldest first):',
       ...log,
+      ...(native ? ['WebKit gesture recognizers:', ...native.report] : []),
     ].join('\n');
   }
   const out = document.getElementById('out');
   document.getElementById('show').onclick = () => { out.textContent = report(); out.style.display = 'block'; };
-  document.getElementById('reset').onclick = () => { t0 = performance.now(); log = []; touches = [0, 0]; presses = [0, 0]; off = 0; lastPress = null; hidden = 0; known.clear(); out.style.display = 'none'; };
+  document.getElementById('reset').onclick = () => { t0 = performance.now(); log = []; touches = [0, 0]; presses = [0, 0]; off = 0; lastPress = null; hidden = 0; known.clear(); nativeStarts = [0, 0]; out.style.display = 'none'; };
   document.getElementById('sound').onclick = (e) => { soundOn = !soundOn; e.target.setAttribute('aria-pressed', soundOn); e.target.textContent = soundOn ? 'Sound on' : 'Sound off'; };
+  if (native) {
+    const note = document.getElementById('native');
+    note.textContent = 'In the iPad app: WebKit gestures ' + ({ webkit: 'left as is (like Safari)', drumming: 'off for drumming', all: 'all off' }[native.gestures] || native.gestures) + (native.relay ? ', native touches counted.' : '.') + ' Change in Settings → Music Maker+.';
+    note.hidden = false;
+    const src = document.getElementById('source');
+    src.hidden = !native.relay;
+    src.onclick = () => { fromNative = !fromNative; src.setAttribute('aria-pressed', fromNative); src.textContent = fromNative ? 'Play from native touches' : 'Play from web touches'; };
+  }
   document.getElementById('copy').onclick = async (e) => {
     const text = report();
     try { await navigator.clipboard.writeText(text); e.target.textContent = 'Copied'; setTimeout(() => { e.target.textContent = 'Copy log'; }, 1500); }

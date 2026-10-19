@@ -51,5 +51,7 @@ writeFileSync('public/icons/icon-512.png', icon(512));
 writeFileSync('public/icons/apple-touch-icon.png', icon(180, { round: false, inset: 0.18 }));
 // Maskable: full-bleed square, pads inside the central safe zone.
 writeFileSync('public/icons/maskable-512.png', icon(512, { round: false, inset: 0.24 }));
+// The native iPad wrapper (ios/): one opaque 1024 square, iOS rounds it.
+writeFileSync('ios/MusicMaker/Assets.xcassets/AppIcon.appiconset/icon-1024.png', icon(1024, { round: false, inset: 0.18 }));
 writeFileSync('public/favicon.svg', `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="rgb(${BG})"/><rect x="11" y="11" width="19.5" height="19.5" rx="4" fill="rgb(${PADS[0]})"/><rect x="33.5" y="11" width="19.5" height="19.5" rx="4" fill="rgb(${PADS[1]})"/><rect x="11" y="33.5" width="19.5" height="19.5" rx="4" fill="rgb(${PADS[2]})"/><rect x="33.5" y="33.5" width="19.5" height="19.5" rx="4" fill="rgb(${PADS[3]})"/></svg>\n`);
 console.log('icons written');
