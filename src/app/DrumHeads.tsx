@@ -4,7 +4,7 @@ import type { Track } from '../model/types';
 import { VIEW, viewFor, headCircles, hitTest, layoutFor, saveLayout, segmentPath, depthVelocity, DEFAULT_LAYOUTS, generatedLayout, type DrumLayout, type Part } from '../model/drumLayout';
 import * as recorder from '../engine/recorder';
 import StrokeLevel from './StrokeLevel';
-import { SWAP_FADE, dampOnHold, onRest } from './damp';
+import { dampOnHold } from './damp';
 import { disableTapForce, enableTapForce, tapForceListening, tapForceSensed, tapVelocity } from './tapForce';
 import { useStore } from '../state/store';
 
@@ -14,8 +14,6 @@ const HEAD_NAMES: Record<string, [string, string]> = {
 };
 const PART_NAMES: Record<Part, string> = { rim: 'Rim', middle: 'Middle ring', syahi: 'Syahi', centre: 'Syahi centre' };
 /** Semitones a bass stroke rises over the head's radius as the finger slides toward the centre (capped at 5). */
-/** Closed-stroke delay limits (ms). */
-const clampMs = (ms: number) => Math.max(1, Math.min(300, Math.round(ms)));
 const BEND_PER_RADIUS = 7;
 
 /**
@@ -25,7 +23,7 @@ const BEND_PER_RADIUS = 7;
  */
 export default function DrumHeads({ track, switcher }: { track: Track; switcher?: ReactNode }) {
   const bank = track.bank!;
-  const { drumDepth, setDrumDepth, drumForce, setDrumForce, drumDamp, setDrumDamp, closedAfter, setClosedAfter } = useStore();
+  const { drumDepth, setDrumDepth, drumForce, setDrumForce, drumDamp, setDrumDamp } = useStore();
   // Tap force needs the motion sensor, which iPad allows only from a tap: after a reload it waits for one.
   const [forceLive, setForceLive] = useState(tapForceListening);
   // The last tap's force, shown without re-drawing the drum on every stroke.
@@ -42,8 +40,6 @@ export default function DrumHeads({ track, switcher }: { track: Track; switcher?
   const [layout, setLayout] = useState<DrumLayout>(() => layoutFor(bank));
   const [layoutBank, setLayoutBank] = useState(bank);
   if (layoutBank !== bank) { setLayoutBank(bank); setLayout(layoutFor(bank)); }
-  // Edit layout: assigning what a lift plays (open) or what a resting finger plays (closed).
-  const [pick, setPick] = useState<'open' | 'closed'>('open');
   const [sel, setSel] = useState<{ head: 0 | 1; part: Part; seg: number } | null>(null);
   const svg = useRef<SVGSVGElement>(null);
   const touch = useRef<HTMLDivElement>(null);
@@ -110,26 +106,14 @@ export default function DrumHeads({ track, switcher }: { track: Track; switcher?
     let later: ((v: number) => void) | null = null;
     const force = drumForce && forceLive ? tapVelocity(e.timeStamp, (v) => later?.(v)) : null;
     const vel = Math.max(0.12, depth * (force ?? 1));
-    // A segment with a closed stroke: the open one sounds at once, and is written once it is known which it was.
-    const closed = layout[hit.head].closed?.[hit.part]?.[hit.seg] || '';
-    const sound = recorder.drum(track.id, voice, voiceSound(bank, voice), e.timeStamp, vel, heads, !closed);
-    let current = sound;
+    const sound = recorder.drum(track.id, voice, voiceSound(bank, voice), e.timeStamp, vel, heads);
     if (force === null && drumForce && forceLive && !tapForceSensed() && forceText.current) forceText.current.textContent = 'No motion sensor here';
     if (force !== null) {
       showForce(force);
       // A bigger jolt read just after the touch: set the stroke's volume to match.
-      later = (v) => { current.level(Math.max(0.12, depth * v) / vel); showForce(v); };
+      later = (v) => { sound.level(Math.max(0.12, depth * v) / vel); showForce(v); };
     }
     flash(hit.head, hit.part, hit.seg);
-    if (closed) {
-      // Lifted at once: the open stroke rings on. Left resting: it is cut and the closed stroke plays.
-      onRest(e.pointerId, e.clientX, e.clientY, () => {
-        sound.stop(SWAP_FADE);
-        current = recorder.drum(track.id, closed, voiceSound(bank, closed), e.timeStamp, vel, heads, false);
-        recorder.recordDrum(track.id, closed, e.timeStamp, vel);
-      }, () => recorder.recordDrum(track.id, voice, e.timeStamp, vel), closedAfter);
-      return;
-    }
     if (!bends(voice)) {
       if (drumDamp) dampOnHold(sound, e.pointerId, e.clientX, e.clientY);
       return;
@@ -153,22 +137,10 @@ export default function DrumHeads({ track, switcher }: { track: Track; switcher?
     addEventListener('pointercancel', up);
   };
 
-  // The number being typed (shown as typed until it is a valid value and the field is left).
-  const [msText, setMsText] = useState<string | null>(null);
-  const hasClosed = layout.some((hd) => Object.values(hd.closed ?? {}).some((list) => list?.some(Boolean)));
   const selHead = sel ? layout[sel.head] : null;
   const selList = sel && selHead ? selHead.parts[sel.part] : [];
-  const selClosed = sel && selHead ? selHead.closed?.[sel.part]?.[sel.seg] ?? '' : '';
-  /** Set the selected segment's open or closed stroke ('' = none). */
-  const setStroke = (l: DrumLayout, v: string) => {
-    if (!sel) return;
-    const hd = l[sel.head];
-    if (pick === 'open') { hd.parts[sel.part][sel.seg] = v; return; }
-    const n = hd.parts[sel.part].length;
-    const list = Array.from({ length: n }, (_, i) => hd.closed?.[sel.part]?.[i] ?? '');
-    list[sel.seg] = v;
-    hd.closed = { ...hd.closed, [sel.part]: list };
-  };
+  /** Set the selected segment's stroke ('' = none). */
+  const setStroke = (l: DrumLayout, v: string) => { if (sel) l[sel.head].parts[sel.part][sel.seg] = v; };
 
   return (
     <div className={`drumview${editing ? ' editing' : ''}`}>
@@ -180,17 +152,6 @@ export default function DrumHeads({ track, switcher }: { track: Track; switcher?
         {!editing && (
           <>
             <button className={`btn sm${drumDamp ? ' on' : ''}`} aria-pressed={drumDamp} title="Lift at once and a stroke rings; leave the finger resting and it is damped" onClick={() => setDrumDamp(!drumDamp)}>Hold damps</button>
-            {hasClosed && (
-              <div className="closedafter" title="How long a finger must rest before the closed stroke takes over: shorter follows sooner, but quick taps count as resting more often">
-                <span>Closed after</span>
-                <button className="btn sm" aria-label="1 ms shorter" onClick={() => setClosedAfter(clampMs(closedAfter - 1))}>−</button>
-                <input type="number" inputMode="numeric" min={1} max={300} step={1} value={msText ?? closedAfter} aria-label="Closed after, milliseconds"
-                  onChange={(e) => { setMsText(e.target.value); const v = parseInt(e.target.value, 10); if (v >= 1 && v <= 300) setClosedAfter(v); }}
-                  onBlur={() => setMsText(null)} />
-                <span>ms</span>
-                <button className="btn sm" aria-label="1 ms longer" onClick={() => setClosedAfter(clampMs(closedAfter + 1))}>+</button>
-              </div>
-            )}
             <button className={`btn sm${drumDepth ? ' on' : ''}`} aria-pressed={drumDepth} title="Softer at one side of each area, louder at the other (set the loud side in Edit layout)" onClick={() => setDrumDepth(!drumDepth)}>Depth</button>
             <button className={`btn sm${drumForce && forceLive ? ' on' : ''}`} aria-pressed={drumForce && forceLive} title="Harder taps play louder, read from the iPad's motion sensor" onClick={toggleForce}>
               {drumForce && !forceLive ? 'Tap force · tap to allow' : 'Tap force'}
@@ -252,7 +213,7 @@ export default function DrumHeads({ track, switcher }: { track: Track; switcher?
                           data-zone={`${h}:${part}:${i}`}
                           mask={part === 'middle' ? `url(#skin-${track.id}-${h})` : undefined}
                         />
-                        <text x={lx} y={ly} className={`zlabel ${part}`}>{v ? nameOf(v) + (bends(v) ? ' ↗' : '') + (hd.closed?.[part]?.[i] ? ` / ${nameOf(hd.closed[part]![i])}` : '') : editing ? '＋' : ''}</text>
+                        <text x={lx} y={ly} className={`zlabel ${part}`}>{v ? nameOf(v) + (bends(v) ? ' ↗' : '') : editing ? '＋' : ''}</text>
                       </g>
                     );
                   });
@@ -274,9 +235,8 @@ export default function DrumHeads({ track, switcher }: { track: Track; switcher?
                     {[1, 2, 3, 4].map((n) => (
                       <button key={n} aria-pressed={Math.max(1, selList.length) === n} onClick={() => {
                         edit((l) => {
-                          const hd = l[sel.head], list = hd.parts[sel.part], shut = hd.closed?.[sel.part] ?? [];
+                          const hd = l[sel.head], list = hd.parts[sel.part];
                           hd.parts[sel.part] = Array.from({ length: n }, (_, i) => (i < list.length ? list[i] : ''));
-                          if (shut.length) hd.closed = { ...hd.closed, [sel.part]: Array.from({ length: n }, (_, i) => shut[i] ?? '') };
                         });
                         setSel({ ...sel, seg: Math.min(sel.seg, n - 1) });
                       }}>{n}</button>
@@ -301,23 +261,16 @@ export default function DrumHeads({ track, switcher }: { track: Track; switcher?
                     ))}
                   </div>
                 </div>
-                <div className="segrow">
-                  <span>Stroke when the finger</span>
-                  <div className="seg" role="group" aria-label="Which stroke to set">
-                    <button aria-pressed={pick === 'open'} onClick={() => setPick('open')}>Lifts (open)</button>
-                    <button aria-pressed={pick === 'closed'} onClick={() => setPick('closed')}>Rests (closed)</button>
-                  </div>
-                </div>
                 <div className="strokepick">
-                  <button aria-pressed={!(pick === 'open' ? selList[sel.seg] : selClosed)} onClick={() => edit((l) => setStroke(l, ''))}>{pick === 'open' ? 'Nothing' : 'Same as open'}</button>
+                  <button aria-pressed={!selList[sel.seg]} onClick={() => edit((l) => setStroke(l, ''))}>Nothing</button>
                   {kit.map((k) => (
-                    <button key={k.voice} aria-pressed={(pick === 'open' ? selList[sel.seg] : selClosed) === k.voice} onClick={() => {
+                    <button key={k.voice} aria-pressed={selList[sel.seg] === k.voice} onClick={() => {
                       edit((l) => setStroke(l, k.voice));
                       recorder.drum(track.id, k.voice, voiceSound(bank, k.voice), undefined, 1);
                     }}>{k.name}{k.bends ? ' ↗' : ''}</button>
                   ))}
                 </div>
-                {(() => { const v = (pick === 'closed' && selClosed) || selList[sel.seg]; return v ? <StrokeLevel trackId={track.id} bank={bank} voice={v} name={nameOf(v)} /> : null; })()}
+                {selList[sel.seg] && <StrokeLevel trackId={track.id} bank={bank} voice={selList[sel.seg]} name={nameOf(selList[sel.seg])} />}
                 <Shape head={selHead} onChange={(fn) => edit((l) => fn(l[sel.head]))} />
               </>
             ) : (

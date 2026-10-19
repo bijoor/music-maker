@@ -361,10 +361,25 @@ function countVoice(v: { nodes?: { source?: AudioScheduledSourceNode | AudioSche
   src.addEventListener('ended', () => { voicesNow--; }, { once: true });
 }
 
+/** The last sound played immediately: the audio clock then, the page clock then, and when it was set to start. */
+let lastTrigger = { ctx: -1, perf: 0, t: 0 };
+/**
+ * When a sound played now should start. The iPad's audio clock moves in coarse steps, so two strokes a few
+ * milliseconds apart can read the same time and would sound as one: a stroke soon after another keeps their real
+ * spacing (by the page clock), capped so the head start never grows much.
+ */
+function startTime(ac: BaseAudioContext): number {
+  const ctx = ac.currentTime, perf = performance.now();
+  let t = ctx + LEAD;
+  if (ctx - lastTrigger.ctx < 0.1) t = Math.min(ctx + LEAD + 0.03, Math.max(t, lastTrigger.t + (perf - lastTrigger.perf) / 1000));
+  lastTrigger = { ctx, perf, t };
+  return t;
+}
+
 export function trigger(value: Record<string, unknown>, duration = 0.25) {
   const ac = getAudioContext();
   // Pass the tempo too: tempo-synced effects such as delay then match the pattern.
-  const play = () => superdough(value, ac.currentTime + LEAD, duration, r?.scheduler.cps ?? 0.5);
+  const play = () => superdough(value, startTime(ac), duration, r?.scheduler.cps ?? 0.5);
   const url = sampleUrl(value);
   if (!url || getLoadedBuffer(url)) return play();
   const asked = performance.now();

@@ -14,7 +14,7 @@ const STILL_PX = 8;
  * Wait to see whether a finger rests or lifts: `rest` runs if it is still down (and has not slid) after HOLD_MS,
  * `lift` if it comes up (or slides) first.
  */
-export function onRest(pointerId: number, x0: number, y0: number, rest: () => void, lift: () => void = () => {}, after = HOLD_MS) {
+function onRest(pointerId: number, x0: number, y0: number, rest: () => void, lift: () => void = () => {}, after = HOLD_MS) {
   let moved = false, settled = false;
   const finish = (rested: boolean) => {
     if (settled) return;
@@ -32,9 +32,6 @@ export function onRest(pointerId: number, x0: number, y0: number, rest: () => vo
   addEventListener('pointerup', up);
   addEventListener('pointercancel', up);
 }
-
-/** How quickly an open stroke is cut when its closed stroke takes over (seconds). */
-export const SWAP_FADE = 0.025;
 
 export function dampOnHold(sound: HeldNote, pointerId: number, x0: number, y0: number) {
   onRest(pointerId, x0, y0, () => sound.stop(DAMP_FADE));

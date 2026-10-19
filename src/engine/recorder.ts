@@ -110,10 +110,15 @@ function needClip(track: Track): number | null {
 export type Head = 'left' | 'right';
 /** The heads a stroke is played on, from the hand that plays it (both hands: both heads). */
 export const headsOf = (hand?: string): Head[] => (hand === 'both' ? ['left', 'right'] : hand === 'left' || hand === 'right' ? [hand] : []);
-/** The stroke last played on each head (by track), so the next one can stop it. */
-const ringing = new Map<string, engine.HeldNote>();
+/** Strokes still ringing on each head (by track), with when they were struck, so the next one can stop them. */
+const ringing = new Map<string, { note: engine.HeldNote; at: number }[]>();
 /** How quickly a stroke stops when the next one is played on its head (seconds). */
 const DAMP_FADE = 0.05;
+/**
+ * Strokes younger than this (ms) are left to ring: two fingers striking in quick succession (a roll, or the same
+ * stroke on two pads) should both be heard, not have the second cut the first before it sounds.
+ */
+const DAMP_AFTER_MS = 120;
 const velocityValue = (vel: number) => (vel < 1 ? { velocity: vel } : {});
 
 /**
@@ -124,15 +129,21 @@ export function drum(trackId: string, voice: string, sound: Record<string, unkno
   // Like a hand on a real drum, a new stroke stops the one still ringing on the same head. Without this, long
   // bass strokes (Ghe, Gha ring for seconds) pile up when played quickly, and the device turns its volume down.
   if (timeStamp !== undefined) engine.noteInputDelay(performance.now() - timeStamp);
-  for (const h of heads) ringing.get(`${trackId}:${h}`)?.stop(DAMP_FADE);
+  const now = performance.now();
+  for (const h of heads) {
+    const key = `${trackId}:${h}`;
+    const keep = (ringing.get(key) ?? []).filter((r) => {
+      if (now - r.at < DAMP_AFTER_MS) return true;
+      r.note.stop(DAMP_FADE);
+      return false;
+    });
+    ringing.set(key, keep);
+  }
   const hit = player.hold(trackId, { ...sound, ...velocityValue(vel) }, 1);
-  for (const h of heads) ringing.set(`${trackId}:${h}`, hit);
+  for (const h of heads) ringing.get(`${trackId}:${h}`)!.push({ note: hit, at: now });
   if (write) record(trackId, voice, timeStamp, vel);
   return hit;
 }
-
-/** Write a stroke into the selected clip later than it was played (once it is known which stroke it was). */
-export const recordDrum = (trackId: string, voice: string, timeStamp: number | undefined, vel = 1) => record(trackId, voice, timeStamp, vel);
 
 /** Write a drum hit into the selected clip (Edit: at the cursor; Record: at the step it was heard). */
 function record(trackId: string, voice: string, timeStamp: number | undefined, vel: number) {

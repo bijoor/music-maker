@@ -10,8 +10,8 @@
 // Mridangam and tabla: left-hand strokes on F D S A / R E W Q / V C X Z, right-hand strokes on J K L ; / U I O P /
 // M , . /, strokes for both hands on G H T Y B N.
 
-import { HANDS, padOrderVersion, padSpots } from '../model/padOrder';
-import { kitVoices, type Hand } from '../model/kit';
+import { padGrid, padOrderVersion } from '../model/padOrder';
+import { kitVoices } from '../model/kit';
 
 /**
  * The drum kit's keys, spread like a drummer's limbs: Space kicks, the snares and hats under the fingers, toms on
@@ -21,35 +21,35 @@ const KIT_KEYS: Record<string, string> = {
   ' ': 'bd', b: 'bd:1', c: 'sd', s: 'sd:1', d: 'rim', m: 'hh', l: 'oh',
   f: 'ht', g: 'mt', h: 'lt', p: 'cr', q: 'rd', r: 'cp', t: 'cb', y: 'sh', u: 'tb',
 };
-// Indian kits: each hand plays its own side of the keyboard, from the home row outwards (index finger first).
-const HAND_KEYS: Record<Hand, string> = { left: 'fdsarewqvcxz', both: 'ghtybn', right: 'jkl;uiopm,./' };
+/** Keyboard rows, top to bottom: an Indian kit's pad grid uses as many as it has rows, ending on the bottom one. */
+const GRID_KEYS = ['1234567890', 'qwertyuiop', 'asdfghjkl;', 'zxcvbnm,./'];
 
 /**
- * Keys for a kit's pads: the drum kit's fixed keys, or for the Indian kits each hand's side, one key per pad spot
- * (a stroke with two pads has two keys). Returns key → voice, voice → hint, and each spot's hint ('hand:index').
+ * Keys for a kit's pads: the drum kit's fixed keys, or for the Indian kits the keyboard laid over the pad grid
+ * (bottom row of pads on Z X C V …, the next on A S D F …, and so on; a stroke with two pads has two keys).
+ * Returns key → voice, voice → hint, and each pad's hint by cell.
  */
 function layout(bank?: string) {
-  const keys: Record<string, string> = {}, hints: Record<string, string> = {}, spotHints: Record<string, string> = {};
+  const keys: Record<string, string> = {}, hints: Record<string, string> = {}, cellHints: Record<number, string> = {};
   const label = (key: string) => (key === ' ' ? 'Space' : key.toUpperCase());
   const kit = kitVoices(bank);
   if (bank && kit.some((k) => k.hand)) {
-    const spots = padSpots(bank);
-    for (const h of HANDS) {
-      spots[h].forEach((v, i) => {
-        const key = HAND_KEYS[h][i];
-        if (!key || !v) return;
-        keys[key] = v; spotHints[`${h}:${i}`] = label(key);
-        hints[v] ??= label(key);
-      });
-    }
-    return { keys, hints, spotHints };
+    const g = padGrid(bank);
+    g.cells.forEach((v, i) => {
+      const r = Math.floor(i / g.cols), c = i % g.cols;
+      const key = GRID_KEYS[GRID_KEYS.length - g.rows + r]?.[c];
+      if (!key || !v) return;
+      keys[key] = v; cellHints[i] = label(key);
+      hints[v] ??= label(key);
+    });
+    return { keys, hints, cellHints };
   }
   for (const k of kit) {
     const mine = Object.keys(KIT_KEYS).filter((key) => KIT_KEYS[key] === k.voice);
     mine.forEach((key) => (keys[key] = k.voice));
     if (mine.length) hints[k.voice] = mine.map(label).join(' ');
   }
-  return { keys, hints, spotHints };
+  return { keys, hints, cellHints };
 }
 const layouts = new Map<string, ReturnType<typeof layout>>();
 const kitLayout = (bank?: string) => {
@@ -62,8 +62,8 @@ const kitLayout = (bank?: string) => {
 export const drumKey = (bank: string | undefined, key: string): string | undefined => kitLayout(bank).keys[key];
 /** The key shown on a pad. */
 export const drumHint = (bank: string | undefined, voice: string): string => kitLayout(bank).hints[voice] ?? '';
-/** The key shown on an Indian kit's pad spot. */
-export const spotHint = (bank: string | undefined, hand: Hand, i: number): string => kitLayout(bank).spotHints[`${hand}:${i}`] ?? '';
+/** The key shown on an Indian kit's pad (by its cell in the pad grid). */
+export const cellHint = (bank: string | undefined, i: number): string => kitLayout(bank).cellHints[i] ?? '';
 
 /** Piano layout: semitones above the C of the track's octave. */
 export const PIANO_KEYS: Record<string, number> = {

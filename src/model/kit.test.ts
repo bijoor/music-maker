@@ -70,30 +70,28 @@ describe('Indian kits', () => {
       .toEqual(['bd', 'bd:1', 'sd', 'sd:1', 'rim', 'hh', 'oh', 'ht', 'mt', 'lt', 'cr', 'rd', 'cp', 'cb', 'sh', 'tb']);
     expect(drumHint('RolandTR909', 'bd')).toBe('Space');
     expect(drumHint('RolandTR909', 'oh')).toBe('L');
-    // Indian kits: left hand from F outwards, right hand from J, both hands in the middle, each hand in pad order
-    // (by default the drum layout's, from the rim inward).
-    expect(['f', 'd', 'r', 'j', 'k', 'o', 'g', 'h'].map((k) => drumKey('Tabla', k))).toEqual(['tabla_ge', 'tabla_gha', 'tabla_kat', 'tabla_tak', 'tabla_ta', 'tabla_na', 'tabla_dha', 'tabla_dhin']);
-    expect(drumHint('Tabla', 'tabla_ge')).toBe('F');
-    expect(['f', 'a', 'j', 'p', 'g', '1'].map((k) => drumKey('Mridangam', k))).toEqual(['thom', 'ki', 'nam', 'ka', 'dhum', undefined]);
+    // Indian kits: the keyboard laid over the pad grid (by default left hand | both | right, four rows on 1 Q A Z).
+    expect(['1', '2', '3', '4', 'q', 'e', 'a', 'f', 'v', 's'].map((k) => drumKey('Tabla', k))).toEqual(['tabla_ge', 'tabla_gha', 'tabla_dha', 'tabla_tak', 'tabla_ghe', 'tabla_dhin', 'tabla_kat', 'tabla_tun', 'tabla_na', undefined]);
+    expect(drumHint('Tabla', 'tabla_ge')).toBe('1');
+    expect(['1', '3', '4'].map((k) => drumKey('Mridangam', k))).toEqual(['thom', 'dhum', 'nam']);
   });
 });
 
-describe('pad order', () => {
-  it('swaps pads and the keys that play them', async () => {
-    const { swapSpots, setSpot, resetPadOrder, padSpots } = await import('./padOrder');
-    const spots = padSpots('Tabla');
-    // Every hand has the same rows; spots left over are empty.
-    expect(spots.left.length / 2).toBe(spots.right.length / 2);
-    expect(spots.both.length).toBe(spots.left.length / 2);
-    swapSpots('Tabla', { hand: 'left', i: 0 }, { hand: 'left', i: 4 });
-    expect(padSpots('Tabla').left[0]).toBe('tabla_kat');
-    expect(drumKey('Tabla', 'f')).toBe('tabla_kat');
-    // A second pad for a stroke, in an empty spot, with a key of its own.
-    const empty = padSpots('Tabla').left.indexOf('');
-    setSpot('Tabla', { hand: 'left', i: empty }, 'tabla_ge');
-    expect(drumKey('Tabla', 'fdsarewqvcxz'[empty])).toBe('tabla_ge');
-    expect(drumKey('Tabla', 'r')).toBe('tabla_ge');
+describe('pad grid', () => {
+  it('sets pads, resizes the grid and moves the keys with it', async () => {
+    const { padGrid, setCell, resizeGrid, resetPadOrder } = await import('./padOrder');
+    const g = padGrid('Tabla');
+    expect([g.rows, g.cols]).toEqual([4, 5]);
+    // A second pad for a stroke, in an empty cell, with a key of its own (row 3, column 2: S).
+    setCell('Tabla', 2 * 5 + 1, 'tabla_ge');
+    expect(drumKey('Tabla', 's')).toBe('tabla_ge');
+    expect(drumKey('Tabla', '1')).toBe('tabla_ge');
+    // Three rows: the keyboard's three letter rows; pads keep their row and column.
+    resizeGrid('Tabla', 3, 5);
+    expect(padGrid('Tabla').cells.length).toBe(15);
+    expect(drumKey('Tabla', 'q')).toBe('tabla_ge');
+    expect(drumKey('Tabla', 'x')).toBe('tabla_ge');
     resetPadOrder('Tabla');
-    expect(drumKey('Tabla', 'f')).toBe('tabla_ge');
+    expect(drumKey('Tabla', '1')).toBe('tabla_ge');
   });
 });

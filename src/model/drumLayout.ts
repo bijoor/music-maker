@@ -19,8 +19,6 @@ export interface Head {
   parts: Record<Part, string[]>;
   /** How far each area's segments are turned clockwise from segment 1 centred on the top, as a fraction of a turn. */
   turn?: Partial<Record<Part, number>>;
-  /** Closed strokes: what a segment plays when the finger stays resting on it (e.g. Te where a lift plays Tin). */
-  closed?: Partial<Record<Part, string[]>>;
   /** Velocity by depth: which side of each area plays loudest ('out', the default: its outer edge). */
   loud?: Partial<Record<Part, 'in' | 'out'>>;
 }
