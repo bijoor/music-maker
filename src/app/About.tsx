@@ -18,6 +18,7 @@ function Latency() {
         <li>Audio buffer: {ms(s.base)} · output: {ms(s.output)}</li>
         <li>About {ms(total)} from touch to sound, plus any Bluetooth delay · {s.rate} Hz, {s.state}</li>
         <li>Sounds playing now: {s.voices} · notes tracked: {s.held} (both should fall back near 0 when you stop playing)</li>
+        <li>Presses the engine was too late for (played again at once): {s.dropped}</li>
       </ul>
     </section>
   );

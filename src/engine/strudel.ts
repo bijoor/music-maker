@@ -348,12 +348,14 @@ export function latencyStats() {
     input: avg(recent.input), engine: avg(recent.engine), lead: LEAD * 1000,
     base: ac.baseLatency != null ? ac.baseLatency * 1000 : null,
     output: ac.outputLatency ? ac.outputLatency * 1000 : null,
-    rate: ac.sampleRate, state: ac.state, voices: voicesNow, held: live.size + holders.size,
+    rate: ac.sampleRate, state: ac.state, voices: voicesNow, held: live.size + holders.size, dropped,
   };
 }
 const startedAt = new Map<string, number>();
 /** Sounds playing right now (played from pads and keys), for the About panel: it should fall back to 0 when quiet. */
 let voicesNow = 0;
+/** Presses the engine was too late for, played again (for the About panel). */
+let dropped = 0;
 function countVoice(v: { nodes?: { source?: AudioScheduledSourceNode | AudioScheduledSourceNode[] } }) {
   const src = [v.nodes?.source ?? []].flat()[0];
   if (!src) return;
@@ -404,6 +406,16 @@ function wrapSound(s: string) {
     ...entry,
     onTrigger: async (t: number, value: Record<string, unknown>, ...rest: unknown[]) => {
       let voice = await onTrigger(t, value, ...rest);
+      // Too late: the engine drops a sound it could not start by its time (the sampler returns nothing, or the
+      // voice started where no one hears it). A key or pad press is then played again at once, a little late,
+      // rather than lost — on a busy moment of fast playing, quick taps were simply going missing.
+      const late = !voice || getAudioContext().currentTime > t;
+      if (late && holders.has(String(value.holdId)) && !value.retry) {
+        try { voice?.stop?.(0); } catch { /* not started */ }
+        dropped++;
+        setTimeout(() => trigger({ ...value, retry: true }, Number(value.duration) || 0.25), 0);
+        return undefined;
+      }
       if (voice) countVoice(voice);
       const began = startedAt.get(String(value.holdId));
       if (began !== undefined) { startedAt.delete(String(value.holdId)); keep(recent.engine, performance.now() - began); }
