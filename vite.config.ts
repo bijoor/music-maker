@@ -33,6 +33,8 @@ export default defineConfig(({ command }) => ({
         globPatterns: ['**/*.{js,css,html,svg,png,woff2,json,mp3,wav}'],
         // Control the page from the first visit, so sounds are cached right away (updates still wait for the prompt).
         clientsClaim: true,
+        // Pages of their own (the bare tap test) open as themselves, not as the app.
+        navigateFallbackDenylist: [/taps\.html$/],
         maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
         // Samples and soundfonts come from GitHub and jsDelivr; keep every one used so the app works offline afterwards.
         runtimeCaching: [

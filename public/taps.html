@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+<title>Bare tap test</title>
+<style>
+  /* A tap test with none of the app: two pads, plain Web Audio, and nothing on screen changes while playing. */
+  :root { color-scheme: dark; --bg: #16171b; --panel: #23252b; --line: #3a3d45; --fg: #e8e8ea; --muted: #9a9ca3; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--fg); font: 14px -apple-system, system-ui, sans-serif; touch-action: manipulation; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+  body { display: flex; flex-direction: column; gap: 10px; padding: 12px 16px; }
+  .bar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  button { font: inherit; color: inherit; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; }
+  button[aria-pressed="true"] { background: #4b6bfb; border-color: #4b6bfb; }
+  .pads { flex: 1; min-height: 200px; display: grid; grid-template-columns: 1fr 1fr; gap: 16px; touch-action: none; }
+  .pad { display: grid; place-content: center; font-size: 32px; font-weight: 700; border-radius: 18px; border: 1px solid var(--line); background: var(--panel); touch-action: none; }
+  #out { display: none; flex: 1; min-height: 0; overflow: auto; white-space: pre; font: 12px ui-monospace, monospace; background: var(--panel); border-radius: 8px; padding: 8px; -webkit-user-select: text; user-select: text; }
+  textarea { width: 100%; min-height: 120px; font: 12px ui-monospace, monospace; background: var(--panel); color: inherit; border: 1px solid var(--line); border-radius: 8px; }
+  .muted { color: var(--muted); }
+</style>
+</head>
+<body>
+  <div class="bar">
+    <strong>Bare tap test</strong>
+    <button id="sound" aria-pressed="true">Sound on</button>
+    <button id="show">Show results</button>
+    <button id="copy">Copy log</button>
+    <button id="reset">Reset</button>
+    <a class="muted" href="./">Back to the app</a>
+  </div>
+  <p class="muted" style="margin:0">Tap Reset, play the two pads alternately from slow to fast, then Show results. Nothing on screen changes while you play.</p>
+  <div class="pads" id="pads">
+    <div class="pad" data-pad="0">Na</div>
+    <div class="pad" data-pad="1">Ge</div>
+  </div>
+  <div id="out"></div>
+<script>
+  const NAMES = ['Na', 'Ge'], FILES = ['samples/tabla/na.wav', 'samples/tabla/ge.wav'];
+  let ac = null, buffers = [], soundOn = true;
+  let t0 = performance.now(), log = [], touches = [0, 0], presses = [0, 0], off = 0, lastPress = null;
+
+  function audio() {
+    if (!ac) {
+      ac = new (window.AudioContext || window.webkitAudioContext)();
+      FILES.forEach((f, i) => fetch(f).then((r) => r.arrayBuffer()).then((b) => ac.decodeAudioData(b)).then((d) => { buffers[i] = d; }).catch(() => {}));
+    }
+    if (ac.state !== 'running') ac.resume();
+  }
+  function play(i) {
+    if (!soundOn || !ac || !buffers[i]) return;
+    const src = ac.createBufferSource();
+    src.buffer = buffers[i];
+    src.connect(ac.destination);
+    src.start();
+  }
+  const padOf = (el) => (el && el.closest ? el.closest('.pad') : null);
+  const at = (e) => ((e.timeStamp - t0) / 1000).toFixed(3) + 's';
+
+  // Touches: sound straight from the touch, no drawing.
+  document.addEventListener('touchstart', (e) => {
+    audio();
+    for (const t of e.changedTouches) {
+      const pad = padOf(t.target);
+      if (!pad) { off++; log.push(at(e) + ' — touch off the pads'); continue; }
+      const i = +pad.dataset.pad;
+      touches[i]++;
+      play(i);
+      log.push(at(e) + ' ' + NAMES[i] + ' touch');
+    }
+    if (padOf(e.target)) e.preventDefault();
+  }, { capture: true, passive: false });
+  document.addEventListener('touchend', (e) => {
+    for (const t of e.changedTouches) { const pad = padOf(t.target); if (pad) log.push(at(e) + ' ' + NAMES[+pad.dataset.pad] + ' lift'); }
+  }, { capture: true, passive: true });
+  document.addEventListener('touchcancel', (e) => { log.push(at(e) + ' touch cancelled ×' + e.changedTouches.length); }, { capture: true, passive: true });
+  document.addEventListener('pointerdown', (e) => {
+    const pad = padOf(e.target);
+    if (!pad || e.pointerType === 'mouse') return;
+    const i = +pad.dataset.pad;
+    presses[i]++;
+    const gap = lastPress === null ? '' : ' +' + Math.round(e.timeStamp - lastPress) + 'ms';
+    lastPress = e.timeStamp;
+    log.push(at(e) + ' ' + NAMES[i] + ' press' + gap);
+  }, { capture: true, passive: true });
+  for (const type of ['gesturestart', 'gesturechange', 'gestureend']) document.addEventListener(type, (e) => e.preventDefault(), { passive: false });
+  // Mouse (desktop): play from the pointer instead.
+  document.addEventListener('mousedown', (e) => { const pad = padOf(e.target); if (pad) { audio(); play(+pad.dataset.pad); } });
+
+  function report() {
+    return [
+      'Bare tap test · sound ' + (soundOn ? 'on' : 'off'),
+      'Touches ' + (touches[0] + touches[1]) + ' (Na ' + touches[0] + ', Ge ' + touches[1] + ') · presses ' + (presses[0] + presses[1]) + ' (Na ' + presses[0] + ', Ge ' + presses[1] + ') · touches off the pads ' + off,
+      'Log (oldest first):',
+      ...log,
+    ].join('\n');
+  }
+  const out = document.getElementById('out');
+  document.getElementById('show').onclick = () => { out.textContent = report(); out.style.display = 'block'; };
+  document.getElementById('reset').onclick = () => { t0 = performance.now(); log = []; touches = [0, 0]; presses = [0, 0]; off = 0; lastPress = null; out.style.display = 'none'; };
+  document.getElementById('sound').onclick = (e) => { soundOn = !soundOn; e.target.setAttribute('aria-pressed', soundOn); e.target.textContent = soundOn ? 'Sound on' : 'Sound off'; };
+  document.getElementById('copy').onclick = async (e) => {
+    const text = report();
+    try { await navigator.clipboard.writeText(text); e.target.textContent = 'Copied'; setTimeout(() => { e.target.textContent = 'Copy log'; }, 1500); }
+    catch { const ta = document.createElement('textarea'); ta.value = text; out.replaceChildren(ta); out.style.display = 'block'; ta.focus(); ta.select(); }
+  };
+</script>
+</body>
+</html>

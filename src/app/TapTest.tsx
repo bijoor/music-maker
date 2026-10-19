@@ -143,6 +143,7 @@ export default function TapTest() {
     <PanelFrame title="Tap test" actions={
       <>
         <button className={`btn sm${appPath ? ' on' : ''}`} aria-pressed={appPath} disabled={!track} title={track ? 'Play through the drums’ own stroke handling on the selected drum track' : 'Select a drum track to use its stroke handling'} onClick={() => setAppPath(!appPath)}>App’s stroke handling</button>
+        <a className="btn sm" href={`${import.meta.env.BASE_URL}taps.html`} title="The same test with none of the app: plain Web Audio, nothing drawn while you play">Bare test page</a>
         <button className="btn sm" onClick={copy}>{copied ? 'Copied' : 'Copy log'}</button>
         <button className="btn sm" onClick={reset}>Reset</button>
       </>
