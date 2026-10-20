@@ -17,6 +17,7 @@ function Latency() {
         <li>Engine starting the sound: {ms(s.engine)} (must stay under the {ms(s.lead)} head start)</li>
         <li>Audio buffer: {ms(s.base)} · output: {ms(s.output)}</li>
         <li>About {ms(total)} from touch to sound, plus any Bluetooth delay · {s.rate} Hz, {s.state}</li>
+        {s.native && <li>iPad app, iOS audio: buffer {s.native.buffer.toFixed(1)} ms (asked {s.native.askedBuffer.toFixed(1)}) · output {s.native.output.toFixed(1)} ms · {s.native.rate} Hz · {s.native.route}</li>}
         <li>Sounds playing now: {s.voices} · notes tracked: {s.held} (both should fall back near 0 when you stop playing)</li>
         <li>Presses the engine was too late for (played again at once): {s.dropped}</li>
       </ul>

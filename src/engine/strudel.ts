@@ -394,6 +394,12 @@ export function noteMissed(why: 'drum' | 'empty') { if (why === 'drum') taps.off
 export function noteBetween() { taps.between++; }
 export function resetTaps() { watchTaps(); Object.assign(taps, { touches: 0, presses: 0, strokes: 0, started: 0, softest: 1, between: 0, offDrum: 0, empty: 0 }); }
 
+/** In the native iPad app (ios/): the iOS audio session's buffer and output latency, updated every second. */
+type NativeAudio = { buffer: number; askedBuffer: number; output: number; rate: number; route: string };
+function nativeAudio(): NativeAudio | null {
+  return (globalThis as { musicMakerNative?: { audio?: NativeAudio } }).musicMakerNative?.audio ?? null;
+}
+
 export function latencyStats() {
   watchTaps();
   const ac = getAudioContext() as AudioContext & { outputLatency?: number };
@@ -402,6 +408,7 @@ export function latencyStats() {
     base: ac.baseLatency != null ? ac.baseLatency * 1000 : null,
     output: ac.outputLatency ? ac.outputLatency * 1000 : null,
     rate: ac.sampleRate, state: ac.state, voices: voicesNow, held: live.size + holders.size, dropped, taps: { ...taps },
+    native: nativeAudio(),
   };
 }
 const startedAt = new Map<string, number>();

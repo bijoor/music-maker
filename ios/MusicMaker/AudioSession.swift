@@ -5,6 +5,10 @@ import UIKit
 /// (a music player) while it plays. Mixing with other apps was tried and dropped: iOS then sizes the audio buffer
 /// for the other app, and the pads lag noticeably.
 ///
+/// The audio buffer is asked to be one Web Audio render block (128 frames, 2.7 ms at 48 kHz), as small as Safari
+/// gets; iOS may hand out a larger one when the session is activated or the route changes, so `keepBufferSmall()`
+/// asks again whenever the buffer in use is larger (WebViewController calls it every second).
+///
 /// The session is never activated at launch (that would stop other apps' audio before anything plays); WebKit
 /// activates it when the page plays. After an interruption (a call, Siri) ends it is activated again, and on every
 /// return to the app the page is told to resume its sound (if iOS wants a tap first, the next tap does it).
@@ -43,13 +47,42 @@ final class AudioSession {
         }
         center.addObserver(forName: UIApplication.willEnterForegroundNotification, object: nil, queue: .main) { [weak self] _ in
             self?.note("app back in the foreground")
-            self?.reactivate(activate: false)
+            self?.keepBufferSmall()
+            self?.onReactivated?()
         }
     }
 
     func start() {
         setCategory()
-        try? AVAudioSession.sharedInstance().setPreferredIOBufferDuration(0.005) // short buffer: lower pad latency
+        keepBufferSmall()
+    }
+
+    /// One Web Audio render block at the current sample rate.
+    private var wantedBuffer: TimeInterval { 128 / max(AVAudioSession.sharedInstance().sampleRate, 8000) }
+
+    /// Asks for the small buffer again if the one in use is larger (and was not already asked for at this rate).
+    func keepBufferSmall() {
+        let session = AVAudioSession.sharedInstance()
+        let wanted = wantedBuffer
+        guard session.ioBufferDuration > wanted * 1.5 || abs(session.preferredIOBufferDuration - wanted) > 0.0002 else { return }
+        do {
+            try session.setPreferredIOBufferDuration(wanted)
+            if session.ioBufferDuration > wanted * 1.5 { note(String(format: "asked for a %.1f ms buffer, have %.1f ms", wanted * 1000, session.ioBufferDuration * 1000)) }
+        } catch {
+            note("could not set the buffer: \(error.localizedDescription)")
+        }
+    }
+
+    /// What the page's About panel shows about the native side (milliseconds, Hz).
+    var info: [String: Any] {
+        let session = AVAudioSession.sharedInstance()
+        return [
+            "buffer": session.ioBufferDuration * 1000,
+            "askedBuffer": session.preferredIOBufferDuration * 1000,
+            "output": session.outputLatency * 1000,
+            "rate": session.sampleRate,
+            "route": session.currentRoute.outputs.map(\.portName).joined(separator: ", "),
+        ]
     }
 
     private func reactivate(activate: Bool) {
@@ -57,6 +90,7 @@ final class AudioSession {
         if activate {
             do { try AVAudioSession.sharedInstance().setActive(true); note("session active") } catch { note("could not activate: \(error.localizedDescription)") }
         }
+        keepBufferSmall()
         onReactivated?()
     }
 

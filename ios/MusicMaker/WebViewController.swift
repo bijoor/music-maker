@@ -8,12 +8,16 @@ import WebKit
 /// recognizer and whether it was kept). With `relay` on, every touch the iPad reports is also sent to the page as a
 /// `nativetouch` event on window, `detail: [{ id, phase: 'start' | 'end' | 'cancel', x, y, t }]` (x, y in CSS px;
 /// t in ms of system uptime), whether or not WebKit delivers it as a touch event.
-final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDelegate {
+final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDelegate, WKScriptMessageHandler {
     private let settings: Settings
     private var webView: WKWebView!
     private var stripper: GestureStripper?
     private var touchIDs: [ObjectIdentifier: Int] = [:]
     private var nextTouchID = 1
+    /// Native touches go only to a page that asked for them (the bare tap test), so playing in the app never waits
+    /// behind an extra message to the page.
+    private var pageWantsTouches = false
+    private var audioTimer: Timer?
 
     init(settings: Settings) {
         self.settings = settings
@@ -30,6 +34,7 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
         config.suppressesIncrementalRendering = false
         config.dataDetectorTypes = []
         config.userContentController.addUserScript(WKUserScript(source: bootstrapScript(), injectionTime: .atDocumentStart, forMainFrameOnly: true))
+        config.userContentController.add(self, name: "musicMakerNative")
         if settings.gestures == .all {
             config.userContentController.addUserScript(WKUserScript(source: Self.clickScript, injectionTime: .atDocumentStart, forMainFrameOnly: true))
         }
@@ -54,6 +59,11 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
             self?.webView.evaluateJavaScript("dispatchEvent(new Event('focus')); 0")
         }
         AudioSession.shared.onLog = { [weak self] _ in self?.sendAudioLog() }
+        // Every second: keep the audio buffer small and give the page the native audio numbers (About → Latency).
+        audioTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
+            AudioSession.shared.keepBufferSmall()
+            self?.sendAudioInfo()
+        }
         stripper = GestureStripper(webView: webView, mode: settings.gestures)
         webView.load(URLRequest(url: settings.startURL))
     }
@@ -67,7 +77,7 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
 
     func windowSaw(_ touches: Set<UITouch>, event: UIEvent) {
         if touches.contains(where: { $0.phase == .began }) { stripper?.enforce() }
-        guard settings.relayTouches else { return }
+        guard settings.relayTouches, pageWantsTouches else { return }
         var items: [String] = []
         for touch in touches where touch.view?.isDescendant(of: webView) ?? false {
             let key = ObjectIdentifier(touch)
@@ -91,6 +101,21 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
     }
 
     // MARK: Page
+
+    /// Requests from the page: `{ wantsTouches: true }` (the bare tap test) turns on native touches for this page.
+    func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {
+        guard let body = message.body as? [String: Any] else { return }
+        if body["wantsTouches"] as? Bool == true { pageWantsTouches = true }
+    }
+
+    func webView(_ webView: WKWebView, didCommit navigation: WKNavigation!) {
+        pageWantsTouches = false
+    }
+
+    private func sendAudioInfo() {
+        guard let json = (try? JSONSerialization.data(withJSONObject: AudioSession.shared.info)).flatMap({ String(data: $0, encoding: .utf8) }) else { return }
+        webView?.evaluateJavaScript("if (window.musicMakerNative) window.musicMakerNative.audio = \(json); 0")
+    }
 
     /// The native audio session's recent events, for the bare tap test's results.
     private func sendAudioLog() {

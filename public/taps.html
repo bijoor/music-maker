@@ -131,7 +131,8 @@
       'Touches ' + (touches[0] + touches[1]) + ' (Na ' + touches[0] + ', Ge ' + touches[1] + ') · presses ' + (presses[0] + presses[1]) + ' (Na ' + presses[0] + ', Ge ' + presses[1] + ') · touches off the pads ' + off + ' · hidden touches found ' + hidden,
       'Log (oldest first):',
       ...log,
-      ...(native ? ['Audio: this page ' + (ac ? ac.state : 'not started') + ' · navigator.audioSession ' + (navigator.audioSession ? navigator.audioSession.type : 'none'),
+      ...(native ? ['Audio: this page ' + (ac ? ac.state + ', buffer ' + (ac.baseLatency * 1000).toFixed(1) + ' ms, output ' + ((ac.outputLatency || 0) * 1000).toFixed(1) + ' ms' : 'not started') + ' · navigator.audioSession ' + (navigator.audioSession ? navigator.audioSession.type : 'none'),
+        ...(native.audio ? ['iOS audio: buffer ' + native.audio.buffer.toFixed(1) + ' ms (asked ' + native.audio.askedBuffer.toFixed(1) + ') · output ' + native.audio.output.toFixed(1) + ' ms · ' + native.audio.rate + ' Hz · ' + native.audio.route] : []),
         'Native audio session (newest last):', ...(native.audioLog || []), 'WebKit gesture recognizers:', ...native.report] : []),
     ].join('\n');
   }
@@ -145,6 +146,8 @@
     note.hidden = false;
     const src = document.getElementById('source');
     src.hidden = !native.relay;
+    // Native touches are sent only to pages that ask (so the app itself never waits for them).
+    try { window.webkit.messageHandlers.musicMakerNative.postMessage({ wantsTouches: true }); } catch {}
     src.onclick = () => { fromNative = !fromNative; src.setAttribute('aria-pressed', fromNative); src.textContent = fromNative ? 'Play from native touches' : 'Play from web touches'; };
   }
   document.getElementById('copy').onclick = async (e) => {
