@@ -29,11 +29,17 @@ export default function Transport() {
       const started = engine.isStarted();
       const c = started ? engine.cycleNow() : 0;
       const bar = Math.floor(c), beat = Math.floor((c - bar) * 4);
-      const key = started ? `${bar}:${beat}` : 'stopped';
+      const key = started ? `${bar}:${beat}:${useStore.getState().selected.trackId}` : 'stopped';
       if (key !== last) {
         last = key;
         const first = player.songStartBar();
-        if (barRef.current) barRef.current.textContent = started && bar < first ? 'Count-in' : `Bar ${started ? bar - first + 1 : 1}`;
+        // Where the selected track is in its clip (Bar 3 of 4), so its first bar is plain with nothing else playing.
+        const pos = started && bar >= first ? engine.position(useStore.getState().selected.trackId) : null;
+        if (barRef.current) {
+          barRef.current.textContent = started && bar < first ? 'Count-in'
+            : pos && pos.period > 1 ? `Bar ${Math.floor(pos.bars) + 1} of ${pos.period}`
+            : `Bar ${started ? bar - first + 1 : 1}`;
+        }
         dotsRef.current?.querySelectorAll('i').forEach((d, i) => d.classList.toggle('on', started && i <= beat));
       }
       raf = requestAnimationFrame(tick);

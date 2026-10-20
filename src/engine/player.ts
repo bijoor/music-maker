@@ -40,8 +40,14 @@ async function compileCached(code: string) {
 }
 
 // Clicks for the count-in and the metronome, on their own engine tracks (not part of the song): a high beep on the
-// first beat of each bar and lower ones on the others, so the start of the bar is plain even with nothing else playing.
-const CLICK = 'note("[a5 e5 e5 e5]").s("sine").attack(.001).decay(.06).sustain(0).release(.02).gain("[.8 .5 .5 .5]")';
+// first beat of each bar and lower ones on the others, so the start of the bar is plain even with nothing else
+// playing. Over a clip of several bars, the first beat of its first bar is higher still (`bars` > 1).
+const CLICK_SOUND = '.s("sine").attack(.001).decay(.06).sustain(0).release(.02)';
+const click = (bars = 1) =>
+  bars > 1
+    ? `note("<[e6 e5 e5 e5] [a5 e5 e5 e5]!${bars - 1}>")${CLICK_SOUND}.gain("<[.9 .5 .5 .5] [.75 .5 .5 .5]!${bars - 1}>")`
+    : `note("[a5 e5 e5 e5]")${CLICK_SOUND}.gain("[.8 .5 .5 .5]")`;
+const CLICK = click();
 
 async function apply(song: Song, notBefore = 0) {
   const { songMode, sceneOrigin } = useStore.getState();
@@ -72,6 +78,7 @@ async function apply(song: Song, notBefore = 0) {
     }
     playing.set(tc.trackId, { code, key: tc.playKey });
   }
+  followMetronome();
 }
 
 /** Queue a sync so changes apply in order even though compiling is asynchronous. */
@@ -109,9 +116,26 @@ export async function play(opts: { countIn?: boolean } = {}) {
 let songStart = 0;
 export const songStartBar = () => songStart;
 
+/** Bars the metronome marks as one clip: the selected track's loop (its clips in turn), else 1. */
+function metroBars(): number {
+  const { selected } = useStore.getState();
+  const tc = latest?.tracks.find((t) => t.trackId === selected.trackId);
+  return tc && tc.playKey !== 'silence' ? Math.max(1, Math.min(16, tc.period)) : 1;
+}
+let metroAt = 0;
 async function setMetronome(on: boolean) {
   if (!engine.isStarted()) return;
-  engine.launch('__metro', on ? await compileCached(CLICK) : engine.silence);
+  if (!on) { metroAt = 0; engine.launch('__metro', engine.silence); return; }
+  // In step with the scene's tracks, so the clip's first bar gets the highest beep.
+  const bars = metroBars();
+  metroAt = bars;
+  const origin = useStore.getState().sceneOrigin ?? songStart;
+  engine.launch('__metro', await compileCached(click(bars)), { period: bars, origin });
+}
+/** Re-mark the clip when the selected track or its length changes. */
+function followMetronome() {
+  const { metronome, transport } = useStore.getState();
+  if (metronome && transport === 'playing' && metroAt && metroBars() !== metroAt) void setMetronome(true);
 }
 
 export function stop() {
@@ -274,6 +298,7 @@ const launchesChanged = (a: Song, b: Song) =>
 
 useStore.subscribe((state, prev) => {
   if (state.metronome !== prev.metronome && state.transport === 'playing') setMetronome(state.metronome);
+  if (state.selected.trackId !== prev.selected.trackId) followMetronome();
   if (state.song === prev.song && state.songMode === prev.songMode) return;
   if (state.song.bpm !== prev.song.bpm) engine.setBpm(state.song.bpm);
   if (state.transport !== 'playing') return;
