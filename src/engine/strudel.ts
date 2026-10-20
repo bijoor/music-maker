@@ -81,23 +81,14 @@ export function unlockAudio() {
   src.start(0);
 }
 
-const MIX_KEY = 'music-maker:mixAudio';
-/** Whether the app's sound plays over other apps' audio (a music player) instead of stopping it (per device). */
-export function mixesWithOthers(): boolean {
-  try { return localStorage.getItem(MIX_KEY) === '1'; } catch { return false; }
-}
 /**
- * How iOS treats the app's sound: 'playback' (the default) stops other apps' audio and ignores Silent mode;
- * 'ambient' plays along with other apps' audio, but is muted in Silent mode.
+ * iOS plays the app's sound as 'playback': it stops other apps' audio (a music player) while playing and is not
+ * muted in Silent mode. Mixing with other apps was tried and dropped: iOS then sizes the audio buffer for the other
+ * app, and the pads lag noticeably.
  */
 function setAudioSessionType() {
   const nav = navigator as Navigator & { audioSession?: { type: string } };
-  if (nav.audioSession) nav.audioSession.type = mixesWithOthers() ? 'ambient' : 'playback';
-}
-export function setMixWithOthers(on: boolean) {
-  try { localStorage.setItem(MIX_KEY, on ? '1' : '0'); } catch { /* this session only */ }
-  setAudioSessionType();
-  wakeAudio();
+  if (nav.audioSession) nav.audioSession.type = 'playback';
 }
 
 /**

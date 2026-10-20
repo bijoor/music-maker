@@ -8,7 +8,7 @@ import WebKit
 /// recognizer and whether it was kept). With `relay` on, every touch the iPad reports is also sent to the page as a
 /// `nativetouch` event on window, `detail: [{ id, phase: 'start' | 'end' | 'cancel', x, y, t }]` (x, y in CSS px;
 /// t in ms of system uptime), whether or not WebKit delivers it as a touch event.
-final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDelegate, WKScriptMessageHandler {
+final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDelegate {
     private let settings: Settings
     private var webView: WKWebView!
     private var stripper: GestureStripper?
@@ -30,8 +30,6 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
         config.suppressesIncrementalRendering = false
         config.dataDetectorTypes = []
         config.userContentController.addUserScript(WKUserScript(source: bootstrapScript(), injectionTime: .atDocumentStart, forMainFrameOnly: true))
-        config.userContentController.addUserScript(WKUserScript(source: Self.audioScript, injectionTime: .atDocumentStart, forMainFrameOnly: true))
-        config.userContentController.add(self, name: "musicMakerAudio")
         if settings.gestures == .all {
             config.userContentController.addUserScript(WKUserScript(source: Self.clickScript, injectionTime: .atDocumentStart, forMainFrameOnly: true))
         }
@@ -55,6 +53,7 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
         AudioSession.shared.onReactivated = { [weak self] in
             self?.webView.evaluateJavaScript("dispatchEvent(new Event('focus')); 0")
         }
+        AudioSession.shared.onLog = { [weak self] _ in self?.sendAudioLog() }
         stripper = GestureStripper(webView: webView, mode: settings.gestures)
         webView.load(URLRequest(url: settings.startURL))
     }
@@ -93,35 +92,19 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
 
     // MARK: Page
 
-    /// The page's "Play over other apps" setting, sent by `audioScript`.
-    func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {
-        guard message.name == "musicMakerAudio", let body = message.body as? [String: Any], let mix = body["mix"] as? Bool else { return }
-        AudioSession.shared.setMixWithOthers(mix)
+    /// The native audio session's recent events, for the bare tap test's results.
+    private func sendAudioLog() {
+        let json = (try? JSONSerialization.data(withJSONObject: AudioSession.shared.log)).flatMap { String(data: $0, encoding: .utf8) } ?? "[]"
+        webView?.evaluateJavaScript("if (window.musicMakerNative) window.musicMakerNative.audioLog = \(json); 0")
     }
 
-    /// Reports the page's "Play over other apps" setting (localStorage 'music-maker:mixAudio') at load and whenever the
-    /// page changes it, so the native audio session follows it.
-    private static let audioScript = """
-    (() => {
-      const KEY = 'music-maker:mixAudio';
-      const post = () => {
-        try { window.webkit.messageHandlers.musicMakerAudio.postMessage({ mix: localStorage.getItem(KEY) === '1' }); } catch {}
-      };
-      const setItem = Storage.prototype.setItem;
-      Storage.prototype.setItem = function (key, value) {
-        setItem.call(this, key, value);
-        if (key === KEY && this === window.localStorage) post();
-      };
-      post();
-    })();
-    """
-
     private func bootstrapScript() -> String {
-        "window.musicMakerNative = { gestures: '\(settings.gestures.rawValue)', relay: \(settings.relayTouches), report: [] };"
+        "window.musicMakerNative = { gestures: '\(settings.gestures.rawValue)', relay: \(settings.relayTouches), report: [], audioLog: [] };"
     }
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
         stripper?.enforce()
+        sendAudioLog()
         let report = (try? JSONSerialization.data(withJSONObject: stripper?.report ?? [])).flatMap { String(data: $0, encoding: .utf8) } ?? "[]"
         webView.evaluateJavaScript("if (window.musicMakerNative) window.musicMakerNative.report = \(report); 0") { _, error in
             if let error { NSLog("MusicMaker report failed: %@", "\(error)") }

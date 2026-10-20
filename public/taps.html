@@ -62,6 +62,7 @@
   function audio() {
     if (!ac) {
       ac = new (window.AudioContext || window.webkitAudioContext)();
+      ac.onstatechange = () => log.push(((performance.now() - t0) / 1000).toFixed(3) + 's audio ' + ac.state);
       FILES.forEach((f, i) => fetch(f).then((r) => r.arrayBuffer()).then((b) => ac.decodeAudioData(b)).then((d) => { buffers[i] = d; }).catch(() => {}));
     }
     if (ac.state !== 'running') ac.resume();
@@ -130,7 +131,8 @@
       'Touches ' + (touches[0] + touches[1]) + ' (Na ' + touches[0] + ', Ge ' + touches[1] + ') · presses ' + (presses[0] + presses[1]) + ' (Na ' + presses[0] + ', Ge ' + presses[1] + ') · touches off the pads ' + off + ' · hidden touches found ' + hidden,
       'Log (oldest first):',
       ...log,
-      ...(native ? ['WebKit gesture recognizers:', ...native.report] : []),
+      ...(native ? ['Audio: this page ' + (ac ? ac.state : 'not started') + ' · navigator.audioSession ' + (navigator.audioSession ? navigator.audioSession.type : 'none'),
+        'Native audio session (newest last):', ...(native.audioLog || []), 'WebKit gesture recognizers:', ...native.report] : []),
     ].join('\n');
   }
   const out = document.getElementById('out');
