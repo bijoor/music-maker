@@ -32,7 +32,8 @@ export default function Transport() {
       const key = started ? `${bar}:${beat}` : 'stopped';
       if (key !== last) {
         last = key;
-        if (barRef.current) barRef.current.textContent = `Bar ${started ? bar + 1 : 1}`;
+        const first = player.songStartBar();
+        if (barRef.current) barRef.current.textContent = started && bar < first ? 'Count-in' : `Bar ${started ? bar - first + 1 : 1}`;
         dotsRef.current?.querySelectorAll('i').forEach((d, i) => d.classList.toggle('on', started && i <= beat));
       }
       raf = requestAnimationFrame(tick);

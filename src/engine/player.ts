@@ -39,8 +39,9 @@ async function compileCached(code: string) {
   return p;
 }
 
-// Clicks for the count-in and the metronome, on their own engine tracks (not part of the song).
-const CLICK = 's("rim*4").bank("RolandTR909").gain("[.9 .45 .45 .45]")';
+// Clicks for the count-in and the metronome, on their own engine tracks (not part of the song): a high beep on the
+// first beat of each bar and lower ones on the others, so the start of the bar is plain even with nothing else playing.
+const CLICK = 'note("[a5 e5 e5 e5]").s("sine").attack(.001).decay(.06).sustain(0).release(.02).gain("[.8 .5 .5 .5]")';
 
 async function apply(song: Song, notBefore = 0) {
   const { songMode, sceneOrigin } = useStore.getState();
@@ -90,17 +91,23 @@ export async function play(opts: { countIn?: boolean } = {}) {
   engine.setBpm(useStore.getState().song.bpm);
   playing.clear();
   let start = 0;
+  songStart = 0;
   // The scene starts with the music (after the count-in).
   if (opts.countIn) {
     engine.launch('__count', await compileCached(CLICK));
     engine.launch('__count', engine.silence, { notBefore: 1 });
     start = 1;
+    songStart = 1;
   }
   useStore.getState().setSceneOrigin(start);
   await sync(useStore.getState().song, start);
   useStore.getState().setTransport('playing');
   await setMetronome(useStore.getState().metronome);
 }
+
+/** The bar the song starts on (1 after a count-in bar): the counter shows "Count-in" before it, and bars from it. */
+let songStart = 0;
+export const songStartBar = () => songStart;
 
 async function setMetronome(on: boolean) {
   if (!engine.isStarted()) return;
