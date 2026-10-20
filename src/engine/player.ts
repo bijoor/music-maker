@@ -7,6 +7,7 @@ import { kitVoices, voiceSound } from '../model/kit';
 import { findScale, scalePitch } from '../model/scales';
 import { keyboardOf } from '../model/groups';
 import { strokeLevel } from '../model/strokeLevels';
+import { strokeSpeed } from '../model/tuning';
 import { useStore } from '../state/store';
 import * as engine from './strudel';
 
@@ -218,11 +219,18 @@ useStore.subscribe((st, prev) => {
   if (k !== warmedKey && engine.isReady()) { warmedKey = k; warm(st.song); }
 });
 
+/** A drum stroke's tuning to the song (model/tuning), as a sound field; nothing for other sounds. */
+function tuned(track: Track, value: Record<string, unknown>): Record<string, unknown> {
+  if (track.kind !== 'drums' || typeof value.s !== 'string') return {};
+  const speed = strokeSpeed(useStore.getState().song, track, value.s);
+  return speed !== 1 ? { speed } : {};
+}
+
 export function preview(trackId: string, value: Record<string, unknown>, steps = 1) {
   const track = useStore.getState().song.tracks.find((t) => t.id === trackId);
   if (!track) return;
   const controls = fxValues(track);
-  const go = () => engine.trigger({ ...value, ...controls }, steps / 16 / engine.getCps());
+  const go = () => engine.trigger({ ...value, ...tuned(track, value), ...controls }, steps / 16 / engine.getCps());
   // Once loaded, sound right away in the tap handler; nothing else may run first.
   if (engine.isReady()) { go(); return; }
   engine.unlockAudio();
@@ -236,7 +244,7 @@ export function preview(trackId: string, value: Record<string, unknown>, steps =
 export function hold(trackId: string, value: Record<string, unknown>, steps?: number): engine.HeldNote {
   const track = useStore.getState().song.tracks.find((t) => t.id === trackId);
   if (!track) return { stop() {}, glide() {}, level() {} };
-  const v = { ...value, ...fxValues(track) };
+  const v = { ...value, ...tuned(track, value), ...fxValues(track) };
   const max = () => (steps ? steps / 16 / engine.getCps() : 30);
   if (engine.isReady()) return engine.hold(v, max());
   // First sound: the engine is still starting; pass on what happens meanwhile.

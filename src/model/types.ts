@@ -88,6 +88,8 @@ export interface Track {
   group?: string;
   /** Melodic tracks: the keyboard layout it plays with (else its group's default). */
   keyboard?: { layout: 'piano' | 'pads'; octaves: 1 | 2 | 3 | 4; perRow?: 1 | 2 };
+  /** Indian kits: tuned strokes follow the song's Sa (unless off), moved by `offset` semitones (model/tuning). */
+  tuning?: { off?: boolean; offset?: number };
 }
 
 /** A saved set of active slots, from any tracks. Tracks it does not name keep playing. */

@@ -1,14 +1,9 @@
-import AVFoundation
 import UIKit
 
 @main
 final class AppDelegate: UIResponder, UIApplicationDelegate {
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
-        // Sound plays with the silent switch on, and a short audio buffer keeps pad latency down.
-        let session = AVAudioSession.sharedInstance()
-        try? session.setCategory(.playback, mode: .default, options: [.mixWithOthers])
-        try? session.setPreferredIOBufferDuration(0.005)
-        try? session.setActive(true)
+        AudioSession.shared.start()
         return true
     }
 

@@ -488,3 +488,6 @@ select.sm { min-height: 30px; padding: 3px 6px; font-size: 13px; }
 .padgrid, .kit, .drumtouch, .tappads, .kb, .spads, .chords { touch-action: none; }
 html { touch-action: manipulation; }
 .taplog li.off { color: #e5534b; }
+.fxs.tuning { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.fxs.tuning .lbl { flex-basis: 100%; }
+.fxs.tuning output { text-align: left; min-width: 8em; }

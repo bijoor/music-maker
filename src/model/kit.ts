@@ -12,6 +12,8 @@ export interface KitVoice {
   span?: 2 | 4;
   /** Indian kits: the hand that plays the stroke (pads are laid out left hand | both | right hand). */
   hand?: Hand;
+  /** A pitched stroke tuned to the song's Sa (the dayan's ringing strokes; see model/tuning). */
+  tuned?: boolean;
   /** Sliding a finger up on the pad raises the stroke's pitch (a bass head pressed by the hand). */
   bends?: boolean;
 }
@@ -71,30 +73,30 @@ export const KIT: KitVoice[] = [
  */
 export const INDIAN_KITS: Record<string, KitVoice[]> = {
   Mridangam: [
-    { voice: 'nam', name: 'Nam', main: true, hand: 'right' },
-    { voice: 'dhin', name: 'Dhin', main: true, hand: 'right' },
-    { voice: 'chaapu', name: 'Chapu', main: true, hand: 'right' },
-    { voice: 'ardha', name: 'Ardha chapu', main: true, hand: 'right' },
+    { voice: 'nam', name: 'Nam', main: true, hand: 'right', tuned: true },
+    { voice: 'dhin', name: 'Dhin', main: true, hand: 'right', tuned: true },
+    { voice: 'chaapu', name: 'Chapu', main: true, hand: 'right', tuned: true },
+    { voice: 'ardha', name: 'Ardha chapu', main: true, hand: 'right', tuned: true },
     { voice: 'ta', name: 'Ta', main: true, hand: 'right' },
     { voice: 'dhi', name: 'Dhi', main: true, hand: 'right' },
     { voice: 'na', name: 'Na', main: true, hand: 'right' },
     { voice: 'ka', name: 'Ka', main: true, hand: 'right' },
-    { voice: 'dhum', name: 'Dhum', main: true, hand: 'both' },
+    { voice: 'dhum', name: 'Dhum', main: true, hand: 'both', tuned: true },
     { voice: 'thom', name: 'Thom', main: true, hand: 'left', bends: true },
     { voice: 'tha', name: 'Tha', main: true, hand: 'left' },
     { voice: 'gumki', name: 'Gumki', main: true, hand: 'left' },
     { voice: 'ki', name: 'Ki', main: true, hand: 'left' },
   ],
   Tabla: [
-    { voice: 'tabla_na', name: 'Na', main: true, hand: 'right' },
-    { voice: 'tabla_ta', name: 'Ta', main: true, hand: 'right' },
-    { voice: 'tabla_tin', name: 'Tin', main: true, hand: 'right' },
-    { voice: 'tabla_tun', name: 'Tun', main: true, hand: 'right' },
+    { voice: 'tabla_na', name: 'Na', main: true, hand: 'right', tuned: true },
+    { voice: 'tabla_ta', name: 'Ta', main: true, hand: 'right', tuned: true },
+    { voice: 'tabla_tin', name: 'Tin', main: true, hand: 'right', tuned: true },
+    { voice: 'tabla_tun', name: 'Tun', main: true, hand: 'right', tuned: true },
     { voice: 'tabla_te', name: 'Te', main: true, hand: 'right' },
     { voice: 'tabla_te2', name: 'Te 2', main: true, hand: 'right' },
     { voice: 'tabla_tak', name: 'Tak', main: true, hand: 'right' },
-    { voice: 'tabla_dha', name: 'Dha', main: true, hand: 'both' },
-    { voice: 'tabla_dhin', name: 'Dhin', main: true, hand: 'both' },
+    { voice: 'tabla_dha', name: 'Dha', main: true, hand: 'both', tuned: true },
+    { voice: 'tabla_dhin', name: 'Dhin', main: true, hand: 'both', tuned: true },
     { voice: 'tabla_ge', name: 'Ge', main: true, hand: 'left', bends: true },
     { voice: 'tabla_ghe', name: 'Ghe', main: true, hand: 'left' },
     { voice: 'tabla_gha', name: 'Gha', main: true, hand: 'left' },

@@ -1,6 +1,7 @@
 // Edited code → song. Each track block is parsed with acorn; every clip expression is compiled with Strudel and
 // the events it actually plays are read back into grid notes. Anything the grid can show becomes a normal clip
 // again (even code written differently, such as `.fast(2)`); anything else is kept verbatim as custom code.
+import { strokeSpeed } from '../model/tuning';
 import * as acorn from 'acorn';
 import * as core from '@strudel/core';
 import * as mini from '@strudel/mini';
@@ -56,17 +57,20 @@ function velocityOf(v: Record<string, unknown>): number | null {
   return Number.isFinite(x) && x > 0 && x <= 1 ? Math.round(x * 100) / 100 : null;
 }
 
-function toDrums(evs: Ev[], bars: Bars, track: Track): Record<string, number[]> | null {
+function toDrums(evs: Ev[], bars: Bars, track: Track, song?: Song): Record<string, number[]> | null {
   const bank = track.bank ?? 'RolandTR909';
   const hits = emptyHits(bars);
   for (const e of evs.filter((x) => x.b < bars)) {
-    if (!onGrid(e.b) || Object.keys(e.v).some((k) => !['s', 'n', 'bank', 'velocity'].includes(k)) || typeof e.v.s !== 'string') return null;
+    if (!onGrid(e.b) || Object.keys(e.v).some((k) => !['s', 'n', 'bank', 'velocity', 'speed'].includes(k)) || typeof e.v.s !== 'string') return null;
     const vel = velocityOf(e.v);
     if (vel === null) return null;
     const voice = e.v.n ? `${e.v.s}:${e.v.n}` : e.v.s;
     // The grid always writes the track's machine (or the machine it borrows from, or none for an Indian kit);
     // anything else would change the sound.
     if (!kitHas(bank, voice) || (e.v.bank ?? '') !== voiceBank(bank, voice)) return null;
+    // A speed is the grid's only when it is the stroke's tuning to the song (model/tuning).
+    const speed = song ? strokeSpeed(song, track, voice) : 1;
+    if (Math.abs(Number(e.v.speed ?? 1) - speed) > 1e-3) return null;
     hits[voice] ??= Array(bars * STEPS_PER_BAR).fill(0);
     hits[voice][Math.round(e.b * STEPS_PER_BAR)] = vel;
   }
@@ -101,9 +105,9 @@ function toNotes(evs: Ev[], bars: Bars, track: Track): Note[] | null {
 
 const toBars = (n: number | undefined): Bars | undefined => (n === 1 || n === 2 || n === 4 ? n : undefined);
 
-async function readClip(text: string, track: Track, existing: Clip | null, name?: string, barsHint?: Bars): Promise<{ clip: Clip; custom: boolean } | { error: string }> {
+async function readClip(text: string, track: Track, existing: Clip | null, name?: string, barsHint?: Bars, song?: Song): Promise<{ clip: Clip; custom: boolean } | { error: string }> {
   // Unchanged code keeps the clip exactly as it was.
-  if (existing && (existing.code ? existing.code === text : clipCode(track, existing).code === text) && (!name || name === existing.name)) return { clip: existing, custom: !!existing.code };
+  if (existing && (existing.code ? existing.code === text : clipCode(track, existing, song).code === text) && (!name || name === existing.name)) return { clip: existing, custom: !!existing.code };
   let evs: Ev[];
   try {
     evs = events(await compile(text), 8);
@@ -115,7 +119,7 @@ async function readClip(text: string, track: Track, existing: Clip | null, name?
   const clipName = name ?? existing?.name ?? `${track.kind === 'drums' ? 'Beat' : 'Clip'} ${track.slots.filter(Boolean).length + 1}`;
   if (bars) {
     if (track.kind === 'drums') {
-      const hits = toDrums(evs, bars, track);
+      const hits = toDrums(evs, bars, track, song);
       if (hits) return { clip: { kind: 'drums', id, name: clipName, bars, hits }, custom: false };
     } else {
       const notes = toNotes(evs, bars, track);
@@ -217,7 +221,7 @@ export async function parseCode(code: string, song: Song): Promise<ParseResult> 
           const cm = comment && /^\s*(.*?)\s*·\s*(\d+)\s*bars?/.exec(comment.value);
           const text = body.slice(decl.init.start, decl.init.end);
           while (track.slots.length <= slot) track.slots.push(null);
-          const res = await readClip(text, track, track.slots[slot], cm?.[1] || undefined, toBars(cm ? +cm[2] : undefined));
+          const res = await readClip(text, track, track.slots[slot], cm?.[1] || undefined, toBars(cm ? +cm[2] : undefined), song);
           if ('error' in res) { errors.push(`${track.name} ${letter}: ${res.error}`); failed = true; break; }
           const was = track.slots[slot];
           if (res.clip !== was) {

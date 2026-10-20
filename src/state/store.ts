@@ -173,6 +173,8 @@ interface State {
   setSlideStill(px: number): void;
   setDrumView(v: 'pads' | 'drum'): void;
   setDrumDepth(on: boolean): void;
+  /** Indian kits: tune the track's tuned strokes to the song's Sa (or not), moved by an offset in semitones. */
+  setTuning(trackId: string, tuning: { off?: boolean; offset?: number }): void;
   setDrumForce(on: boolean): void;
   setDrumDamp(on: boolean): void;
   setExpanded(on: boolean): void;
@@ -718,6 +720,7 @@ export const useStore = create<State>((set, get) => {
     set({ glide: on });
   },
   setDrumView: (v) => { saveNumber('drumView', v === 'drum' ? 1 : 0); set({ drumView: v }); },
+  setTuning: (trackId, tuning) => set(onTrack(trackId, (t) => { t.tuning = { ...t.tuning, ...tuning }; })),
   setDrumDepth: (on) => { saveNumber('drumDepth', on ? 1 : 0); set({ drumDepth: on }); },
   setDrumDamp: (on) => { saveNumber('drumDamp', on ? 1 : 0); set({ drumDamp: on }); },
   setDrumForce: (on) => { saveNumber('drumForce', on ? 1 : 0); set({ drumForce: on }); },

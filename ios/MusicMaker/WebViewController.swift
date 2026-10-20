@@ -8,7 +8,7 @@ import WebKit
 /// recognizer and whether it was kept). With `relay` on, every touch the iPad reports is also sent to the page as a
 /// `nativetouch` event on window, `detail: [{ id, phase: 'start' | 'end' | 'cancel', x, y, t }]` (x, y in CSS px;
 /// t in ms of system uptime), whether or not WebKit delivers it as a touch event.
-final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDelegate {
+final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDelegate, WKScriptMessageHandler {
     private let settings: Settings
     private var webView: WKWebView!
     private var stripper: GestureStripper?
@@ -30,6 +30,8 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
         config.suppressesIncrementalRendering = false
         config.dataDetectorTypes = []
         config.userContentController.addUserScript(WKUserScript(source: bootstrapScript(), injectionTime: .atDocumentStart, forMainFrameOnly: true))
+        config.userContentController.addUserScript(WKUserScript(source: Self.audioScript, injectionTime: .atDocumentStart, forMainFrameOnly: true))
+        config.userContentController.add(self, name: "musicMakerAudio")
         if settings.gestures == .all {
             config.userContentController.addUserScript(WKUserScript(source: Self.clickScript, injectionTime: .atDocumentStart, forMainFrameOnly: true))
         }
@@ -48,6 +50,11 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
 
     override func viewDidLoad() {
         super.viewDidLoad()
+        // Back from the background or an interruption: the session is active again, tell the page to resume its sound
+        // (it listens for focus; if iOS wants a tap first, the next tap does it).
+        AudioSession.shared.onReactivated = { [weak self] in
+            self?.webView.evaluateJavaScript("dispatchEvent(new Event('focus')); 0")
+        }
         stripper = GestureStripper(webView: webView, mode: settings.gestures)
         webView.load(URLRequest(url: settings.startURL))
     }
@@ -86,6 +93,29 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
 
     // MARK: Page
 
+    /// The page's "Play over other apps" setting, sent by `audioScript`.
+    func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {
+        guard message.name == "musicMakerAudio", let body = message.body as? [String: Any], let mix = body["mix"] as? Bool else { return }
+        AudioSession.shared.setMixWithOthers(mix)
+    }
+
+    /// Reports the page's "Play over other apps" setting (localStorage 'music-maker:mixAudio') at load and whenever the
+    /// page changes it, so the native audio session follows it.
+    private static let audioScript = """
+    (() => {
+      const KEY = 'music-maker:mixAudio';
+      const post = () => {
+        try { window.webkit.messageHandlers.musicMakerAudio.postMessage({ mix: localStorage.getItem(KEY) === '1' }); } catch {}
+      };
+      const setItem = Storage.prototype.setItem;
+      Storage.prototype.setItem = function (key, value) {
+        setItem.call(this, key, value);
+        if (key === KEY && this === window.localStorage) post();
+      };
+      post();
+    })();
+    """
+
     private func bootstrapScript() -> String {
         "window.musicMakerNative = { gestures: '\(settings.gestures.rawValue)', relay: \(settings.relayTouches), report: [] };"
     }
@@ -97,7 +127,7 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
             if let error { NSLog("MusicMaker report failed: %@", "\(error)") }
         }
         // For Console.app / `log stream`: what the page can use, and what was done to WebKit's gestures.
-        webView.evaluateJavaScript("[location.href, 'secure ' + isSecureContext, 'AudioWorklet ' + !!window.AudioWorkletNode, 'storage ' + !!window.indexedDB].join(' · ')") { value, _ in
+        webView.evaluateJavaScript("[location.href, 'secure ' + isSecureContext, 'AudioWorklet ' + !!window.AudioWorkletNode, 'storage ' + !!window.indexedDB, 'audioSession ' + (navigator.audioSession ? navigator.audioSession.type : 'none')].join(' · ')") { value, _ in
             NSLog("MusicMaker page: %@", "\(value ?? "?")")
         }
         for line in stripper?.report ?? [] { NSLog("MusicMaker gesture (%@): %@", settings.gestures.rawValue, line) }

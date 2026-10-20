@@ -4,6 +4,7 @@
 // Every note or hit token is recorded with its character range, so played events (which carry the range of
 // the token that produced them) can be mapped back to a clip and step for highlighting.
 import { isStrokeKit, kitHas, kitVoices, voiceBank, voiceOrder } from '../model/kit';
+import { strokeSpeed } from '../model/tuning';
 import { pitchToCode } from '../model/notes';
 import { findScale } from '../model/scales';
 import { currentScene, sceneBars } from '../model/lines';
@@ -147,25 +148,26 @@ function writeBars(w: Writer, bars: number, writeBar: (bar: number) => void) {
   w.add('>');
 }
 
-function writeDrumClip(w: Writer, track: Track, clip: DrumClip) {
+function writeDrumClip(w: Writer, track: Track, clip: DrumClip, song?: Song) {
   const bank = track.bank ?? 'RolandTR909';
   // Hits of another kit (kept from before the track changed kit) are not played.
   const order = isStrokeKit(bank) ? (v: string) => kitVoices(bank).findIndex((k) => k.voice === v) : voiceOrder;
   const used = Object.keys(clip.hits).filter((v) => kitHas(bank, v) && clip.hits[v].some((x) => x > 0)).sort((a, b) => order(a) - order(b));
   if (!used.length) { w.add('silence'); return; }
   // Voices the machine lacks are borrowed from another machine, as a separate layer. Indian kits have no machine.
-  // A voice with softer hits gets a layer of its own, carrying its velocities in the same rhythm.
-  const groups = new Map<string, { bank: string; voices: string[]; velocity: boolean }>();
+  // A voice with softer hits gets a layer of its own, carrying its velocities in the same rhythm. Strokes tuned to
+  // the song's Sa (model/tuning) share a layer played at their speed.
+  const groups = new Map<string, { bank: string; voices: string[]; velocity: boolean; speed: number }>();
   for (const v of used) {
-    const b = voiceBank(bank, v), velocity = hasVelocity(clip, v);
-    const key = velocity ? `${b}|${v}` : b;
-    const g = groups.get(key) ?? { bank: b, voices: [], velocity };
+    const b = voiceBank(bank, v), velocity = hasVelocity(clip, v), speed = song ? strokeSpeed(song, track, v) : 1;
+    const key = (velocity ? `${b}|${v}` : b) + (speed !== 1 ? `|${speed}` : '');
+    const g = groups.get(key) ?? { bank: b, voices: [], velocity, speed };
     g.voices.push(v);
     groups.set(key, g);
   }
   const many = groups.size > 1;
   if (many) w.add('stack(');
-  [...groups.values()].forEach(({ bank: b, voices, velocity }, i) => {
+  [...groups.values()].forEach(({ bank: b, voices, velocity, speed }, i) => {
     if (i) w.add(', ');
     w.add('s("');
     writeBars(w, clip.bars, (bar) => writeDrumBar(w, clip, voices, bar));
@@ -176,6 +178,7 @@ function writeDrumClip(w: Writer, track: Track, clip: DrumClip) {
       w.add('")');
     }
     if (b) w.add(`.bank("${b}")`);
+    if (speed !== 1) w.add(`.speed(${speed})`); // four decimals: two would be cents out of tune
   });
   if (many) w.add(')');
 }
@@ -235,9 +238,9 @@ function writeMelodicClip(w: Writer, track: Track, clip: MelodicClip) {
 /** Seconds a bend takes when a note does not say (Strudel's own default for pattack). */
 export const DEFAULT_BEND_TIME = 0.2;
 
-function writeClip(w: Writer, track: Track, clip: Clip) {
+function writeClip(w: Writer, track: Track, clip: Clip, song?: Song) {
   if (clip.code) w.add(clip.code);
-  else if (clip.kind === 'drums') writeDrumClip(w, track, clip);
+  else if (clip.kind === 'drums') writeDrumClip(w, track, clip, song);
   else writeMelodicClip(w, track, clip);
 }
 
@@ -338,7 +341,7 @@ function writeTrack(w: Writer, song: Song, track: Track, label: string, opts: Ge
   track.slots.forEach((clip, i) => {
     if (!clip) return;
     w.add(`const ${clipVar(label, i)} = `);
-    writeClip(w, track, clip);
+    writeClip(w, track, clip, song);
     w.add(`  // ${clip.name} · ${clip.bars} bar${clip.bars > 1 ? 's' : ''}${clip.code ? ' · custom' : ''}\n`);
   });
   const custom = !opts.songMode && track.playCode;
@@ -408,9 +411,9 @@ function writeScenes(w: Writer, song: Song, labels: Map<string, string>) {
 }
 
 /** The code for a single clip expression (used by tests and previews). */
-export function clipCode(track: Track, clip: Clip): { code: string; tokens: CodeToken[] } {
+export function clipCode(track: Track, clip: Clip, song?: Song): { code: string; tokens: CodeToken[] } {
   const w = new Writer();
-  writeClip(w, track, clip);
+  writeClip(w, track, clip, song);
   return { code: w.text, tokens: w.tokens };
 }
 
