@@ -9,6 +9,7 @@ export default function Transport() {
   const { song, transport, panel, setPanel, updateReady, sargam, mode, countIn, metronome, setBpm, setTonic, setScale, toggleCode, resetSong, setUi, setMode, touchVelocity, setTouchVelocity, pitchSnap, setPitchSnap, slideStill, setSlideStill, openRecorder, newSong, setMessage } = useStore();
   const [more, setMore] = useState(false);
   const [confirmReset, setConfirmReset] = useState(false);
+  const [mix, setMix] = useState(engine.mixesWithOthers);
   const [midi, setMidi] = useState<{ state: MidiState; devices: string[] }>({ state: 'off', devices: [] });
   const connect = () =>
     connectMidi((state, devices) => {
@@ -99,6 +100,7 @@ export default function Transport() {
             <button role="menuitem" onClick={() => setSlideStill(slideStill <= 4 ? 8 : slideStill <= 8 ? 14 : 4)}>
               Slide steadiness: {slideStill <= 4 ? 'fine (4 px)' : slideStill <= 8 ? 'normal (8 px)' : 'steady (14 px)'}
             </button>
+            <button role="menuitemcheckbox" aria-checked={mix} title="On: plays along with a music player or another app (muted in Silent mode). Off: stops other apps' audio while playing." onClick={() => { engine.setMixWithOthers(!mix); setMix(!mix); }}>{mix ? '✓ ' : ''}Play over other apps (music player)</button>
             <button role="menuitem" onClick={() => { openRecorder(null); setMore(false); }}>Record a drum kit from an instrument…</button>
             <button role="menuitem" onClick={() => { setPanel('taptest'); setMore(false); }}>Tap test</button>
             <button role="menuitem" onClick={() => { setPanel('about'); setMore(false); }}>About and sound credits</button>

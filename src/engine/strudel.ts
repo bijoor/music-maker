@@ -71,8 +71,7 @@ function output(hap: any, deadline: number, duration: number, cps: number, t: nu
  * in the tap handler.
  */
 export function unlockAudio() {
-  const nav = navigator as Navigator & { audioSession?: { type: string } };
-  if (nav.audioSession) nav.audioSession.type = 'playback';
+  setAudioSessionType();
   const ac = getAudioContext() as AudioContext;
   ac.resume();
   const buf = ac.createBuffer(1, 1, ac.sampleRate);
@@ -81,6 +80,47 @@ export function unlockAudio() {
   src.connect(ac.destination);
   src.start(0);
 }
+
+const MIX_KEY = 'music-maker:mixAudio';
+/** Whether the app's sound plays over other apps' audio (a music player) instead of stopping it (per device). */
+export function mixesWithOthers(): boolean {
+  try { return localStorage.getItem(MIX_KEY) === '1'; } catch { return false; }
+}
+/**
+ * How iOS treats the app's sound: 'playback' (the default) stops other apps' audio and ignores Silent mode;
+ * 'ambient' plays along with other apps' audio, but is muted in Silent mode.
+ */
+function setAudioSessionType() {
+  const nav = navigator as Navigator & { audioSession?: { type: string } };
+  if (nav.audioSession) nav.audioSession.type = mixesWithOthers() ? 'ambient' : 'playback';
+}
+export function setMixWithOthers(on: boolean) {
+  try { localStorage.setItem(MIX_KEY, on ? '1' : '0'); } catch { /* this session only */ }
+  setAudioSessionType();
+  wakeAudio();
+}
+
+/**
+ * iOS pauses the app's audio when it goes to the background (or another app takes the audio), and it stays paused
+ * on return: every tap and key wakes it again if needed (inside the tap, as iOS requires), and the return to the
+ * app tries too.
+ */
+export function wakeAudio() {
+  const ac = getAudioContext() as AudioContext;
+  if (ac.state !== 'running') unlockAudio();
+}
+let wakeWatched = false;
+function watchWake() {
+  if (wakeWatched || typeof addEventListener !== 'function') return;
+  wakeWatched = true;
+  const opts = { capture: true, passive: true } as const;
+  for (const type of ['pointerdown', 'touchend', 'keydown']) addEventListener(type, () => { if (ready) wakeAudio(); }, opts);
+  const back = () => { if (ready && document.visibilityState === 'visible') wakeAudio(); };
+  document.addEventListener('visibilitychange', back);
+  addEventListener('pageshow', back);
+  addEventListener('focus', back);
+}
+watchWake();
 
 /** A plain Web Audio beep, independent of Strudel, to tell audio problems apart from engine problems. */
 export function beep() {
